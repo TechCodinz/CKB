@@ -75,66 +75,66 @@ impl LayeredArchitectureDetector {
                 LayerPattern {
                     name: "presentation".to_string(),
                     patterns: vec![
-                        PathPattern::new("**/controllers/**"),
-                        PathPattern::new("**/presenters/**"),
-                        PathPattern::new("**/views/**"),
-                        NamingPattern::new("*Controller"),
-                        NamingPattern::new("*Presenter"),
-                        NamingPattern::new("*View"),
-                        AnnotationPattern::new("@Controller"),
-                        AnnotationPattern::new("@RestController"),
+                        PathPattern("**/controllers/**"),
+                        PathPattern("**/presenters/**"),
+                        PathPattern("**/views/**"),
+                        NamingPattern("*Controller"),
+                        NamingPattern("*Presenter"),
+                        NamingPattern("*View"),
+                        AnnotationPattern("@Controller"),
+                        AnnotationPattern("@RestController"),
                     ],
                 },
                 LayerPattern {
                     name: "application".to_string(),
                     patterns: vec![
-                        PathPattern::new("**/services/**"),
-                        PathPattern::new("**/usecases/**"),
-                        PathPattern::new("**/application/**"),
-                        NamingPattern::new("*Service"),
-                        NamingPattern::new("*UseCase"),
-                        NamingPattern::new("*Interactor"),
-                        AnnotationPattern::new("@Service"),
-                        AnnotationPattern::new("@UseCase"),
+                        PathPattern("**/services/**"),
+                        PathPattern("**/usecases/**"),
+                        PathPattern("**/application/**"),
+                        NamingPattern("*Service"),
+                        NamingPattern("*UseCase"),
+                        NamingPattern("*Interactor"),
+                        AnnotationPattern("@Service"),
+                        AnnotationPattern("@UseCase"),
                     ],
                 },
                 LayerPattern {
                     name: "domain".to_string(),
                     patterns: vec![
-                        PathPattern::new("**/domain/**"),
-                        PathPattern::new("**/models/**"),
-                        PathPattern::new("**/entities/**"),
-                        NamingPattern::new("*Entity"),
-                        NamingPattern::new("*ValueObject"),
-                        NamingPattern::new("*Aggregate"),
-                        AnnotationPattern::new("@Entity"),
-                        AnnotationPattern::new("@DomainService"),
+                        PathPattern("**/domain/**"),
+                        PathPattern("**/models/**"),
+                        PathPattern("**/entities/**"),
+                        NamingPattern("*Entity"),
+                        NamingPattern("*ValueObject"),
+                        NamingPattern("*Aggregate"),
+                        AnnotationPattern("@Entity"),
+                        AnnotationPattern("@DomainService"),
                     ],
                 },
                 LayerPattern {
                     name: "infrastructure".to_string(),
                     patterns: vec![
-                        PathPattern::new("**/infrastructure/**"),
-                        PathPattern::new("**/repositories/**"),
-                        PathPattern::new("**/gateways/**"),
-                        NamingPattern::new("*Repository"),
-                        NamingPattern::new("*Gateway"),
-                        NamingPattern::new("*Adapter"),
-                        AnnotationPattern::new("@Repository"),
-                        AnnotationPattern::new("@Component"),
+                        PathPattern("**/infrastructure/**"),
+                        PathPattern("**/repositories/**"),
+                        PathPattern("**/gateways/**"),
+                        NamingPattern("*Repository"),
+                        NamingPattern("*Gateway"),
+                        NamingPattern("*Adapter"),
+                        AnnotationPattern("@Repository"),
+                        AnnotationPattern("@Component"),
                     ],
                 },
                 LayerPattern {
                     name: "data".to_string(),
                     patterns: vec![
-                        PathPattern::new("**/data/**"),
-                        PathPattern::new("**/repositories/impl/**"),
-                        PathPattern::new("**/dao/**"),
-                        NamingPattern::new("*RepositoryImpl"),
-                        NamingPattern::new("*Dao"),
-                        NamingPattern::new("*DataSource"),
-                        AnnotationPattern::new("@Repository"),
-                        AnnotationPattern::new("@Dao"),
+                        PathPattern("**/data/**"),
+                        PathPattern("**/repositories/impl/**"),
+                        PathPattern("**/dao/**"),
+                        NamingPattern("*RepositoryImpl"),
+                        NamingPattern("*Dao"),
+                        NamingPattern("*DataSource"),
+                        AnnotationPattern("@Repository"),
+                        AnnotationPattern("@Dao"),
                     ],
                 },
             ],
@@ -256,6 +256,57 @@ impl PatternDetector for LayeredArchitectureDetector {
             ),
         }))
     }
+
+    fn check_layer_compliance(&self, _graph: &DependencyGraph, _layers: &[ArchitectureBoundary]) -> Result<Vec<DriftViolation>> {
+        Ok(Vec::new())
+    }
+}
+
+pub struct ModularArchitectureDetector;
+impl ModularArchitectureDetector { pub fn new() -> Self { Self } }
+impl PatternDetector for ModularArchitectureDetector {
+    fn detect(&self, _graph: &DependencyGraph) -> Result<Option<ArchitecturalPattern>> { Ok(None) }
+}
+
+pub struct HexagonalArchitectureDetector;
+impl HexagonalArchitectureDetector { pub fn new() -> Self { Self } }
+impl PatternDetector for HexagonalArchitectureDetector {
+    fn detect(&self, _graph: &DependencyGraph) -> Result<Option<ArchitecturalPattern>> { Ok(None) }
+}
+
+pub struct CleanArchitectureDetector;
+impl CleanArchitectureDetector { pub fn new() -> Self { Self } }
+impl PatternDetector for CleanArchitectureDetector {
+    fn detect(&self, _graph: &DependencyGraph) -> Result<Option<ArchitecturalPattern>> { Ok(None) }
+}
+
+pub struct MicroservicesDetector;
+impl MicroservicesDetector { pub fn new() -> Self { Self } }
+impl PatternDetector for MicroservicesDetector {
+    fn detect(&self, _graph: &DependencyGraph) -> Result<Option<ArchitecturalPattern>> { Ok(None) }
+}
+
+pub struct EventDrivenDetector;
+impl EventDrivenDetector { pub fn new() -> Self { Self } }
+impl PatternDetector for EventDrivenDetector {
+    fn detect(&self, _graph: &DependencyGraph) -> Result<Option<ArchitecturalPattern>> { Ok(None) }
+}
+
+pub struct CqrsDetector;
+impl CqrsDetector { pub fn new() -> Self { Self } }
+impl PatternDetector for CqrsDetector {
+    fn detect(&self, _graph: &DependencyGraph) -> Result<Option<ArchitecturalPattern>> { Ok(None) }
+}
+
+pub struct DomainDrivenDesignDetector;
+impl DomainDrivenDesignDetector { pub fn new() -> Self { Self } }
+impl PatternDetector for DomainDrivenDesignDetector {
+    fn detect(&self, _graph: &DependencyGraph) -> Result<Option<ArchitecturalPattern>> { Ok(None) }
+}
+
+pub struct MlPatternDetector;
+impl MlPatternDetector {
+    pub fn predict_patterns(&self, _graph: &DependencyGraph) -> Result<Vec<ArchitecturalPattern>> { Ok(Vec::new()) }
 }
 
 struct LayerPattern {
