@@ -4,6 +4,7 @@ use axum::{
     http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
+use tower_http::cors::{Any, CorsLayer};
 use serde_json::{json, Value};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -35,11 +36,17 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
     let app = Router::new()
         .route("/health", get(health_check))
         .route("/api/v1/scan", post(scan_codebase))
         .route("/api/v1/report", get(get_report))
         .route("/api/v1/impact", post(analyze_impact))
+        .layer(cors)
         .with_state(state);
 
     let port: u16 = std::env::var("PORT")
