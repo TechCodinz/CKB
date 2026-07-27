@@ -10,6 +10,10 @@ mod analysis;
 mod storage;
 mod error;
 mod types;
+pub mod telemetry;
+pub mod contracts;
+pub mod vcs;
+pub mod federation;
 
 pub use parser::*;
 pub use graph::*;
@@ -17,6 +21,10 @@ pub use analysis::*;
 pub use storage::*;
 pub use error::*;
 pub use types::*;
+pub use telemetry::*;
+pub use contracts::*;
+pub use vcs::*;
+pub use federation::*;
 
 use std::sync::Arc;
 use rayon::ThreadPoolBuilder;
@@ -163,6 +171,44 @@ impl CkbEngine {
         let node_id = NodeId(format!("{}::file", file));
         let graph = self.graph.read().await;
         Ok(graph.get_runtime_metrics(&node_id).cloned())
+    }
+
+    /// Feature 1: Native OpenTelemetry OTLP span ingestion
+    pub async fn ingest_otlp_spans(&self, raw_payload: &str) -> Result<OtlpIngestReport, anyhow::Error> {
+        let metrics_map = OtlpReceiver::ingest_spans(raw_payload)?;
+        let mut graph = self.graph.write().await;
+        for (node_id, metrics) in &metrics_map {
+            graph.record_runtime_trace(node_id.clone(), metrics.execution_count, metrics.avg_latency_ms);
+        }
+        Ok(OtlpReceiver::summarize(&metrics_map))
+    }
+
+    /// Feature 2: Semantic Clone & Duplicate Logic Detector
+    pub async fn detect_semantic_clones(&self, file_contents: &std::collections::HashMap<String, String>) -> Result<CloneReport, anyhow::Error> {
+        Ok(CloneDetector::detect(file_contents))
+    }
+
+    /// Feature 3: Git History Architectural Drift Timeline
+    pub async fn get_drift_timeline(&self, repo_path: &str, max_commits: usize) -> Result<DriftTimeline, anyhow::Error> {
+        GitDriftAnalyzer::build_timeline(repo_path, max_commits)
+    }
+
+    /// Feature 4: Cross-Service API Contract Validator
+    pub async fn validate_api_contracts(&self, consumer_spec: &str, provider_spec: &str) -> Result<ContractValidationReport, anyhow::Error> {
+        let consumer_eps = ApiContractValidator::parse_openapi_spec("consumer-service", consumer_spec)?;
+        let provider_eps = ApiContractValidator::parse_openapi_spec("provider-service", provider_spec)?;
+        Ok(ApiContractValidator::validate(&consumer_eps, &provider_eps))
+    }
+
+    /// Feature 5: AI Test Coverage Gap Analysis
+    pub async fn analyze_test_coverage_gaps(&self) -> Result<TestCoverageGapReport, anyhow::Error> {
+        let graph = self.graph.read().await;
+        TestCoverageAnalyzer::analyze_gaps(&graph)
+    }
+
+    /// Feature 6: Multi-Repo / Monorepo Federated Graph Engine
+    pub async fn federate_repos(&self, repo_reports: &std::collections::HashMap<String, ScanReport>) -> Result<FederationReport, anyhow::Error> {
+        Ok(FederatedGraphEngine::federate(repo_reports))
     }
     
     /// Incrementally scan modified files in a codebase and update the graph
