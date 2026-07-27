@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -45,25 +44,29 @@ export class FlutterwavePaymentService {
         };
 
         try {
-            const response = await axios.post(`${FLW_API_URL}/payments`, payload, {
+            const res = await fetch(`${FLW_API_URL}/payments`, {
+                method: 'POST',
                 headers: {
                     Authorization: `Bearer ${FLW_SECRET_KEY}`,
                     'Content-Type': 'application/json',
                 },
+                body: JSON.stringify(payload),
             });
 
-            if (response.data && response.data.status === 'success') {
+            const data: any = await res.json();
+
+            if (data && data.status === 'success') {
                 return {
                     status: 'success',
-                    paymentUrl: response.data.data.link,
+                    paymentUrl: data.data.link,
                     txRef,
                 };
             } else {
-                throw new Error(response.data.message || 'Failed to initialize Flutterwave payment');
+                throw new Error(data.message || 'Failed to initialize Flutterwave payment');
             }
         } catch (error: any) {
-            console.error('Flutterwave Initialization Error:', error.response?.data || error.message);
-            throw new Error(error.response?.data?.message || 'Flutterwave payment initialization failed');
+            console.error('Flutterwave Initialization Error:', error.message);
+            throw new Error(error.message || 'Flutterwave payment initialization failed');
         }
     }
 
@@ -72,14 +75,17 @@ export class FlutterwavePaymentService {
      */
     async verifyTransaction(transactionId: string) {
         try {
-            const response = await axios.get(`${FLW_API_URL}/transactions/${transactionId}/verify`, {
+            const res = await fetch(`${FLW_API_URL}/transactions/${transactionId}/verify`, {
+                method: 'GET',
                 headers: {
                     Authorization: `Bearer ${FLW_SECRET_KEY}`,
                 },
             });
 
-            if (response.data && response.data.status === 'success') {
-                const txData = response.data.data;
+            const data: any = await res.json();
+
+            if (data && data.status === 'success') {
+                const txData = data.data;
                 
                 if (txData.status === 'successful') {
                     const userId = txData.meta?.userId;
@@ -100,7 +106,7 @@ export class FlutterwavePaymentService {
 
             return { verified: false, reason: 'Transaction unverified or incomplete' };
         } catch (error: any) {
-            console.error('Flutterwave Verification Error:', error.response?.data || error.message);
+            console.error('Flutterwave Verification Error:', error.message);
             throw new Error('Flutterwave transaction verification failed');
         }
     }

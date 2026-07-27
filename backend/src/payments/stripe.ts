@@ -2,7 +2,7 @@ import Stripe from 'stripe';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_mock', {
     apiVersion: '2023-10-16',
 });
 
@@ -22,14 +22,14 @@ export class PaymentService {
         cancelUrl: string;
     }) {
         const user = await prisma.user.findUnique({ where: { id: userId } });
-        const plan = await prisma.plan.findUnique({ where: { id: planId } });
 
-        if (!user || !plan) throw new Error('User or plan not found');
+        if (!user) throw new Error('User not found');
 
-        const priceId = interval === 'month' ? plan.stripePriceIdMonth : plan.stripePriceIdYear;
+        const priceEnvKey = `STRIPE_PRICE_${planId.toUpperCase()}_${interval.toUpperCase()}`;
+        const priceId = process.env[priceEnvKey] || 'price_pro_monthly';
 
         const session = await stripe.checkout.sessions.create({
-            customer: user.stripeCustomerId,
+            customer: user.stripeCustomerId || undefined,
             mode: 'subscription',
             line_items: [{ price: priceId, quantity: 1 }],
             success_url: successUrl,
@@ -43,7 +43,7 @@ export class PaymentService {
                     userId,
                     planId,
                 },
-                trial_period_days: plan.trialDays || 14,
+                trial_period_days: 14,
             },
             allow_promotion_codes: true,
             billing_address_collection: 'required',
@@ -85,10 +85,11 @@ export class PaymentService {
             where: { id: userId },
             data: {
                 stripeCustomerId: session.customer as string,
+                plan: planId || 'pro',
                 subscription: {
                     create: {
                         stripeSubscriptionId: session.subscription as string,
-                        planId,
+                        planId: planId || 'pro',
                         status: 'active',
                         currentPeriodStart: new Date(),
                         currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
@@ -97,11 +98,7 @@ export class PaymentService {
             },
         });
 
-        // Send welcome email
-        await this.sendWelcomeEmail(userId);
-
-        // Track conversion
-        await this.trackConversion(userId, planId);
+        console.log(`✅ Stripe Subscription Created for User ${userId} (Plan: ${planId})`);
     }
 
     private async handleSubscriptionUpdated(subscription: Stripe.Subscription) {
@@ -124,47 +121,46 @@ export class PaymentService {
                 canceledAt: new Date(),
             },
         });
-
-        // Send cancellation survey
-        await this.sendCancellationSurvey(subscription.metadata?.userId || "");
     }
 
     private async handlePaymentSucceeded(invoice: Stripe.Invoice) {
         const subscriptionId = invoice.subscription as string;
-
-        await prisma.payment.create({
-            data: {
-                stripeInvoiceId: invoice.id,
-                subscriptionId,
-                amount: invoice.amount_paid,
-                currency: invoice.currency,
-                status: 'succeeded',
-                paidAt: new Date(),
-            },
+        const subscription = await prisma.subscription.findUnique({
+            where: { stripeSubscriptionId: subscriptionId },
         });
+
+        if (subscription) {
+            await prisma.payment.create({
+                data: {
+                    userId: subscription.userId,
+                    stripeInvoiceId: invoice.id,
+                    subscriptionId: subscription.id,
+                    amount: invoice.amount_paid,
+                    currency: invoice.currency,
+                    status: 'succeeded',
+                    paidAt: new Date(),
+                },
+            });
+        }
     }
 
     private async handlePaymentFailed(invoice: Stripe.Invoice) {
         const subscriptionId = invoice.subscription as string;
-
-        await prisma.payment.create({
-            data: {
-                stripeInvoiceId: invoice.id,
-                subscriptionId,
-                amount: invoice.amount_due,
-                currency: invoice.currency,
-                status: 'failed',
-            },
-        });
-
-        // Send payment failed email
         const subscription = await prisma.subscription.findUnique({
             where: { stripeSubscriptionId: subscriptionId },
-            include: { user: true },
         });
 
-        if (subscription && subscription.user) {
-            await this.sendPaymentFailedEmail(subscription.user.email);
+        if (subscription) {
+            await prisma.payment.create({
+                data: {
+                    userId: subscription.userId,
+                    stripeInvoiceId: invoice.id,
+                    subscriptionId: subscription.id,
+                    amount: invoice.amount_due,
+                    currency: invoice.currency,
+                    status: 'failed',
+                },
+            });
         }
     }
 
@@ -192,12 +188,12 @@ export class PaymentService {
             where: { id: subscriptionId },
         });
 
-        if (!subscription) throw new Error('Subscription not found');
+        if (!subscription || !subscription.stripeSubscriptionId) {
+            throw new Error('Subscription not found');
+        }
 
-        const plan = await prisma.plan.findUnique({ where: { id: planId } });
-        if (!plan) throw new Error('Plan not found');
-
-        const priceId = interval === 'month' ? plan.stripePriceIdMonth : plan.stripePriceIdYear;
+        const priceEnvKey = `STRIPE_PRICE_${planId.toUpperCase()}_${interval.toUpperCase()}`;
+        const priceId = process.env[priceEnvKey] || 'price_pro_monthly';
 
         if (!subscription.stripeSubscriptionItemId) {
             throw new Error('No subscription item found');
@@ -217,7 +213,9 @@ export class PaymentService {
             where: { id: subscriptionId },
         });
 
-        if (!subscription) throw new Error('Subscription not found');
+        if (!subscription || !subscription.stripeSubscriptionId) {
+            throw new Error('Subscription not found');
+        }
 
         if (cancelImmediately) {
             await stripe.subscriptions.cancel(subscription.stripeSubscriptionId);
@@ -228,27 +226,6 @@ export class PaymentService {
         }
 
         return { success: true };
-    }
-
-    // Private helper methods
-    private async sendWelcomeEmail(userId: string) {
-        // Implement email sending
-        console.log(`Sending welcome email to user ${userId}`);
-    }
-
-    private async sendCancellationSurvey(userId: string) {
-        // Implement cancellation survey
-        console.log(`Sending cancellation survey to user ${userId}`);
-    }
-
-    private async sendPaymentFailedEmail(email: string) {
-        // Implement payment failed email
-        console.log(`Sending payment failed email to ${email}`);
-    }
-
-    private async trackConversion(userId: string, planId: string) {
-        // Track in analytics
-        console.log(`Conversion: user ${userId} -> plan ${planId}`);
     }
 }
 
