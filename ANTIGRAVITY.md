@@ -16,9 +16,13 @@
 **Before adding any new feature or refactoring:**
 - Call `ckb_get_prompt_context` to retrieve minimal topological graph context
 - Call `ckb_agentic_diff_guardrail` to verify layer boundaries before applying file modifications
-- Query `ckb_get_dynamic_runtime_metrics` to inspect live execution hotpaths and latency
+- Query `ckb_get_dynamic_runtime_metrics` or `ckb_ingest_otlp_spans` to inspect live execution hotpaths and latency
+- Query `ckb_detect_semantic_clones` to prevent introducing duplicate logic
 
-**During refactoring & debt remediation:**
+**During cross-service deployments & refactoring:**
+- Query `ckb_validate_api_contracts` to verify OpenAPI contract safety between consumer and provider services
+- Query `ckb_analyze_test_coverage_gaps` to inspect untested hotpath gaps
+- Query `ckb_get_drift_timeline` to review commit-by-commit architectural risk trends
 - If circular dependencies or tight coupling are detected, invoke `ckb_self_healing_refactor` to compute graph-partitioning interface isolation plans
 - Call `ckb_generate_ai_rules` to re-synthesize updated architectural guidelines
 

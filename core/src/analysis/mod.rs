@@ -3,10 +3,14 @@
 mod boundaries;
 mod patterns;
 mod drift;
+pub mod clone_detector;
+pub mod test_coverage;
 
 pub use boundaries::*;
 pub use patterns::*;
 pub use drift::*;
+pub use clone_detector::*;
+pub use test_coverage::*;
 
 use crate::graph::DependencyGraph;
 use crate::types::*;

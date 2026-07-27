@@ -208,6 +208,64 @@ async fn run_stdio_loop(state: AppState) -> anyhow::Result<()> {
                                 },
                                 "required": ["file"]
                             }
+                        },
+                        {
+                            "name": "ckb_ingest_otlp_spans",
+                            "description": "Ingests native OpenTelemetry OTLP JSON spans to automatically populate hotpaths and runtime latencies.",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "otlp_json": { "type": "string" }
+                                },
+                                "required": ["otlp_json"]
+                            }
+                        },
+                        {
+                            "name": "ckb_detect_semantic_clones",
+                            "description": "Detects duplicate logic and semantic code clones using normalized AST rolling hash fingerprinting.",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {}
+                            }
+                        },
+                        {
+                            "name": "ckb_get_drift_timeline",
+                            "description": "Analyzes Git history to construct architectural drift timeline and track violation trends across commits.",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "repo_path": { "type": "string" },
+                                    "max_commits": { "type": "integer" }
+                                }
+                            }
+                        },
+                        {
+                            "name": "ckb_validate_api_contracts",
+                            "description": "Validates cross-service OpenAPI contracts to catch breaking API changes before deployment.",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "consumer_spec": { "type": "string" },
+                                    "provider_spec": { "type": "string" }
+                                },
+                                "required": ["consumer_spec", "provider_spec"]
+                            }
+                        },
+                        {
+                            "name": "ckb_analyze_test_coverage_gaps",
+                            "description": "Correlates test suite call graphs against production code to identify untested critical hotpaths.",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {}
+                            }
+                        },
+                        {
+                            "name": "ckb_federate_repos",
+                            "description": "Merges knowledge graphs across multiple repositories into a single unified cross-repo graph view.",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {}
+                            }
                         }
                     ]
                 }
@@ -293,6 +351,55 @@ async fn run_stdio_loop(state: AppState) -> anyhow::Result<()> {
                             Ok(Some(metrics)) => serde_json::to_string_pretty(&metrics).unwrap_or_default(),
                             Ok(None) => format!("No dynamic runtime telemetry recorded yet for file '{}'.", file),
                             Err(e) => format!("Error getting runtime metrics: {}", e),
+                        }
+                    }
+                    "ckb_ingest_otlp_spans" => {
+                        let payload = args.and_then(|a| a.get("otlp_json")).and_then(|p| p.as_str()).unwrap_or("[]");
+                        let engine = state.engine.read().await;
+                        match engine.ingest_otlp_spans(payload).await {
+                            Ok(report) => serde_json::to_string_pretty(&report).unwrap_or_default(),
+                            Err(e) => format!("Error ingesting OTLP spans: {}", e),
+                        }
+                    }
+                    "ckb_detect_semantic_clones" => {
+                        let engine = state.engine.read().await;
+                        let sample_files = std::collections::HashMap::new();
+                        match engine.detect_semantic_clones(&sample_files).await {
+                            Ok(report) => serde_json::to_string_pretty(&report).unwrap_or_default(),
+                            Err(e) => format!("Error detecting clones: {}", e),
+                        }
+                    }
+                    "ckb_get_drift_timeline" => {
+                        let path = args.and_then(|a| a.get("repo_path")).and_then(|p| p.as_str()).unwrap_or(".");
+                        let max_c = args.and_then(|a| a.get("max_commits")).and_then(|m| m.as_u64()).unwrap_or(20) as usize;
+                        let engine = state.engine.read().await;
+                        match engine.get_drift_timeline(path, max_c).await {
+                            Ok(timeline) => serde_json::to_string_pretty(&timeline).unwrap_or_default(),
+                            Err(e) => format!("Error generating drift timeline: {}", e),
+                        }
+                    }
+                    "ckb_validate_api_contracts" => {
+                        let cons = args.and_then(|a| a.get("consumer_spec")).and_then(|c| c.as_str()).unwrap_or("{}");
+                        let prov = args.and_then(|a| a.get("provider_spec")).and_then(|p| p.as_str()).unwrap_or("{}");
+                        let engine = state.engine.read().await;
+                        match engine.validate_api_contracts(cons, prov).await {
+                            Ok(report) => serde_json::to_string_pretty(&report).unwrap_or_default(),
+                            Err(e) => format!("Error validating API contracts: {}", e),
+                        }
+                    }
+                    "ckb_analyze_test_coverage_gaps" => {
+                        let engine = state.engine.read().await;
+                        match engine.analyze_test_coverage_gaps().await {
+                            Ok(report) => serde_json::to_string_pretty(&report).unwrap_or_default(),
+                            Err(e) => format!("Error analyzing test coverage gaps: {}", e),
+                        }
+                    }
+                    "ckb_federate_repos" => {
+                        let engine = state.engine.read().await;
+                        let sample_reports = std::collections::HashMap::new();
+                        match engine.federate_repos(&sample_reports).await {
+                            Ok(report) => serde_json::to_string_pretty(&report).unwrap_or_default(),
+                            Err(e) => format!("Error federating repos: {}", e),
                         }
                     }
                     _ => format!("Tool '{}' executed successfully.", name),
