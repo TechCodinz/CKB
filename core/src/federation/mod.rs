@@ -45,14 +45,14 @@ impl FederatedGraphEngine {
         let repo_names: Vec<String> = reports.keys().cloned().collect();
 
         for (repo_name, report) in reports {
-            total_nodes += report.total_files;
-            total_edges += report.total_nodes;
+            total_nodes += report.nodes;
+            total_edges += report.edges;
 
             repos.push(FederatedRepoInfo {
                 repo_name: repo_name.clone(),
                 repo_path: format!("./repos/{}", repo_name),
-                total_nodes: report.total_files,
-                total_edges: report.total_nodes,
+                total_nodes: report.nodes,
+                total_edges: report.edges,
             });
 
             // Detect cross-repo shared contract references
