@@ -51,4 +51,5 @@ tempfile = "3.8"
 
 [[bench]]
 name = "parser"
+path = "benches/parser.rs"
 harness = false
