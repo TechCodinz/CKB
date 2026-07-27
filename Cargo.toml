@@ -1,13 +1,5 @@
-[package]
-name = "ckb"
-version = "0.1.0"
-edition = "2021"
-description = "Code Knowledge Base - Architectural intelligence for AI-era development"
-authors = ["Your Name <your.email@example.com>"]
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/yourusername/ckb"
-
 [workspace]
+resolver = "2"
 members = [
     "core",
     "cli",
