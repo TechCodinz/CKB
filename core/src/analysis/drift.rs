@@ -277,7 +277,7 @@ impl Rule for StabilityRule {
                 let stability = outgoing / (incoming + outgoing);
                 
                 // Unstable components should not be depended on by many
-                if stability > 0.7 && incoming > 5 {
+                if stability > 0.7 && incoming > 5.0 {
                     violations.push(DriftViolation {
                         id: uuid::Uuid::new_v4(),
                         kind: ViolationKind::UnstableDependency,

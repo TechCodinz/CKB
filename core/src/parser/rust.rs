@@ -6,7 +6,7 @@ use crate::types::{Node as CkbNode, NodeKind, Symbol, SymbolKind, Import, Import
 use anyhow::Result;
 
 pub struct RustParser {
-    parser: Parser,
+    parser: std::sync::Mutex<Parser>,
 }
 
 impl RustParser {
@@ -14,7 +14,7 @@ impl RustParser {
         let mut parser = Parser::new();
         parser.set_language(&tree_sitter_rust::language())
             .expect("Failed to load Rust grammar");
-        Self { parser }
+        Self { parser: std::sync::Mutex::new(parser) }
     }
 
     fn extract_imports(&self, node: Node, source: &str) -> Vec<Import> {
@@ -173,7 +173,7 @@ impl RustParser {
 
 impl LanguageParserTrait for RustParser {
     fn parse(&self, path: &str, content: &str) -> Result<FileAnalysis> {
-        let tree = self.parser.parse(content, None)
+        let tree = self.parser.lock().unwrap().parse(content, None)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse Rust file"))?;
 
         let root = tree.root_node();

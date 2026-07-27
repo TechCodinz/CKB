@@ -6,15 +6,15 @@ use crate::types::{Node as CkbNode, NodeKind, Symbol, SymbolKind, Import, Import
 use anyhow::Result;
 
 pub struct JavaParser {
-    parser: Parser,
+    parser: std::sync::Mutex<Parser>,
 }
 
 impl JavaParser {
     pub fn new() -> Self {
         let mut parser = Parser::new();
-        parser.set_language(&tree_sitter_java::LANGUAGE.into())
+        parser.set_language(&tree_sitter_java::language())
             .expect("Failed to load Java grammar");
-        Self { parser }
+        Self { parser: std::sync::Mutex::new(parser) }
     }
 
     fn extract_imports(&self, node: Node, source: &str) -> Vec<Import> {
@@ -149,7 +149,7 @@ impl JavaParser {
 
 impl LanguageParserTrait for JavaParser {
     fn parse(&self, path: &str, content: &str) -> Result<FileAnalysis> {
-        let tree = self.parser.parse(content, None)
+        let tree = self.parser.lock().unwrap().parse(content, None)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse Java file"))?;
 
         let root = tree.root_node();
