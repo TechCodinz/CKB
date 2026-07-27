@@ -8,7 +8,7 @@ const router = express.Router();
 const authenticate = (req: any, res: any, next: any) => { req.user = { id: "user_123" }; next(); };
 // Mock prisma
 const prisma: any = { user: { findUnique: async () => ({ stripeCustomerId: "cus_123", subscription: { payments: [] } }) } };
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2025-02-24.acacia' });
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2023-10-16' });
 
 // Get all plans
 router.get('/plans', async (req, res) => {
