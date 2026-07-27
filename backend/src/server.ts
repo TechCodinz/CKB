@@ -11,6 +11,9 @@ const prisma = new PrismaClient();
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'ckb-dev-secret-change-in-production';
 
+// ─── Health ───
+app.get('/health', (_req, res) => res.json({ status: 'ok', version: '1.0.0' }));
+
 // ─── Middleware ───
 app.use(helmet());
 app.use(cors({
@@ -31,9 +34,6 @@ function authenticate(req: any, res: any, next: any) {
         return res.status(401).json({ message: 'Invalid token' });
     }
 }
-
-// ─── Health ───
-app.get('/health', (_req, res) => res.json({ status: 'ok', version: '1.0.0' }));
 
 // ─── Auth Routes ───
 app.post('/api/v1/auth/register', async (req, res) => {
