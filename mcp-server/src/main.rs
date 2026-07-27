@@ -282,8 +282,10 @@ async fn run_stdio_loop(state: AppState) -> anyhow::Result<()> {
                         match engine.scan_codebase(path).await {
                             Ok(report) => {
                                 let count = report.drift.len();
+                                let files = report.files_processed;
+                                let nodes = report.nodes;
                                 *state.latest_report.write().await = Some(report);
-                                format!("Scan complete. Files: {}, Nodes: {}, Violations: {}", report.files_processed, report.nodes, count)
+                                format!("Scan complete. Files: {}, Nodes: {}, Violations: {}", files, nodes, count)
                             }
                             Err(e) => format!("Scan error: {}", e),
                         }
