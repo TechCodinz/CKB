@@ -36,7 +36,8 @@ impl TestCoverageAnalyzer {
         let mut prod_nodes = Vec::new();
 
         for node in &nodes {
-            if node.file_path.contains("test") || node.file_path.contains("spec") || node.name.starts_with("test_") {
+            let path_str = node.path.to_string_lossy();
+            if path_str.contains("test") || path_str.contains("spec") || node.name.starts_with("test_") {
                 test_nodes.push(node);
             } else {
                 prod_nodes.push(node);
@@ -54,13 +55,14 @@ impl TestCoverageAnalyzer {
                 covered_count += 1;
             } else {
                 let callers_count = callers.len();
-                let is_critical = callers_count >= 2 || prod_node.file_path.contains("core") || prod_node.file_path.contains("api");
+                let path_str = prod_node.path.to_string_lossy();
+                let is_critical = callers_count >= 2 || path_str.contains("core") || path_str.contains("api");
 
                 if is_critical {
                     let risk = ((callers_count as f32 * 0.25) + 0.3).min(0.98);
                     untested_hotpaths.push(UntestedHotpath {
                         function_name: prod_node.name.clone(),
-                        file_path: prod_node.file_path.clone(),
+                        file_path: path_str.into_owned(),
                         line_number: prod_node.line,
                         incoming_callers_count: callers_count,
                         failure_risk_score: risk,

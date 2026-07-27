@@ -225,6 +225,10 @@ impl LayeredArchitectureDetector {
             _ => vec![],
         }
     }
+
+    fn check_layer_compliance(&self, _graph: &DependencyGraph, _layers: &[ArchitectureBoundary]) -> Result<Vec<DriftViolation>> {
+        Ok(Vec::new())
+    }
 }
 
 impl PatternDetector for LayeredArchitectureDetector {
@@ -256,10 +260,6 @@ impl PatternDetector for LayeredArchitectureDetector {
                 compliance * 100.0
             ),
         }))
-    }
-
-    fn check_layer_compliance(&self, _graph: &DependencyGraph, _layers: &[ArchitectureBoundary]) -> Result<Vec<DriftViolation>> {
-        Ok(Vec::new())
     }
 }
 

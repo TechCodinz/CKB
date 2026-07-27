@@ -13,7 +13,7 @@ tree-sitter-typescript = "0.21"
 tree-sitter-python = "0.21"
 tree-sitter-go = "0.21"
 tree-sitter-rust = "0.21"
-tree-sitter-java = "0.23"
+tree-sitter-java = "0.21"
 
 # Concurrency
 rayon = "1.8"
@@ -30,7 +30,7 @@ sled = "0.34"
 redis = { version = "0.24", optional = true }
 
 # Graph algorithms
-petgraph = "0.6"
+petgraph = { version = "0.6", features = ["serde-1"] }
 pathfinding = "4.4"
 
 # Utilities
