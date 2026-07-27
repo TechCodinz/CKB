@@ -13,7 +13,7 @@ tree-sitter-typescript = "0.21"
 tree-sitter-python = "0.21"
 tree-sitter-go = "0.21"
 tree-sitter-rust = "0.21"
-tree-sitter-java = "0.21"
+tree-sitter-java = "0.23"
 
 # Concurrency
 rayon = "1.8"
