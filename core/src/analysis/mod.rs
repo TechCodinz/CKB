@@ -25,7 +25,7 @@ impl ArchitectureAnalyzer {
     pub fn new() -> Self {
         Self {
             pattern_detectors: vec![
-                Box::new(patterns::LayeredArchitectureDetector),
+                Box::new(patterns::LayeredArchitectureDetector::new()),
                 Box::new(patterns::ModularArchitectureDetector),
                 Box::new(patterns::HexagonalArchitectureDetector),
             ],

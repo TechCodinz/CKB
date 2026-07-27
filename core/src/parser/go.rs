@@ -12,7 +12,7 @@ pub struct GoParser {
 impl GoParser {
     pub fn new() -> Self {
         let mut parser = Parser::new();
-        parser.set_language(&tree_sitter_go::LANGUAGE.into())
+        parser.set_language(&tree_sitter_go::language())
             .expect("Failed to load Go grammar");
         Self { parser }
     }
