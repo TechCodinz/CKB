@@ -1,34 +1,26 @@
-//! Persistent storage for code knowledge graphs using RocksDB
+//! Persistent storage for code knowledge graphs using sled (pure Rust DB)
 
 mod models;
 
-use rocksdb::{DB, Options, IteratorMode, WriteBatch};
+use sled::Db;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use anyhow::Result;
 use serde::{Serialize, Deserialize};
 use crate::graph::DependencyGraph;
-use crate::types::*;
 
 pub struct GraphStorage {
-    db: Arc<DB>,
+    db: Arc<Db>,
     cache: Arc<RwLock<lru::LruCache<String, Vec<u8>>>>,
 }
 
 impl GraphStorage {
     pub fn new(path: &str) -> Result<Self> {
-        let mut opts = Options::default();
-        opts.create_if_missing(true);
-        opts.set_compression_type(rocksdb::DBCompressionType::Lz4);
-        opts.set_write_buffer_size(64 * 1024 * 1024); // 64MB
-        opts.set_max_write_buffer_number(3);
-        opts.set_target_file_size_base(64 * 1024 * 1024); // 64MB
-        
-        let db = DB::open(&opts, path)?;
+        let db = sled::open(path)?;
         
         Ok(Self {
             db: Arc::new(db),
-            cache: Arc::new(RwLock::new(lru::LruCache::new(1000))),
+            cache: Arc::new(RwLock::new(lru::LruCache::new(std::num::NonZeroUsize::new(1000).unwrap()))),
         })
     }
     
@@ -38,10 +30,7 @@ impl GraphStorage {
         
         // Serialize graph
         let bytes = bincode::serialize(graph)?;
-        
-        // Store in batch with metadata
-        let mut batch = WriteBatch::default();
-        batch.put(key.as_bytes(), &bytes);
+        self.db.insert(key.as_bytes(), bytes.as_slice())?;
         
         // Store metadata
         let metadata = SnapshotMetadata {
@@ -52,12 +41,11 @@ impl GraphStorage {
         };
         
         let meta_bytes = bincode::serialize(&metadata)?;
-        batch.put(format!("snapshot_meta:{}", snapshot_id).as_bytes(), &meta_bytes);
+        self.db.insert(format!("snapshot_meta:{}", snapshot_id).as_bytes(), meta_bytes.as_slice())?;
         
         // Update latest pointer
-        batch.put("latest_snapshot".as_bytes(), snapshot_id.as_bytes());
-        
-        self.db.write(batch)?;
+        self.db.insert("latest_snapshot".as_bytes(), snapshot_id.as_bytes())?;
+        self.db.flush()?;
         
         Ok(snapshot_id)
     }
@@ -79,7 +67,7 @@ impl GraphStorage {
             
             // Update cache
             let mut cache = self.cache.write().await;
-            cache.put(key, bytes);
+            cache.put(key, bytes.to_vec());
             
             Ok(Some(graph))
         } else {
@@ -89,7 +77,7 @@ impl GraphStorage {
     
     pub async fn get_latest_snapshot(&self) -> Result<Option<DependencyGraph>> {
         if let Some(snapshot_id) = self.db.get("latest_snapshot".as_bytes())? {
-            let id = String::from_utf8(snapshot_id)?;
+            let id = String::from_utf8(snapshot_id.to_vec())?;
             self.load_snapshot(&id).await
         } else {
             Ok(None)
@@ -98,14 +86,11 @@ impl GraphStorage {
     
     pub async fn list_snapshots(&self) -> Result<Vec<SnapshotMetadata>> {
         let mut snapshots = Vec::new();
-        let iter = self.db.iterator(IteratorMode::Start);
         
-        for item in iter {
-            let (key, value) = item?;
-            if key.starts_with(b"snapshot_meta:") {
-                if let Ok(metadata) = bincode::deserialize::<SnapshotMetadata>(&value) {
-                    snapshots.push(metadata);
-                }
+        for item in self.db.scan_prefix("snapshot_meta:") {
+            let (_key, value) = item?;
+            if let Ok(metadata) = bincode::deserialize::<SnapshotMetadata>(&value) {
+                snapshots.push(metadata);
             }
         }
         
@@ -116,11 +101,9 @@ impl GraphStorage {
         let key = format!("snapshot:{}", snapshot_id);
         let meta_key = format!("snapshot_meta:{}", snapshot_id);
         
-        let mut batch = WriteBatch::default();
-        batch.delete(key.as_bytes());
-        batch.delete(meta_key.as_bytes());
-        
-        self.db.write(batch)?;
+        self.db.remove(key.as_bytes())?;
+        self.db.remove(meta_key.as_bytes())?;
+        self.db.flush()?;
         
         // Remove from cache
         let mut cache = self.cache.write().await;
