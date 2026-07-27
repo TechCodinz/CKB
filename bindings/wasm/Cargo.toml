@@ -1,0 +1,18 @@
+[package]
+name = "ckb-wasm"
+version = "0.1.0"
+edition = "2021"
+description = "CKB WASM bindings"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+ckb-core = { path = "../../core" }
+wasm-bindgen = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Oz", "--enable-mutable-globals"]

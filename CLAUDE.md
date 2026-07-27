@@ -1,0 +1,20 @@
+# 🤖 Auto-Generated CKB Architectural Guidelines (CLAUDE.md)
+
+> This repository is governed by CKB (Code Knowledge Base). Maintain architectural boundaries when making code edits.
+
+## Core Architectural Boundaries
+1. **`core/` (Rust Engine)**:
+   - Contains multi-language tree-sitter parsers, petgraph dependency store, drift detection, and topological context slicer.
+   - Do NOT introduce direct external networking dependencies into `core`.
+2. **`mcp-server/` (MCP & REST Server)**:
+   - Exposes standard JSON-RPC 2.0 stdio transport and HTTP REST routes using Axum.
+   - Handles `initialize`, `tools/list`, `tools/call`, `resources/list` for AI clients (Cursor, Claude, Windsurf).
+3. **`cli/` (CLI Tool)**:
+   - Clap-powered CLI binary for `scan`, `check`, `impact`, `export`, `serve`, and `init`.
+4. **`web/` (React Dashboard)**:
+   - React + Material UI + ForceGraph2D visualizer.
+
+## Key Architectural Guardrails
+- Maintain zero-copy, non-blocking asynchronous operations in `core` and `mcp-server`.
+- Do not introduce circular crate dependencies in the Cargo workspace.
+- Always verify blast radius with `ckb impact` before modifying public AST parser signatures.

@@ -1,0 +1,14 @@
+{
+    "context_servers": {
+        "ckb": {
+            "command": {
+                "path": "ckb-mcp-server",
+                "args": [
+                    "--port",
+                    "3000",
+                    "--cors"
+                ]
+            }
+        }
+    }
+}

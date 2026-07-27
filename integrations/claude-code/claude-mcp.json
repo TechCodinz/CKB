@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+        "ckb": {
+            "command": "ckb-mcp-server",
+            "args": [
+                "--port",
+                "3000",
+                "--cors"
+            ]
+        }
+    }
+}

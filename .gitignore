@@ -1,0 +1,38 @@
+# Build artifacts
+target/
+node_modules/
+out/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Rust
+*.pdb
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Vercel
+.vercel/
+
+# RocksDB data
+ckb_data/
+
+# Test artifacts
+*.sarif
+*.snap

@@ -1,0 +1,21 @@
+# CKB Architectural Rules for Windsurf Cascade
+# Place at project root as .windsurfrules
+# Cascade reads this file automatically before generating code
+
+You have access to the CKB (Code Knowledge Base) MCP server.
+
+## BEFORE GENERATING ANY CODE:
+1. Call `ckb_check_boundaries` to get current architecture layers
+2. Call `ckb_analyze_impact` on any file you plan to significantly modify
+3. Never put code in the wrong layer
+
+## RULES:
+- No circular dependencies — ever
+- Lower layers must not import from higher layers
+- Any node with >15 dependents is STABLE — refactor with extreme caution
+- If a change has risk_score > 0.7, warn the user BEFORE writing code
+
+## WHEN ASKED TO "ADD A FEATURE":
+1. Call `ckb_detect_patterns` first — follow the existing pattern
+2. Place code in the correct architectural layer
+3. After generation, confirm the change wouldn't create violations

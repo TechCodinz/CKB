@@ -1,0 +1,41 @@
+#!/bin/sh
+# CKB Pre-commit Hook
+# Blocks commits if critical architectural violations are found
+# Install: cp .git/hooks/pre-commit.ckb .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+
+echo "🔍 CKB: Checking architecture..."
+
+# Check if CKB is installed
+if ! command -v ckb &> /dev/null; then
+    echo "⚠️  CKB not installed — skipping architecture check"
+    exit 0
+fi
+
+# Run architecture check
+OUTPUT=$(ckb check . --format json 2>/dev/null)
+if [ $? -ne 0 ]; then
+    echo "⚠️  CKB server not running — skipping check"
+    exit 0
+fi
+
+# Count violations by severity
+CRITICAL=$(echo "$OUTPUT" | grep -c '"severity":"Critical"' || true)
+ERRORS=$(echo "$OUTPUT" | grep -c '"severity":"Error"' || true)
+TOTAL=$((CRITICAL + ERRORS))
+
+if [ "$TOTAL" -gt 0 ]; then
+    echo ""
+    echo "🔴 CKB: $TOTAL critical/error architectural violations found!"
+    echo "   Run 'ckb check .' to see details"
+    echo "   Fix violations or use 'git commit --no-verify' to bypass"
+    echo ""
+    exit 1
+fi
+
+WARNINGS=$(echo "$OUTPUT" | grep -c '"severity":"Warning"' || true)
+if [ "$WARNINGS" -gt 0 ]; then
+    echo "🟡 CKB: $WARNINGS architectural warnings (commit allowed)"
+fi
+
+echo "✅ CKB: Architecture check passed"
+exit 0

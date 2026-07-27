@@ -1,0 +1,13 @@
+{
+    "mcpServers": {
+        "ckb": {
+            "command": "ckb-mcp-server",
+            "args": [
+                "--stdio"
+            ],
+            "env": {
+                "CKB_PROJECT_PATH": "${workspaceFolder}"
+            }
+        }
+    }
+}

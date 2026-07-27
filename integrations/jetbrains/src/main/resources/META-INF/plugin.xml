@@ -1,0 +1,96 @@
+<idea-plugin>
+    <id>dev.ckb.jetbrains</id>
+    <name>CKB – Architectural Intelligence</name>
+    <vendor email="support@ckb.dev" url="https://ckb.dev">CKB</vendor>
+    <version>1.0.0</version>
+
+    <description><![CDATA[
+        <b>CKB – Code Knowledge Base</b><br><br>
+        Real-time architectural intelligence for your JetBrains IDE.<br><br>
+        <ul>
+            <li>🔍 Scan your codebase for architectural violations</li>
+            <li>🛡️ See dependency violations as inline errors and warnings</li>
+            <li>⚡ Analyze impact of changes before you make them</li>
+            <li>🗺️ Visualize your dependency graph</li>
+            <li>🤖 MCP server integration for AI tools (Claude, Cursor, etc.)</li>
+        </ul>
+        Supports: IntelliJ IDEA, PyCharm, WebStorm, GoLand, Rider, Android Studio.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Tool Window -->
+        <toolWindow id="CKB"
+                    displayName="CKB"
+                    anchor="bottom"
+                    icon="/icons/ckb_tool_window.svg"
+                    factoryClass="dev.ckb.toolwindow.CkbToolWindowFactory"/>
+
+        <!-- External Annotator for inline diagnostics -->
+        <externalAnnotator
+                language="JAVA"
+                implementationClass="dev.ckb.annotator.CkbAnnotator"/>
+        <externalAnnotator
+                language="kotlin"
+                implementationClass="dev.ckb.annotator.CkbAnnotator"/>
+        <externalAnnotator
+                language="Python"
+                implementationClass="dev.ckb.annotator.CkbAnnotator"/>
+        <externalAnnotator
+                language="TypeScript"
+                implementationClass="dev.ckb.annotator.CkbAnnotator"/>
+
+        <!-- Application settings -->
+        <applicationConfigurable
+                parentId="tools"
+                instance="dev.ckb.settings.CkbSettingsConfigurable"
+                id="dev.ckb.settings"
+                displayName="CKB Settings"/>
+        <applicationService
+                serviceImplementation="dev.ckb.settings.CkbSettings"/>
+    </extensions>
+
+    <actions>
+        <!-- CKB Menu Group -->
+        <group id="CkbMenuGroup" text="CKB" popup="true">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+
+            <action id="CkbScanAction"
+                    class="dev.ckb.actions.ScanProjectAction"
+                    text="Scan Project"
+                    description="Run full CKB architectural scan"
+                    icon="AllIcons.Actions.Find">
+            </action>
+            <action id="CkbCheckAction"
+                    class="dev.ckb.actions.CheckArchitectureAction"
+                    text="Check Architecture"
+                    description="Check for architectural violations"
+                    icon="AllIcons.General.InspectionsOK">
+            </action>
+            <action id="CkbImpactAction"
+                    class="dev.ckb.actions.AnalyzeImpactAction"
+                    text="Analyze Impact at Cursor"
+                    description="Analyze impact of change at current cursor position"
+                    icon="AllIcons.Debugger.Watch">
+                <keyboard-shortcut keymap="$default" first-keystroke="shift ctrl I"/>
+            </action>
+            <action id="CkbGraphAction"
+                    class="dev.ckb.actions.ShowGraphAction"
+                    text="Show Dependency Graph"
+                    description="Open dependency graph visualization"
+                    icon="AllIcons.Toolwindows.Dependencies">
+            </action>
+        </group>
+
+        <!-- Editor Context Menu -->
+        <group id="CkbEditorGroup">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <action id="CkbImpactContextAction"
+                    class="dev.ckb.actions.AnalyzeImpactAction"
+                    text="CKB: Analyze Impact Here"
+                    description="Analyze architectural impact at this location"
+                    icon="AllIcons.Debugger.Watch"/>
+        </group>
+    </actions>
+</idea-plugin>

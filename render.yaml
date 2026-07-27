@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: ckb-mcp-server
+    env: rust
+    plan: free
+    buildCommand: cargo build --release -p ckb-mcp-server
+    startCommand: ./target/release/ckb-mcp-server
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: RUST_LOG
+        value: info
+      - key: DATABASE_URL
+        sync: false   # Set this manually in Render dashboard
+  - type: web
+    name: ckb-backend-api
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 4000
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false   # Set this manually in Render dashboard
+      - key: JWT_SECRET
+        sync: false   # Set this manually in Render dashboard
+      - key: COINBASE_PRO_LINK
+        sync: false
+      - key: COINBASE_TEAM_LINK
+        sync: false
+      - key: FRONTEND_URL
+        sync: false   # Your Vercel URL

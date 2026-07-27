@@ -1,0 +1,23 @@
+[
+    {
+        "label": "CKB: Scan Project",
+        "command": "ckb scan ${ZED_WORKTREE_ROOT}",
+        "reveal": "always"
+    },
+    {
+        "label": "CKB: Check Architecture",
+        "command": "ckb check ${ZED_WORKTREE_ROOT}",
+        "reveal": "always"
+    },
+    {
+        "label": "CKB: Start MCP Server",
+        "command": "ckb serve --cors",
+        "reveal": "always",
+        "hide": "on_success"
+    },
+    {
+        "label": "CKB: Impact Analysis (Current File)",
+        "command": "ckb impact ${ZED_WORKTREE_ROOT} ${ZED_FILE} 1",
+        "reveal": "always"
+    }
+]
