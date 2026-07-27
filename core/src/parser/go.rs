@@ -6,7 +6,7 @@ use crate::types::{Node as CkbNode, NodeKind, Symbol, SymbolKind, Import, Import
 use anyhow::Result;
 
 pub struct GoParser {
-    parser: Parser,
+    parser: std::sync::Mutex<Parser>,
 }
 
 impl GoParser {
@@ -14,7 +14,7 @@ impl GoParser {
         let mut parser = Parser::new();
         parser.set_language(&tree_sitter_go::language())
             .expect("Failed to load Go grammar");
-        Self { parser }
+        Self { parser: std::sync::Mutex::new(parser) }
     }
     
     fn extract_imports(&self, node: Node, source: &str) -> Vec<Import> {
@@ -166,7 +166,7 @@ impl GoParser {
 
 impl LanguageParserTrait for GoParser {
     fn parse(&self, path: &str, content: &str) -> Result<FileAnalysis> {
-        let tree = self.parser.parse(content, None)
+        let tree = self.parser.lock().unwrap().parse(content, None)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse Go file"))?;
         
         let root = tree.root_node();

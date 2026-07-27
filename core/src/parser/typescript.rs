@@ -7,7 +7,7 @@ use anyhow::Result;
 use std::collections::HashSet;
 
 pub struct TypeScriptParser {
-    parser: Parser,
+    parser: std::sync::Mutex<Parser>,
 }
 
 impl TypeScriptParser {
@@ -15,7 +15,7 @@ impl TypeScriptParser {
         let mut parser = Parser::new();
         parser.set_language(&tree_sitter_typescript::language_tsx())
             .expect("Failed to load TypeScript grammar");
-        Self { parser }
+        Self { parser: std::sync::Mutex::new(parser) }
     }
     
     fn extract_imports(&self, node: Node, source: &str) -> Vec<Import> {
@@ -142,7 +142,7 @@ impl TypeScriptParser {
 
 impl LanguageParserTrait for TypeScriptParser {
     fn parse(&self, path: &str, content: &str) -> Result<FileAnalysis> {
-        let tree = self.parser.parse(content, None)
+        let tree = self.parser.lock().unwrap().parse(content, None)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse file"))?;
         
         let root = tree.root_node();
@@ -179,7 +179,7 @@ impl LanguageParserTrait for TypeScriptParser {
 
 // JavaScript parser (reuses TypeScript parser with JS grammar)
 pub struct JavaScriptParser {
-    parser: Parser,
+    parser: std::sync::Mutex<Parser>,
 }
 
 impl JavaScriptParser {
@@ -187,13 +187,13 @@ impl JavaScriptParser {
         let mut parser = Parser::new();
         parser.set_language(&tree_sitter_typescript::language_tsx())
             .expect("Failed to load JavaScript grammar");
-        Self { parser }
+        Self { parser: std::sync::Mutex::new(parser) }
     }
 }
 
 impl LanguageParserTrait for JavaScriptParser {
     fn parse(&self, path: &str, content: &str) -> Result<FileAnalysis> {
-        let tree = self.parser.parse(content, None)
+        let tree = self.parser.lock().unwrap().parse(content, None)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse JavaScript file"))?;
 
         let root = tree.root_node();

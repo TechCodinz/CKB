@@ -7,6 +7,7 @@ use crate::types::*;
 use crate::parser::FileAnalysis;
 use anyhow::Result;
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct DependencyGraph {
     graph: DiGraph<Node, Edge>,
     node_indices: HashMap<NodeId, NodeIndex>,
@@ -22,6 +23,10 @@ impl DependencyGraph {
             reverse_indices: HashMap::new(),
             runtime_traces: HashMap::new(),
         }
+    }
+
+    pub fn get_all_nodes(&self) -> Vec<Node> {
+        self.graph.node_weights().cloned().collect()
     }
 
     /// Record live dynamic runtime trace telemetry for a node

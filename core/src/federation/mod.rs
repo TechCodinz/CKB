@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use crate::types::*;
-use crate::parser::ScanReport;
+use crate::ScanReport;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FederatedRepoInfo {

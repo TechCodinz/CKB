@@ -7,7 +7,7 @@ use anyhow::Result;
 use std::collections::HashSet;
 
 pub struct PythonParser {
-    parser: Parser,
+    parser: std::sync::Mutex<Parser>,
 }
 
 impl PythonParser {
@@ -15,7 +15,7 @@ impl PythonParser {
         let mut parser = Parser::new();
         parser.set_language(&tree_sitter_python::language())
             .expect("Failed to load Python grammar");
-        Self { parser }
+        Self { parser: std::sync::Mutex::new(parser) }
     }
     
     fn extract_imports(&self, node: Node, source: &str) -> Vec<Import> {
@@ -176,7 +176,7 @@ impl PythonParser {
 
 impl LanguageParserTrait for PythonParser {
     fn parse(&self, path: &str, content: &str) -> Result<FileAnalysis> {
-        let tree = self.parser.parse(content, None)
+        let tree = self.parser.lock().unwrap().parse(content, None)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse Python file"))?;
         
         let root = tree.root_node();
