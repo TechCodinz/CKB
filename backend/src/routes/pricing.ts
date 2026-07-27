@@ -164,4 +164,49 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req: a
     res.json({ received: true });
 });
 
+// Flutterwave payment initialization
+router.post('/flutterwave/initialize', authenticate, async (req: any, res) => {
+    try {
+        const { planId, amount, currency, redirectUrl } = req.body;
+        const { flutterwavePaymentService } = require('../payments/flutterwave');
+
+        const result = await flutterwavePaymentService.initializePayment({
+            userId: req.user.id,
+            email: req.user.email || 'user@example.com',
+            name: req.user.name || 'CKB Subscriber',
+            planId: planId || 'pro',
+            amount: amount || 29,
+            currency: currency || 'USD',
+            redirectUrl: redirectUrl || 'https://ckb.dev/dashboard',
+        });
+
+        res.json(result);
+    } catch (error: any) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Flutterwave transaction verification
+router.get('/flutterwave/verify/:transactionId', async (req: any, res) => {
+    try {
+        const { flutterwavePaymentService } = require('../payments/flutterwave');
+        const result = await flutterwavePaymentService.verifyTransaction(req.params.transactionId);
+        res.json(result);
+    } catch (error: any) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Flutterwave webhook handler
+router.post('/flutterwave/webhook', express.json(), async (req: any, res) => {
+    try {
+        const signature = req.headers['verif-hash'] as string;
+        const { flutterwavePaymentService } = require('../payments/flutterwave');
+        const result = await flutterwavePaymentService.handleWebhook(req.body, signature);
+        res.json(result);
+    } catch (error: any) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
 export default router;
