@@ -1,0 +1,147 @@
+{
+    "plans": [
+        {
+            "id": "free",
+            "name": "Free",
+            "tagline": "For individual developers",
+            "price": 0,
+            "currency": "USD",
+            "interval": "month",
+            "features": [
+                "5 projects",
+                "Basic architectural scanning",
+                "Community support",
+                "Dependency graph visualization",
+                "7-day snapshot retention"
+            ],
+            "limits": {
+                "projects": 5,
+                "team_members": 1,
+                "api_calls_per_month": 1000,
+                "storage_gb": 0.1
+            },
+            "cta": "Get Started",
+            "popular": false
+        },
+        {
+            "id": "pro",
+            "name": "Pro",
+            "tagline": "For professional developers",
+            "price": 29,
+            "currency": "USD",
+            "interval": "month",
+            "features": [
+                "Unlimited projects",
+                "Advanced architectural patterns",
+                "Real-time drift detection",
+                "MCP server integration",
+                "30-day snapshot retention",
+                "Email support",
+                "VS Code extension"
+            ],
+            "limits": {
+                "projects": -1,
+                "team_members": 1,
+                "api_calls_per_month": 10000,
+                "storage_gb": 1
+            },
+            "cta": "Start Pro Trial",
+            "popular": true,
+            "annual_discount": 0.2
+        },
+        {
+            "id": "team",
+            "name": "Team",
+            "tagline": "For small teams",
+            "price": 99,
+            "currency": "USD",
+            "interval": "month",
+            "price_per_seat": true,
+            "min_seats": 5,
+            "features": [
+                "Everything in Pro",
+                "5 team members included",
+                "Team analytics dashboard",
+                "Shared architectural rules",
+                "Custom violation thresholds",
+                "Slack integration",
+                "Priority support",
+                "API access"
+            ],
+            "limits": {
+                "projects": -1,
+                "team_members": 5,
+                "additional_seat_price": 19,
+                "api_calls_per_month": 50000,
+                "storage_gb": 10
+            },
+            "cta": "Contact Sales",
+            "popular": false
+        },
+        {
+            "id": "enterprise",
+            "name": "Enterprise",
+            "tagline": "For large organizations",
+            "price": "custom",
+            "currency": "USD",
+            "features": [
+                "Everything in Team",
+                "On-premise deployment",
+                "SSO/SAML integration",
+                "SLA guarantees",
+                "Dedicated support engineer",
+                "Custom rule development",
+                "Security compliance reports",
+                "Unlimited everything",
+                "Training & onboarding"
+            ],
+            "cta": "Talk to Sales",
+            "popular": false
+        }
+    ],
+    "addons": [
+        {
+            "id": "additional_seats",
+            "name": "Additional Team Seats",
+            "price": 19,
+            "unit": "per seat/month",
+            "description": "Add more team members beyond the included 5"
+        },
+        {
+            "id": "snapshot_storage",
+            "name": "Extended Snapshot Storage",
+            "price": 49,
+            "unit": "per 10GB/month",
+            "description": "Keep more historical snapshots"
+        },
+        {
+            "id": "api_quota",
+            "name": "Additional API Calls",
+            "price": 10,
+            "unit": "per 10,000 calls",
+            "description": "Extra API quota for MCP integration"
+        },
+        {
+            "id": "custom_rules",
+            "name": "Custom Rule Development",
+            "price": 999,
+            "unit": "one-time",
+            "description": "We'll build custom architectural rules for your stack"
+        }
+    ],
+    "annual_discounts": {
+        "pro": 0.2,
+        "team": 0.15
+    },
+    "trial_days": 14,
+    "currencies": [
+        "USD",
+        "EUR",
+        "GBP"
+    ],
+    "billing_intervals": [
+        "month",
+        "year",
+        "one-time"
+    ]
+}

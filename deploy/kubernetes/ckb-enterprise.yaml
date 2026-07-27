@@ -1,0 +1,165 @@
+# Kubernetes deployment for enterprise customers
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ckb-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ckb-config
+  namespace: ckb-system
+data:
+  CKB_ENVIRONMENT: production
+  CKB_LOG_LEVEL: info
+  CKB_DATA_DIR: /data/ckb
+  CKB_AUTH_ENABLED: "true"
+  CKB_RATE_LIMIT: "1000"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ckb-secrets
+  namespace: ckb-system
+type: Opaque
+data:
+  # These should be base64 encoded
+  DATABASE_URL: ${DATABASE_URL_B64}
+  REDIS_URL: ${REDIS_URL_B64}
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY_B64}
+  JWT_SECRET: ${JWT_SECRET_B64}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ckb-server
+  namespace: ckb-system
+spec:
+  serviceName: ckb-server
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ckb-server
+  template:
+    metadata:
+      labels:
+        app: ckb-server
+    spec:
+      containers:
+      - name: ckb
+        image: ckb/enterprise:latest
+        ports:
+        - containerPort: 3000
+          name: http
+        - containerPort: 3001
+          name: metrics
+        envFrom:
+        - configMapRef:
+            name: ckb-config
+        - secretRef:
+            name: ckb-secrets
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: config
+          mountPath: /app/config
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: ckb-config
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: "ssd"
+      resources:
+        requests:
+          storage: 100Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ckb-server
+  namespace: ckb-system
+spec:
+  selector:
+    app: ckb-server
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+  - name: metrics
+    port: 3001
+    targetPort: 3001
+  type: LoadBalancer
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ckb-ingress
+  namespace: ckb-system
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+  - hosts:
+    - ckb.customer.com
+    secretName: ckb-tls
+  rules:
+  - host: ckb.customer.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ckb-server
+            port:
+              number: 3000
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ckb-server
+  namespace: ckb-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: ckb-server
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80

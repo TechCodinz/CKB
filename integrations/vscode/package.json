@@ -1,0 +1,116 @@
+{
+    "name": "ckb-vscode",
+    "displayName": "CKB - Code Knowledge Base",
+    "description": "Real-time architectural intelligence — detect violations, analyze impact, visualize dependencies",
+    "version": "1.0.0",
+    "publisher": "ckb-dev",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/ckbdev/ckb"
+    },
+    "keywords": [
+        "architecture",
+        "dependency",
+        "analysis",
+        "mcp",
+        "ai",
+        "code-quality"
+    ],
+    "engines": {
+        "vscode": "^1.85.0"
+    },
+    "categories": [
+        "Linters",
+        "Other",
+        "Programming Languages"
+    ],
+    "activationEvents": [
+        "onStartupFinished"
+    ],
+    "main": "./out/extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "ckb.scan",
+                "title": "CKB: Scan Project",
+                "icon": "$(search)"
+            },
+            {
+                "command": "ckb.check",
+                "title": "CKB: Check Architecture",
+                "icon": "$(shield)"
+            },
+            {
+                "command": "ckb.impact",
+                "title": "CKB: Analyze Impact",
+                "icon": "$(pulse)"
+            },
+            {
+                "command": "ckb.showStatus",
+                "title": "CKB: Show Status",
+                "icon": "$(info)"
+            },
+            {
+                "command": "ckb.startServer",
+                "title": "CKB: Start MCP Server",
+                "icon": "$(server)"
+            }
+        ],
+        "keybindings": [
+            {
+                "command": "ckb.impact",
+                "key": "shift+ctrl+i",
+                "mac": "shift+cmd+i",
+                "when": "editorTextFocus"
+            },
+            {
+                "command": "ckb.scan",
+                "key": "shift+ctrl+s",
+                "mac": "shift+cmd+s",
+                "when": "editorTextFocus"
+            }
+        ],
+        "configuration": {
+            "title": "CKB",
+            "properties": {
+                "ckb.serverUrl": {
+                    "type": "string",
+                    "default": "http://localhost:3000",
+                    "description": "URL of the CKB MCP server. Start with: ckb serve"
+                },
+                "ckb.autoScanOnOpen": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically scan project when workspace opens"
+                },
+                "ckb.showDiagnostics": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Show architectural violations as inline errors/warnings"
+                }
+            }
+        },
+        "menus": {
+            "editor/context": [
+                {
+                    "when": "editorTextFocus",
+                    "command": "ckb.impact",
+                    "group": "ckb@1"
+                }
+            ]
+        }
+    },
+    "scripts": {
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "package": "vsce package",
+        "publish": "vsce publish"
+    },
+    "devDependencies": {
+        "@types/vscode": "^1.85.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.3.0",
+        "@vscode/vsce": "^2.22.0"
+    }
+}

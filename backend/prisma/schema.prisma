@@ -1,0 +1,109 @@
+// Prisma schema for CKB Backend
+// Run: npx prisma generate && npx prisma migrate deploy
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  name         String?
+  passwordHash String?
+  plan         String    @default("free")
+  active       Boolean   @default(true)
+  stripeCustomerId String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  projects     Project[]
+  subscription Subscription?
+  payments     Payment[]
+  apiKeys      ApiKey[]
+
+  @@map("users")
+}
+
+model Project {
+  id          String    @id @default(uuid())
+  name        String
+  path        String?
+  userId      String
+  lastScanned DateTime?
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scans       Scan[]
+
+  @@map("projects")
+}
+
+model Subscription {
+  id                     String    @id @default(uuid())
+  userId                 String    @unique
+  planId                 String
+  status                 String
+  stripeSubscriptionId   String?   @unique
+  stripeSubscriptionItemId String?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime
+  cancelAtPeriodEnd      Boolean   @default(false)
+  canceledAt             DateTime?
+  createdAt              DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model Payment {
+  id              String    @id @default(uuid())
+  userId          String
+  stripeInvoiceId String?   @unique
+  subscriptionId  String?
+  amount          Int
+  currency        String    @default("usd")
+  status          String
+  paidAt          DateTime?
+  createdAt       DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model ApiKey {
+  id          String    @id @default(uuid())
+  userId      String
+  name        String
+  prefix      String
+  hash        String    @unique
+  permissions Json      @default("[\"read\"]")
+  active      Boolean   @default(true)
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+model Scan {
+  id             String   @id @default(uuid())
+  projectId      String
+  filesScanned   Int      @default(0)
+  nodesFound     Int      @default(0)
+  violationsFound Int     @default(0)
+  score          Float?
+  createdAt      DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("scans")
+}

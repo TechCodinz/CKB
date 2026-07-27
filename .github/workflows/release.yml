@@ -1,0 +1,63 @@
+name: Release CLI
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-release:
+    name: Build and Release
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools (Linux ARM)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }} -p cli
+
+      - name: Package Binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czvf ckb-${{ matrix.target }}.tar.gz ckb-cli
+          mv ckb-${{ matrix.target }}.tar.gz ../../../
+
+      - name: Package Binary (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd target\${{ matrix.target }}\release
+          Compress-Archive -Path ckb-cli.exe -DestinationPath ckb-${{ matrix.target }}.zip
+          Move-Item ckb-${{ matrix.target }}.zip ..\..\..
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ckb-${{ matrix.target }}.tar.gz
+            ckb-${{ matrix.target }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
