@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::algo::has_path_connecting;
 use crate::types::*;
+use crate::parser::FileAnalysis;
 use anyhow::Result;
 
 pub struct DependencyGraph {
@@ -215,8 +216,8 @@ impl DependencyGraph {
                             });
 
                             // Indirect dependents (hop 2)
-                            let 2nd_neighbors = self.graph.neighbors_directed(neighbor_idx, petgraph::Direction::Incoming);
-                            for ind_idx in 2nd_neighbors {
+                            let second_neighbors = self.graph.neighbors_directed(neighbor_idx, petgraph::Direction::Incoming);
+                            for ind_idx in second_neighbors {
                                 if let Some(ind_id) = self.reverse_indices.get(&ind_idx) {
                                     if !visited.contains(ind_id) {
                                         visited.insert(ind_id.clone());

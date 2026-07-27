@@ -2,6 +2,7 @@
 
 use crate::graph::DependencyGraph;
 use crate::types::*;
+use super::PatternDetector;
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;

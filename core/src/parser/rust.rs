@@ -12,7 +12,7 @@ pub struct RustParser {
 impl RustParser {
     pub fn new() -> Self {
         let mut parser = Parser::new();
-        parser.set_language(&tree_sitter_rust::LANGUAGE.into())
+        parser.set_language(&tree_sitter_rust::language())
             .expect("Failed to load Rust grammar");
         Self { parser }
     }

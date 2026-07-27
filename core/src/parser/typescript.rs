@@ -13,7 +13,7 @@ pub struct TypeScriptParser {
 impl TypeScriptParser {
     pub fn new() -> Self {
         let mut parser = Parser::new();
-        parser.set_language(&tree_sitter_typescript::LANGUAGE_TSX.into())
+        parser.set_language(&tree_sitter_typescript::language_tsx())
             .expect("Failed to load TypeScript grammar");
         Self { parser }
     }
@@ -185,7 +185,7 @@ pub struct JavaScriptParser {
 impl JavaScriptParser {
     pub fn new() -> Self {
         let mut parser = Parser::new();
-        parser.set_language(&tree_sitter_typescript::LANGUAGE_JSX.into())
+        parser.set_language(&tree_sitter_typescript::language_tsx())
             .expect("Failed to load JavaScript grammar");
         Self { parser }
     }

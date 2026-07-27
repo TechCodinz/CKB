@@ -13,7 +13,7 @@ pub struct PythonParser {
 impl PythonParser {
     pub fn new() -> Self {
         let mut parser = Parser::new();
-        parser.set_language(&tree_sitter_python::LANGUAGE.into())
+        parser.set_language(&tree_sitter_python::language())
             .expect("Failed to load Python grammar");
         Self { parser }
     }
