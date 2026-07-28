@@ -50,6 +50,11 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/v1/scan", post(scan_codebase))
         .route("/api/v1/report", get(get_report))
         .route("/api/v1/impact", post(analyze_impact))
+        .route("/api/v1/search", post(search_codebase))
+        .route("/api/v1/otlp", post(ingest_otlp))
+        .route("/api/v1/drift-timeline", get(get_drift_timeline))
+        .route("/api/v1/test-gaps", get(analyze_test_gaps))
+        .route("/api/v1/rules", get(generate_rules))
         .layer(cors)
         .with_state(state);
 
@@ -540,6 +545,91 @@ async fn analyze_impact(
     
     match engine.analyze_impact(&payload.file, payload.line, c_type).await {
         Ok(impact) => Ok(Json(impact)),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+    }
+}
+
+#[derive(Deserialize)]
+struct SearchRequest {
+    query: String,
+}
+
+#[derive(Serialize)]
+struct SearchResult {
+    query: String,
+    matches: Vec<Value>,
+}
+
+async fn search_codebase(
+    State(state): State<AppState>,
+    Json(payload): Json<SearchRequest>,
+) -> Result<Json<SearchResult>, (StatusCode, String)> {
+    let _engine = state.engine.read().await;
+    let report = state.latest_report.read().await;
+    
+    let mut matches = Vec::new();
+    if let Some(ref r) = *report {
+        let q = payload.query.to_lowercase();
+        for pattern in &r.patterns {
+            if format!("{:?}", pattern).to_lowercase().contains(&q) {
+                matches.push(json!({ "type": "pattern", "data": pattern }));
+            }
+        }
+        for drift in &r.drift {
+            if drift.message.to_lowercase().contains(&q) || drift.boundary.to_lowercase().contains(&q) {
+                matches.push(json!({ "type": "drift", "data": drift }));
+            }
+        }
+    }
+    
+    Ok(Json(SearchResult {
+        query: payload.query,
+        matches,
+    }))
+}
+
+#[derive(Deserialize)]
+struct OtlpRequest {
+    raw_spans: String,
+}
+
+async fn ingest_otlp(
+    State(state): State<AppState>,
+    Json(payload): Json<OtlpRequest>,
+) -> Result<Json<ckb_core::OtlpIngestReport>, (StatusCode, String)> {
+    let engine = state.engine.read().await;
+    match engine.ingest_otlp_spans(&payload.raw_spans).await {
+        Ok(report) => Ok(Json(report)),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+    }
+}
+
+async fn get_drift_timeline(
+    State(state): State<AppState>,
+) -> Result<Json<ckb_core::DriftTimeline>, (StatusCode, String)> {
+    let engine = state.engine.read().await;
+    match engine.get_drift_timeline(".", 50).await {
+        Ok(timeline) => Ok(Json(timeline)),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+    }
+}
+
+async fn analyze_test_gaps(
+    State(state): State<AppState>,
+) -> Result<Json<ckb_core::TestCoverageGapReport>, (StatusCode, String)> {
+    let engine = state.engine.read().await;
+    match engine.analyze_test_coverage_gaps().await {
+        Ok(report) => Ok(Json(report)),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+    }
+}
+
+async fn generate_rules(
+    State(state): State<AppState>,
+) -> Result<String, (StatusCode, String)> {
+    let engine = state.engine.read().await;
+    match engine.generate_ai_rules().await {
+        Ok(rules) => Ok(rules),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
     }
 }
