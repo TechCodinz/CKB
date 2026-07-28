@@ -7,8 +7,6 @@ services:
     startCommand: ./target/release/ckb-mcp-server
     healthCheckPath: /health
     envVars:
-      - key: PORT
-        value: 3000
       - key: RUST_LOG
         value: info
       - key: DATABASE_URL
@@ -22,8 +20,6 @@ services:
     startCommand: npm start
     healthCheckPath: /health
     envVars:
-      - key: PORT
-        value: 4000
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL

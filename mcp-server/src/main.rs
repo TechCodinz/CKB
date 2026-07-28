@@ -21,6 +21,10 @@ struct AppState {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    use std::io::Write;
+    println!("CKB MCP Server: starting execution...");
+    std::io::stdout().flush().unwrap();
+    
     tracing_subscriber::fmt::init();
     
     let args: Vec<String> = std::env::args().collect();
