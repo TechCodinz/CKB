@@ -77,8 +77,8 @@
             "properties": {
                 "ckb.serverUrl": {
                     "type": "string",
-                    "default": "http://localhost:3000",
-                    "description": "URL of the CKB MCP server. Start with: ckb serve"
+                    "default": "https://ckb-mcp-server.onrender.com",
+                    "description": "URL of the CKB server. Default is live engine: https://ckb-mcp-server.onrender.com"
                 },
                 "ckb.autoScanOnOpen": {
                     "type": "boolean",

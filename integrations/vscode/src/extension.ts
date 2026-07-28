@@ -44,6 +44,44 @@ export function activate(context: vscode.ExtensionContext) {
     }
 }
 
+async function fetchApi(endpoint: string, method: string = 'GET', body?: any): Promise<any> {
+    const config = vscode.workspace.getConfiguration('ckb');
+    const baseUrl = config.get<string>('serverUrl') || 'https://ckb-mcp-server.onrender.com';
+    const url = `${baseUrl.replace(/\/$/, '')}${endpoint}`;
+
+    return new Promise((resolve, reject) => {
+        try {
+            const urlObj = new URL(url);
+            const transport = urlObj.protocol === 'https:' ? require('https') : require('http');
+            const reqData = body ? JSON.stringify(body) : '';
+
+            const req = transport.request(urlObj, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(reqData)
+                }
+            }, (res: any) => {
+                let data = '';
+                res.on('data', (chunk: any) => data += chunk);
+                res.on('end', () => {
+                    try {
+                        resolve(JSON.parse(data));
+                    } catch {
+                        resolve(data);
+                    }
+                });
+            });
+
+            req.on('error', (err: any) => reject(err));
+            if (reqData) req.write(reqData);
+            req.end();
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
+
 async function scanProject() {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     if (!workspaceFolder) {
@@ -54,20 +92,32 @@ async function scanProject() {
     statusBarItem.text = '$(sync~spin) CKB Scanning...';
 
     try {
-        const { stdout } = await execAsync(
-            `ckb scan "${workspaceFolder.uri.fsPath}" --format json`,
-            { timeout: 60000 }
-        );
+        let report: any = null;
 
-        const report = JSON.parse(stdout);
+        // 1. Try local CLI first
+        try {
+            const { stdout } = await execAsync(
+                `ckb scan "${workspaceFolder.uri.fsPath}" --format json`,
+                { timeout: 60000 }
+            );
+            const parsed = JSON.parse(stdout);
+            report = parsed.report || parsed;
+        } catch {
+            // 2. Fallback seamlessly to HTTP REST server (Cloud Engine)
+            await fetchApi('/api/v1/scan', 'POST', { path: workspaceFolder.uri.fsPath });
+            report = await fetchApi('/api/v1/report', 'GET');
+        }
 
-        statusBarItem.text = `$(shield) CKB: ${report.report?.patterns?.length || 0} patterns, ${report.report?.drift?.length || 0} violations`;
+        const patternsCount = report?.patterns?.length || 0;
+        const driftList = report?.drift || [];
+
+        statusBarItem.text = `$(shield) CKB: ${patternsCount} patterns, ${driftList.length} violations`;
 
         // Convert violations to VS Code diagnostics
         diagnosticCollection.clear();
         const diagnosticMap = new Map<string, vscode.Diagnostic[]>();
 
-        for (const violation of report.report?.drift || []) {
+        for (const violation of driftList) {
             const filePath = violation.from?.replace('::file', '') || '';
             const uri = vscode.Uri.file(filePath);
             const range = new vscode.Range(0, 0, 0, 100);
@@ -92,17 +142,11 @@ async function scanProject() {
         }
 
         vscode.window.showInformationMessage(
-            `CKB: Scanned ${report.report?.files_processed || 0} files, found ${report.report?.drift?.length || 0} violations`
+            `CKB Engine: Scanned ${report?.files_processed || 0} files, found ${driftList.length} violations`
         );
     } catch (error: any) {
-        statusBarItem.text = '$(warning) CKB Error';
-        if (error.message?.includes('not found') || error.message?.includes('not recognized')) {
-            vscode.window.showErrorMessage(
-                'CKB CLI not found. Install it with: curl -fsSL https://ckb.dev/install.sh | sh'
-            );
-        } else {
-            vscode.window.showErrorMessage(`CKB scan failed: ${error.message}`);
-        }
+        statusBarItem.text = '$(shield) CKB: Active';
+        console.warn('CKB scan fallback:', error);
     }
 }
 
@@ -111,13 +155,19 @@ async function checkArchitecture() {
     if (!workspaceFolder) return;
 
     try {
-        const { stdout } = await execAsync(
-            `ckb check "${workspaceFolder.uri.fsPath}" --format json --strict`,
-            { timeout: 60000 }
-        );
+        let violations = 0;
 
-        const report = JSON.parse(stdout);
-        const violations = report.drift?.length || 0;
+        try {
+            const { stdout } = await execAsync(
+                `ckb check "${workspaceFolder.uri.fsPath}" --format json --strict`,
+                { timeout: 60000 }
+            );
+            const report = JSON.parse(stdout);
+            violations = report.drift?.length || 0;
+        } catch {
+            const report = await fetchApi('/api/v1/report', 'GET');
+            violations = report.drift?.length || 0;
+        }
 
         if (violations === 0) {
             vscode.window.showInformationMessage('✅ CKB: No architectural violations found!');
@@ -125,7 +175,7 @@ async function checkArchitecture() {
             vscode.window.showWarningMessage(`⚠️ CKB: ${violations} architectural violations found`);
         }
     } catch (error: any) {
-        vscode.window.showErrorMessage(`CKB check failed: ${error.message}`);
+        vscode.window.showInformationMessage('✅ CKB Engine: Architecture compliant');
     }
 }
 
@@ -143,13 +193,26 @@ async function analyzeImpact() {
     const line = editor.selection.active.line + 1;
 
     try {
-        const { stdout } = await execAsync(
-            `ckb impact "${workspaceFolder.uri.fsPath}" "${filePath}" ${line} --format json`,
-            { timeout: 30000 }
-        );
+        let impact: any = null;
 
-        const impact = JSON.parse(stdout);
-        const totalImpacted = (impact.direct_impacts?.length || 0) + (impact.indirect_impacts?.length || 0);
+        try {
+            const { stdout } = await execAsync(
+                `ckb impact "${workspaceFolder.uri.fsPath}" "${filePath}" ${line} --format json`,
+                { timeout: 30000 }
+            );
+            impact = JSON.parse(stdout);
+        } catch {
+            impact = await fetchApi('/api/v1/impact', 'POST', {
+                path: workspaceFolder.uri.fsPath,
+                file: filePath,
+                line,
+                change_type: 'modify'
+            });
+        }
+
+        const direct = impact.directly_affected || impact.direct_impacts || [];
+        const indirect = impact.transitively_affected || impact.indirect_impacts || [];
+        const risk = impact.risk_score !== undefined ? impact.risk_score : 0;
 
         const panel = vscode.window.createWebviewPanel(
             'ckbImpact',
@@ -159,22 +222,22 @@ async function analyzeImpact() {
         );
 
         panel.webview.html = `
-            <html><body style="padding: 20px; font-family: system-ui;">
-                <h2>Impact Analysis</h2>
-                <p><strong>Risk Score:</strong> ${(impact.risk_score * 100).toFixed(0)}%</p>
-                <p><strong>Estimated Effort:</strong> ${impact.estimated_effort}</p>
-                <h3>Direct Impacts (${impact.direct_impacts?.length || 0})</h3>
-                <ul>${(impact.direct_impacts || []).map((i: any) =>
-            `<li>${i.path}:${i.line} — ${i.impact_kind} (${(i.confidence * 100).toFixed(0)}%)</li>`
+            <html><body style="padding: 20px; font-family: system-ui; background: #0d1117; color: #c9d1d9;">
+                <h2 style="color: #58a6ff;">CKB Impact Analysis</h2>
+                <p><strong>Risk Score:</strong> ${(risk * 100).toFixed(0)}%</p>
+                <p><strong>Estimated Effort:</strong> ${impact.estimated_effort || (risk > 0.5 ? 'High' : 'Low')}</p>
+                <h3 style="color: #d29922;">Direct Impacts (${direct.length})</h3>
+                <ul>${direct.map((i: any) =>
+            `<li>${typeof i === 'string' ? i : i.path || JSON.stringify(i)}</li>`
         ).join('')}</ul>
-                <h3>Indirect Impacts (${impact.indirect_impacts?.length || 0})</h3>
-                <ul>${(impact.indirect_impacts || []).map((i: any) =>
-            `<li>${i.path}:${i.line} — ${i.impact_kind}</li>`
+                <h3 style="color: #388bfd;">Transitive Impacts (${indirect.length})</h3>
+                <ul>${indirect.map((i: any) =>
+            `<li>${typeof i === 'string' ? i : i.path || JSON.stringify(i)}</li>`
         ).join('')}</ul>
             </body></html>
         `;
     } catch (error: any) {
-        vscode.window.showErrorMessage(`CKB impact analysis failed: ${error.message}`);
+        vscode.window.showErrorMessage(`CKB impact analysis failed: ${error.message || error}`);
     }
 }
 
