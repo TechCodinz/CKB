@@ -1,7 +1,7 @@
 import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 
 // API client for CKB backend
-const API_BASE_URL = (typeof process !== 'undefined' && process.env?.REACT_APP_API_URL) || 'http://localhost:3000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 export const api = axios.create({
     baseURL: API_BASE_URL,
