@@ -3,11 +3,12 @@
     "displayName": "CKB - Code Knowledge Base",
     "description": "Real-time architectural intelligence — detect violations, analyze impact, visualize dependencies",
     "version": "1.0.0",
-    "publisher": "ckb-dev",
+    "publisher": "TechCodinz",
+    "icon": "icon.png",
     "license": "MIT",
     "repository": {
         "type": "git",
-        "url": "https://github.com/ckbdev/ckb"
+        "url": "https://github.com/TechCodinz/CKB"
     },
     "keywords": [
         "architecture",
