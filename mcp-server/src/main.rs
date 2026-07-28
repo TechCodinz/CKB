@@ -55,6 +55,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/v1/drift-timeline", get(get_drift_timeline))
         .route("/api/v1/test-gaps", get(analyze_test_gaps))
         .route("/api/v1/rules", get(generate_rules))
+        .route("/api/v1/org/analytics", get(get_org_analytics))
+        .route("/api/v1/metrics/intelligence", get(get_intelligence_metrics))
         .layer(cors)
         .with_state(state);
 
@@ -634,3 +636,18 @@ async fn generate_rules(
     }
 }
 
+async fn get_org_analytics(
+    State(state): State<AppState>,
+) -> Result<Json<ckb_core::federation::OrganizationalIntelligenceReport>, (StatusCode, String)> {
+    let report = state.latest_report.read().await;
+    let mut map = std::collections::HashMap::new();
+    if let Some(ref r) = *report {
+        map.insert("ckb-core-platform".to_string(), r.clone());
+    }
+    let org_report = ckb_core::federation::FederatedGraphEngine::analyze_org_intelligence(&map);
+    Ok(Json(org_report))
+}
+
+async fn get_intelligence_metrics() -> Json<ckb_core::federation::IntelligenceBenchmarkMetrics> {
+    Json(ckb_core::federation::IntelligenceBenchmarkMetrics::default())
+}
