@@ -70,8 +70,13 @@ impl PythonParser {
         
         for child in node.children(&mut cursor) {
             match child.kind() {
-                "dotted_name" => {
-                    module_name = Some(child.utf8_text(source.as_bytes()).unwrap_or("").to_string());
+                // tree-sitter-python uses dotted_name for multi-segment modules
+                // (e.g. `from os.path import ...`) and may use identifier for
+                // single-segment ones (e.g. `from collections import ...`).
+                "dotted_name" | "identifier" => {
+                    if module_name.is_none() {
+                        module_name = Some(child.utf8_text(source.as_bytes()).unwrap_or("").to_string());
+                    }
                 }
                 "import_list" => {
                     symbols = self.extract_import_list(child, source);

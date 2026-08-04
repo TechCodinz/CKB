@@ -142,7 +142,11 @@ impl TypeScriptParser {
     fn get_node_name(&self, node: Node, source: &str) -> Option<String> {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            if child.kind() == "identifier" {
+            // In tree-sitter-typescript, class names are `type_identifier`
+            // while function names are plain `identifier`. Match both so that
+            // `export class Widget {}` and `export function foo() {}` both
+            // resolve to a name correctly.
+            if child.kind() == "identifier" || child.kind() == "type_identifier" {
                 return Some(child.utf8_text(source.as_bytes()).unwrap_or("").to_string());
             }
         }
