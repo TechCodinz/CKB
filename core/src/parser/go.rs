@@ -46,7 +46,7 @@ impl GoParser {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "interpreted_string_literal" {
-                let path = child.utf8_text(source.as_bytes()).unwrap()
+                let path = child.utf8_text(source.as_bytes()).unwrap_or("")
                     .trim_matches('"')
                     .to_string();
                 
@@ -95,7 +95,7 @@ impl GoParser {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" {
-                return Some(child.utf8_text(source.as_bytes()).unwrap().to_string());
+                return Some(child.utf8_text(source.as_bytes()).unwrap_or("").to_string());
             }
         }
         None
@@ -126,7 +126,7 @@ impl GoParser {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "type_identifier" {
-                return Some(child.utf8_text(source.as_bytes()).unwrap().to_string());
+                return Some(child.utf8_text(source.as_bytes()).unwrap_or("").to_string());
             }
         }
         None
@@ -157,7 +157,7 @@ impl GoParser {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" {
-                return Some(child.utf8_text(source.as_bytes()).unwrap().to_string());
+                return Some(child.utf8_text(source.as_bytes()).unwrap_or("").to_string());
             }
         }
         None
@@ -166,7 +166,7 @@ impl GoParser {
 
 impl LanguageParserTrait for GoParser {
     fn parse(&self, path: &str, content: &str) -> Result<FileAnalysis> {
-        let tree = self.parser.lock().unwrap().parse(content, None)
+        let tree = self.parser.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).parse(content, None)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse Go file"))?;
         
         let root = tree.root_node();
@@ -196,5 +196,44 @@ impl LanguageParserTrait for GoParser {
             calls: Vec::new(),
             type_relations: Vec::new(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::SymbolKind;
+
+    #[test]
+    fn exported_function_starts_with_capital() {
+        let parser = GoParser::new();
+        let analysis = parser.parse("hello.go", "package main\n\nfunc Hello() {}\n").expect("parse should succeed");
+
+        let hello = analysis.exports.iter().find(|s| s.name == "Hello").expect("function should be extracted");
+        assert_eq!(hello.kind, SymbolKind::Function);
+        assert!(hello.exported, "capitalized Go function names are exported by convention");
+        assert!(hello.public);
+    }
+
+    #[test]
+    fn unexported_function_starts_with_lowercase() {
+        let parser = GoParser::new();
+        let analysis = parser.parse("helper.go", "package main\n\nfunc helper() {}\n").expect("parse should succeed");
+
+        let helper = analysis.exports.iter().find(|s| s.name == "helper").expect("function should be extracted");
+        assert!(!helper.exported, "lowercase Go function names are NOT exported by convention");
+    }
+
+    #[test]
+    fn handles_empty_content_without_panicking() {
+        let parser = GoParser::new();
+        assert!(parser.parse("empty.go", "").is_ok());
+    }
+
+    #[test]
+    fn handles_malformed_syntax_without_panicking() {
+        let parser = GoParser::new();
+        let result = parser.parse("broken.go", "package main\n\nfunc oops( { not valid go @@@ %%");
+        assert!(result.is_ok());
     }
 }

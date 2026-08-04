@@ -1,0 +1,11 @@
+# Only compiled output (out/) and packaging metadata should ship in the
+# .vsix — everything else here is source/tooling that bloats the package
+# (or, in the case of *.vsix, would recursively bundle a previous build of
+# itself if a stale one is ever sitting in this directory again).
+src/**
+tsconfig.json
+package-lock.json
+*.vsix
+.gitignore
+**/*.map
+.vscode-test/**

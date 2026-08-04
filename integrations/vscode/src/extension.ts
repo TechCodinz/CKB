@@ -46,7 +46,16 @@ export function activate(context: vscode.ExtensionContext) {
 
 async function fetchApi(endpoint: string, method: string = 'GET', body?: any): Promise<any> {
     const config = vscode.workspace.getConfiguration('ckb');
-    const baseUrl = config.get<string>('serverUrl') || 'https://ckb-mcp-server.onrender.com';
+    // Previously defaulted to a hardcoded external domain
+    // (https://ckb-mcp-server.onrender.com) that a remote scan request could
+    // never actually work against anyway — that server can't read a path on
+    // the user's local machine. Defaulting to localhost means this fallback
+    // only ever "succeeds" when the user has deliberately started their own
+    // `ckb serve` locally (see startMcpServer()), which is the only
+    // configuration where sending a local filesystem path over HTTP
+    // actually makes sense.
+    const baseUrl = config.get<string>('serverUrl') || 'http://localhost:3000';
+    const apiKey = config.get<string>('apiKey');
     const url = `${baseUrl.replace(/\/$/, '')}${endpoint}`;
 
     return new Promise((resolve, reject) => {
@@ -55,20 +64,32 @@ async function fetchApi(endpoint: string, method: string = 'GET', body?: any): P
             const transport = urlObj.protocol === 'https:' ? require('https') : require('http');
             const reqData = body ? JSON.stringify(body) : '';
 
-            const req = transport.request(urlObj, {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Content-Length': Buffer.byteLength(reqData)
-                }
-            }, (res: any) => {
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+                'Content-Length': String(Buffer.byteLength(reqData)),
+            };
+            // Previously never sent — every request to a server that
+            // actually enforces CKB_API_KEY (or per-user backend auth) would
+            // get a silent 401 with no explanation to the user.
+            if (apiKey) {
+                headers['X-API-Key'] = apiKey;
+            }
+
+            const req = transport.request(urlObj, { method, headers }, (res: any) => {
                 let data = '';
                 res.on('data', (chunk: any) => data += chunk);
                 res.on('end', () => {
+                    let parsed: any;
                     try {
-                        resolve(JSON.parse(data));
+                        parsed = JSON.parse(data);
                     } catch {
-                        resolve(data);
+                        parsed = data;
+                    }
+                    if (res.statusCode && res.statusCode >= 400) {
+                        const message = (parsed && parsed.message) || `Server returned HTTP ${res.statusCode}`;
+                        reject(new Error(message));
+                    } else {
+                        resolve(parsed);
                     }
                 });
             });
@@ -80,6 +101,74 @@ async function fetchApi(endpoint: string, method: string = 'GET', body?: any): P
             reject(e);
         }
     });
+}
+
+/**
+ * Runs a `ckb` CLI command and returns its parsed JSON stdout.
+ *
+ * Node's `child_process.exec` treats ANY non-zero exit code as an error —
+ * including `ckb check --strict`, which deliberately exits 1 when it finds
+ * violations (that's the whole point of `--strict`, added so CI can gate on
+ * it). That means the naive "try CLI, catch error, fall back to remote"
+ * pattern this file used before would treat "the CLI worked and found real
+ * violations" identically to "the CLI isn't installed" — always taking the
+ * (broken) remote-fallback path whenever there was anything to actually
+ * report. This distinguishes the two: a non-zero exit with valid JSON on
+ * stdout is a successful run: use it. A missing binary (ENOENT) or
+ * unparseable output is a real failure: only then does the caller fall back.
+ */
+async function runCliJson(command: string, timeoutMs: number): Promise<any> {
+    try {
+        const { stdout } = await execAsync(command, { timeout: timeoutMs });
+        return JSON.parse(stdout);
+    } catch (error: any) {
+        if (typeof error.stdout === 'string' && error.stdout.trim().length > 0) {
+            try {
+                return JSON.parse(error.stdout);
+            } catch {
+                // stdout wasn't valid JSON either — fall through to rethrow.
+            }
+        }
+        throw error;
+    }
+}
+
+function isCliMissing(error: any): boolean {
+    return error?.code === 'ENOENT' || /command not found|is not recognized/i.test(String(error?.message || ''));
+}
+
+let cliAvailabilityWarned = false;
+
+/** Shown once per session, not on every failed scan, to avoid notification spam. */
+function warnCliUnavailableOnce() {
+    if (cliAvailabilityWarned) return;
+    cliAvailabilityWarned = true;
+    vscode.window.showWarningMessage(
+        'CKB: the `ckb` CLI was not found, and no local CKB server is configured (or reachable) at ckb.serverUrl. ' +
+        'Install the CLI, or start one with "CKB: Start MCP Server" and set ckb.serverUrl.',
+        'Install Instructions'
+    ).then(choice => {
+        if (choice === 'Install Instructions') {
+            vscode.env.openExternal(vscode.Uri.parse('https://github.com/TechCodinz/CKB/releases'));
+        }
+    });
+}
+
+/**
+ * Recovers a real filesystem path from a violation's `from`/`to` node ID.
+ * CKB's internal NodeId format is always `"{path}::{suffix}"` — for a
+ * file-level node the suffix is literally "file", but for a function/class/
+ * method-level violation it's the symbol name instead. The previous version
+ * only stripped a literal `"::file"` suffix, so it correctly recovered the
+ * path for file-level violations but left function/class-level violations
+ * as the whole unmodified "path::functionName" string — not a valid file
+ * path, so `vscode.Uri.file(...)` on it would point at a
+ * nonexistent/mangled location and silently fail to show a diagnostic.
+ */
+function extractFilePath(nodeId: string | undefined): string {
+    if (!nodeId) return '';
+    const idx = nodeId.indexOf('::');
+    return idx === -1 ? nodeId : nodeId.slice(0, idx);
 }
 
 async function scanProject() {
@@ -94,18 +183,32 @@ async function scanProject() {
     try {
         let report: any = null;
 
-        // 1. Try local CLI first
+        // 1. Try local CLI first — this is the only path that can reliably
+        //    read the user's actual workspace, since a remote server has no
+        //    access to their local filesystem.
         try {
-            const { stdout } = await execAsync(
+            const parsed = await runCliJson(
                 `ckb scan "${workspaceFolder.uri.fsPath}" --format json`,
-                { timeout: 60000 }
+                60000
             );
-            const parsed = JSON.parse(stdout);
             report = parsed.report || parsed;
-        } catch {
-            // 2. Fallback seamlessly to HTTP REST server (Cloud Engine)
-            await fetchApi('/api/v1/scan', 'POST', { path: workspaceFolder.uri.fsPath });
-            report = await fetchApi('/api/v1/report', 'GET');
+        } catch (cliError: any) {
+            if (!isCliMissing(cliError)) {
+                // The CLI exists but genuinely failed (bad path, parse error,
+                // etc.) — that's worth knowing about, not silently masking.
+                console.warn('CKB CLI scan failed:', cliError);
+            }
+            // 2. Fall back to a configured CKB server. Only useful if the
+            //    user has actually started one (locally, or a real reachable
+            //    deployment) — see the note on ckb.serverUrl's default.
+            try {
+                await fetchApi('/api/v1/scan', 'POST', { path: workspaceFolder.uri.fsPath });
+                report = await fetchApi('/api/v1/report', 'GET');
+            } catch (remoteError: any) {
+                statusBarItem.text = '$(shield) CKB: Unavailable';
+                warnCliUnavailableOnce();
+                return;
+            }
         }
 
         const patternsCount = report?.patterns?.length || 0;
@@ -118,7 +221,8 @@ async function scanProject() {
         const diagnosticMap = new Map<string, vscode.Diagnostic[]>();
 
         for (const violation of driftList) {
-            const filePath = violation.from?.replace('::file', '') || '';
+            const filePath = extractFilePath(violation.from);
+            if (!filePath) continue;
             const uri = vscode.Uri.file(filePath);
             const range = new vscode.Range(0, 0, 0, 100);
 
@@ -137,16 +241,19 @@ async function scanProject() {
             diagnosticMap.set(uri.toString(), existing);
         }
 
-        for (const [uriStr, diagnostics] of diagnosticMap) {
-            diagnosticCollection.set(vscode.Uri.parse(uriStr), diagnostics);
+        const showDiagnostics = vscode.workspace.getConfiguration('ckb').get<boolean>('showDiagnostics', true);
+        if (showDiagnostics) {
+            for (const [uriStr, diagnostics] of diagnosticMap) {
+                diagnosticCollection.set(vscode.Uri.parse(uriStr), diagnostics);
+            }
         }
 
         vscode.window.showInformationMessage(
-            `CKB Engine: Scanned ${report?.files_processed || 0} files, found ${driftList.length} violations`
+            `CKB: Scanned ${report?.files_processed || 0} files, found ${driftList.length} violations`
         );
     } catch (error: any) {
-        statusBarItem.text = '$(shield) CKB: Active';
-        console.warn('CKB scan fallback:', error);
+        statusBarItem.text = '$(shield) CKB: Error';
+        vscode.window.showErrorMessage(`CKB scan failed: ${error?.message || error}`);
     }
 }
 
@@ -156,18 +263,33 @@ async function checkArchitecture() {
 
     try {
         let violations = 0;
+        let ran = false;
 
         try {
-            const { stdout } = await execAsync(
+            // --strict makes this deliberately exit non-zero when violations
+            // are found — that's a successful run with real output, not a
+            // failure, so runCliJson() (not the raw execAsync/catch pattern)
+            // handles it correctly.
+            const report = await runCliJson(
                 `ckb check "${workspaceFolder.uri.fsPath}" --format json --strict`,
-                { timeout: 60000 }
+                60000
             );
-            const report = JSON.parse(stdout);
             violations = report.drift?.length || 0;
-        } catch {
-            const report = await fetchApi('/api/v1/report', 'GET');
-            violations = report.drift?.length || 0;
+            ran = true;
+        } catch (cliError: any) {
+            if (!isCliMissing(cliError)) {
+                console.warn('CKB CLI check failed:', cliError);
+            }
+            try {
+                const report = await fetchApi('/api/v1/report', 'GET');
+                violations = report.drift?.length || 0;
+                ran = true;
+            } catch {
+                warnCliUnavailableOnce();
+            }
         }
+
+        if (!ran) return;
 
         if (violations === 0) {
             vscode.window.showInformationMessage('✅ CKB: No architectural violations found!');
@@ -175,7 +297,7 @@ async function checkArchitecture() {
             vscode.window.showWarningMessage(`⚠️ CKB: ${violations} architectural violations found`);
         }
     } catch (error: any) {
-        vscode.window.showInformationMessage('✅ CKB Engine: Architecture compliant');
+        vscode.window.showErrorMessage(`CKB check failed: ${error?.message || error}`);
     }
 }
 
@@ -268,12 +390,23 @@ async function startMcpServer() {
     vscode.window.showInformationMessage('CKB MCP Server starting on port 3000');
 }
 
+let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+
 function onFileChange(uri: vscode.Uri) {
-    // Debounced re-check on file changes
-    // In production, use incremental analysis
+    // Previously this only spun the status bar icon for 2 seconds and did
+    // nothing else — no rescan ever actually happened, despite the README
+    // documenting "Re-checks architecture when source files change
+    // (debounced)" as a real feature. This is a full rescan (not true
+    // incremental analysis — the engine has an incremental scan path, but
+    // it isn't wired up to the CLI yet, see FEATURES_ADDED.md), debounced so
+    // rapid saves/edits don't trigger a scan storm.
+    const liveRescan = vscode.workspace.getConfiguration('ckb').get<boolean>('rescanOnSave', true);
+    if (!liveRescan) return;
+
     statusBarItem.text = '$(sync~spin) CKB';
-    setTimeout(() => {
-        statusBarItem.text = '$(shield) CKB';
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+        scanProject();
     }, 2000);
 }
 

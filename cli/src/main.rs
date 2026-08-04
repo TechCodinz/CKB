@@ -343,7 +343,7 @@ async fn scan_command(args: ScanArgs, format: String) -> Result<()> {
     
     scan_pb.set_message("Parsing files and building graph...");
     
-    let report = engine.scan_codebase(args.path.to_str().unwrap()).await?;
+    let report = engine.scan_codebase(&args.path.to_string_lossy()).await?;
     
     scan_pb.finish_with_message("✅ Scan complete!");
     
@@ -369,7 +369,7 @@ async fn check_command(args: CheckArgs, format: String) -> Result<()> {
     println!("🔍 CKB Check - Analyzing architectural drift: {}", args.path.display());
     
     let engine = CkbEngine::new()?;
-    let report = engine.scan_codebase(args.path.to_str().unwrap()).await?;
+    let report = engine.scan_codebase(&args.path.to_string_lossy()).await?;
     
     match format.as_str() {
         "json" => {
@@ -391,6 +391,24 @@ async fn check_command(args: CheckArgs, format: String) -> Result<()> {
     if let Some(output) = args.output {
         fs::write(output, to_string_pretty(&report)?).await?;
     }
+
+    // Previously `--strict` and `--fail-on` were parsed but never actually
+    // used anywhere in this function — `ckb check` always exited 0 no matter
+    // how many (or how severe) violations were found, which makes it
+    // useless as a CI gate despite being built for exactly that (it's the
+    // subcommand the GitHub Action below calls). Now it actually fails the
+    // process when `--strict` is set and any violation meets or exceeds
+    // `--fail-on`'s severity.
+    let threshold: Severity = args.fail_on.into();
+    let blocking_violations = report.drift.iter().filter(|v| v.severity >= threshold).count();
+
+    if args.strict && blocking_violations > 0 {
+        eprintln!(
+            "\n❌ CKB check failed: {} violation(s) at or above '{:?}' severity (--strict is set).",
+            blocking_violations, threshold
+        );
+        std::process::exit(1);
+    }
     
     Ok(())
 }
@@ -400,7 +418,7 @@ async fn impact_command(args: ImpactArgs, format: String) -> Result<()> {
         args.file.display(), args.line);
     
     let engine = CkbEngine::new()?;
-    engine.scan_codebase(args.path.to_str().unwrap()).await?;
+    engine.scan_codebase(&args.path.to_string_lossy()).await?;
     
     let change_type = match args.change.as_str() {
         "add" => ckb_core::ChangeType::Add,
@@ -411,7 +429,7 @@ async fn impact_command(args: ImpactArgs, format: String) -> Result<()> {
     };
     
     let impact = engine.analyze_impact(
-        args.file.to_str().unwrap(), 
+        &args.file.to_string_lossy(), 
         args.line, 
         change_type
     ).await?;
@@ -441,7 +459,7 @@ async fn export_command(args: ExportArgs) -> Result<()> {
     println!("🔍 CKB Export - Exporting graph to {} format", args.format);
     
     let engine = CkbEngine::new()?;
-    let report = engine.scan_codebase(args.path.to_str().unwrap()).await?;
+    let report = engine.scan_codebase(&args.path.to_string_lossy()).await?;
     
     match args.format.as_str() {
         "dot" => {
@@ -473,36 +491,59 @@ async fn export_command(args: ExportArgs) -> Result<()> {
 async fn watch_command(args: WatchArgs) -> Result<()> {
     println!("🔍 CKB Watch - Monitoring {} every {} seconds", 
         args.path.display(), args.interval);
+    println!("   Press Ctrl+C to stop.\n");
     
     let mut previous_hash = String::new();
+    let mut previous_violation_count: Option<usize> = None;
     
     loop {
         tokio::time::sleep(tokio::time::Duration::from_secs(args.interval)).await;
         
         let engine = CkbEngine::new()?;
-        let report = engine.scan_codebase(args.path.to_str().unwrap()).await?;
+        let report = match engine.scan_codebase(&args.path.to_string_lossy()).await {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("⚠️  Scan failed, will retry next interval: {}", e);
+                continue;
+            }
+        };
         
         let current_hash = format!("{:x}", md5::compute(to_string_pretty(&report)?));
         
         if current_hash != previous_hash {
             println!("🔄 Change detected at {}", chrono::Local::now().format("%H:%M:%S"));
             
-            if !report.drift.is_empty() {
-                println!("❌ Found {} architectural violations:", report.drift.len());
-                if report.drift.len() > 3 {
-                    println!("  ... and {} more", report.drift.len() - 3);
-                }
+            if report.drift.is_empty() {
+                println!("✅ No violations detected ({} files, {} nodes).\n", report.files_processed, report.nodes);
             } else {
-                println!("✅ No violations detected");
+                // Previously this printed "Found N violations" then, if N > 3,
+                // jumped straight to "...and N-3 more" without ever printing
+                // the first 3 — the actual violation details never appeared
+                // in watch mode at all. Reusing the same table renderer
+                // `ckb check` uses so watch mode is actually useful to read.
+                display_drift_report(&report.drift);
             }
+
+            if let Some(prev_count) = previous_violation_count {
+                let current_count = report.drift.len();
+                if current_count > prev_count {
+                    println!("   📈 {} new violation(s) since last change.\n", current_count - prev_count);
+                } else if current_count < prev_count {
+                    println!("   📉 {} violation(s) resolved since last change.\n", prev_count - current_count);
+                }
+            }
+            previous_violation_count = Some(report.drift.len());
             
             if let Some(cmd) = &args.exec {
-                println!("Executing: {}", cmd);
-                tokio::process::Command::new("sh")
-                    .arg("-c")
-                    .arg(cmd)
-                    .output()
-                    .await?;
+                println!("▶️  Executing: {}", cmd);
+                match tokio::process::Command::new("sh").arg("-c").arg(cmd).output().await {
+                    Ok(output) => {
+                        if !output.status.success() {
+                            eprintln!("   ⚠️  Command exited with status {}", output.status);
+                        }
+                    }
+                    Err(e) => eprintln!("   ⚠️  Failed to run command: {}", e),
+                }
             }
             
             previous_hash = current_hash;
@@ -514,7 +555,7 @@ async fn suggest_command(args: SuggestArgs, format: String) -> Result<()> {
     println!("🔍 CKB Suggest - Finding architectural improvements");
     
     let engine = CkbEngine::new()?;
-    let report = engine.scan_codebase(args.path.to_str().unwrap()).await?;
+    let report = engine.scan_codebase(&args.path.to_string_lossy()).await?;
     
     let suggestions = generate_suggestions(&report, args.count, args.focus)?;
     
@@ -534,7 +575,7 @@ async fn docs_command(args: DocsArgs) -> Result<()> {
     println!("🔍 CKB Docs - Generating architecture documentation");
     
     let engine = CkbEngine::new()?;
-    let report = engine.scan_codebase(args.path.to_str().unwrap()).await?;
+    let report = engine.scan_codebase(&args.path.to_string_lossy()).await?;
     
     fs::create_dir_all(&args.output).await?;
     
@@ -558,7 +599,7 @@ async fn validate_command(args: ValidateArgs, format: String) -> Result<()> {
     let rules: Vec<CustomRule> = serde_json::from_str(&rules_content)?;
     
     let engine = CkbEngine::new()?;
-    let report = engine.scan_codebase(args.path.to_str().unwrap()).await?;
+    let report = engine.scan_codebase(&args.path.to_string_lossy()).await?;
     
     let violations = validate_rules(&report, &rules)?;
     
@@ -937,7 +978,7 @@ fn generate_suggestions(report: &ScanReport, count: usize, focus: Option<String>
         });
     }
 
-    suggestions.sort_by(|a, b| b.priority.partial_cmp(&a.priority).unwrap());
+    suggestions.sort_by(|a, b| b.priority.partial_cmp(&a.priority).unwrap_or(std::cmp::Ordering::Equal));
     suggestions.truncate(count);
     Ok(suggestions)
 }

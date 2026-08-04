@@ -47,7 +47,7 @@ impl PythonParser {
         
         for child in node.children(&mut cursor) {
             if child.kind() == "dotted_name" {
-                let name = child.utf8_text(source.as_bytes()).unwrap().to_string();
+                let name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
                 symbols.push(name);
             }
         }
@@ -71,7 +71,7 @@ impl PythonParser {
         for child in node.children(&mut cursor) {
             match child.kind() {
                 "dotted_name" => {
-                    module_name = Some(child.utf8_text(source.as_bytes()).unwrap().to_string());
+                    module_name = Some(child.utf8_text(source.as_bytes()).unwrap_or("").to_string());
                 }
                 "import_list" => {
                     symbols = self.extract_import_list(child, source);
@@ -93,7 +93,7 @@ impl PythonParser {
         
         for child in node.children(&mut cursor) {
             if child.kind() == "dotted_name" {
-                symbols.push(child.utf8_text(source.as_bytes()).unwrap().to_string());
+                symbols.push(child.utf8_text(source.as_bytes()).unwrap_or("").to_string());
             }
         }
         
@@ -147,7 +147,7 @@ impl PythonParser {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" {
-                return Some(child.utf8_text(source.as_bytes()).unwrap().to_string());
+                return Some(child.utf8_text(source.as_bytes()).unwrap_or("").to_string());
             }
         }
         None
@@ -157,7 +157,7 @@ impl PythonParser {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" {
-                return Some(child.utf8_text(source.as_bytes()).unwrap().to_string());
+                return Some(child.utf8_text(source.as_bytes()).unwrap_or("").to_string());
             }
         }
         None
@@ -167,7 +167,7 @@ impl PythonParser {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" {
-                return Some(child.utf8_text(source.as_bytes()).unwrap().to_string());
+                return Some(child.utf8_text(source.as_bytes()).unwrap_or("").to_string());
             }
         }
         None
@@ -176,7 +176,7 @@ impl PythonParser {
 
 impl LanguageParserTrait for PythonParser {
     fn parse(&self, path: &str, content: &str) -> Result<FileAnalysis> {
-        let tree = self.parser.lock().unwrap().parse(content, None)
+        let tree = self.parser.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).parse(content, None)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse Python file"))?;
         
         let root = tree.root_node();
@@ -206,5 +206,59 @@ impl LanguageParserTrait for PythonParser {
             calls: Vec::new(),
             type_relations: Vec::new(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::SymbolKind;
+
+    #[test]
+    fn extracts_a_top_level_function() {
+        let parser = PythonParser::new();
+        let analysis = parser.parse("hello.py", "def hello():\n    pass\n").expect("parse should succeed");
+
+        assert!(analysis.exports.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Function));
+    }
+
+    #[test]
+    fn extracts_a_class() {
+        let parser = PythonParser::new();
+        let analysis = parser.parse("widget.py", "class Widget:\n    def __init__(self):\n        pass\n").expect("parse should succeed");
+
+        assert!(analysis.exports.iter().any(|s| s.name == "Widget" && s.kind == SymbolKind::Class));
+    }
+
+    #[test]
+    fn extracts_imports() {
+        let parser = PythonParser::new();
+        let analysis = parser.parse("main.py", "import os\nfrom collections import OrderedDict\n").expect("parse should succeed");
+
+        assert!(analysis.imports.iter().any(|i| i.source == "os"));
+        assert!(analysis.imports.iter().any(|i| i.source == "collections"));
+    }
+
+    #[test]
+    fn handles_empty_content_without_panicking() {
+        let parser = PythonParser::new();
+        assert!(parser.parse("empty.py", "").is_ok());
+    }
+
+    #[test]
+    fn handles_malformed_syntax_without_panicking() {
+        let parser = PythonParser::new();
+        let result = parser.parse("broken.py", "def oops(:\n    this is not : valid python @@@");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn survives_repeated_parses_on_the_same_instance() {
+        let parser = PythonParser::new();
+        for i in 0..50 {
+            let src = format!("def f{}():\n    pass\n", i);
+            let analysis = parser.parse("repeat.py", &src).expect("parse should succeed");
+            assert!(analysis.exports.iter().any(|s| s.name == format!("f{}", i)));
+        }
     }
 }

@@ -1,0 +1,101 @@
+name: 'CKB Architecture Check'
+description: 'Scans a codebase with CKB, posts a PR comment summarizing architectural drift/violations, and optionally fails the build on severe findings.'
+author: 'CKB'
+
+inputs:
+  path:
+    description: 'Path to scan (relative to repo root).'
+    required: false
+    default: '.'
+  fail-on:
+    description: 'Minimum violation severity that fails the build: info, warning, error, or critical.'
+    required: false
+    default: 'error'
+  strict:
+    description: 'If "true", fail the workflow when any violation meets or exceeds fail-on severity.'
+    required: false
+    default: 'true'
+  comment-on-pr:
+    description: 'If "true" (and this run is a pull_request event), post/update a summary comment on the PR.'
+    required: false
+    default: 'true'
+  github-token:
+    description: 'Token used to post the PR comment. Defaults to the workflow''s GITHUB_TOKEN.'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  violations-found:
+    description: 'Total number of drift violations found.'
+    value: ${{ steps.parse.outputs.violations }}
+  report-path:
+    description: 'Path to the raw JSON scan report.'
+    value: 'ckb-report.json'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache Cargo/target
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: ${{ github.action_path }}/../../../..
+
+    - name: Build ckb CLI
+      shell: bash
+      # Builds from source since this repo doesn't currently publish binary
+      # releases. If you add a release pipeline later, swap this step for
+      # downloading the prebuilt binary for the runner's platform instead —
+      # it'll cut this action's runtime from ~2-3min to a few seconds.
+      #
+      # Scoped to --bin ckb-cli deliberately: a plain `cargo build --release`
+      # would also try to build bindings/wasm (a workspace member) for the
+      # host target, which fails — wasm-bindgen's extern declarations only
+      # resolve when actually targeting wasm32.
+      run: |
+        cd "${{ github.action_path }}/../../../.."
+        cargo build --release --bin ckb-cli
+        echo "$(pwd)/target/release" >> "$GITHUB_PATH"
+
+    - name: Run CKB check
+      id: scan
+      shell: bash
+      run: |
+        set +e
+        ckb-cli check "${{ inputs.path }}" \
+          --report-format json \
+          --output ckb-report.json \
+          --fail-on "${{ inputs.fail-on }}" \
+          $( [ "${{ inputs.strict }}" = "true" ] && echo "--strict" )
+        CKB_EXIT_CODE=$?
+        set -e
+        echo "exit_code=$CKB_EXIT_CODE" >> "$GITHUB_OUTPUT"
+
+    - name: Parse report
+      id: parse
+      shell: bash
+      run: |
+        if [ -f ckb-report.json ]; then
+          VIOLATIONS=$(node -e "console.log(JSON.parse(require('fs').readFileSync('ckb-report.json','utf8')).drift.length)")
+        else
+          VIOLATIONS=0
+        fi
+        echo "violations=$VIOLATIONS" >> "$GITHUB_OUTPUT"
+
+    - name: Post/update PR comment
+      if: ${{ inputs.comment-on-pr == 'true' && github.event_name == 'pull_request' }}
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        REPORT_PATH: ckb-report.json
+        FAIL_ON: ${{ inputs.fail-on }}
+      run: node "${{ github.action_path }}/report-comment.js"
+
+    - name: Fail if CKB check failed
+      if: ${{ steps.scan.outputs.exit_code != '0' }}
+      shell: bash
+      run: |
+        echo "CKB found violations at or above '${{ inputs.fail-on }}' severity. See the PR comment or ckb-report.json for details."
+        exit 1

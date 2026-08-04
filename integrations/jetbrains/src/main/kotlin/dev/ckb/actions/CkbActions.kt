@@ -35,6 +35,10 @@ class ScanProjectAction : AnAction("Scan Project") {
             }
 
             override fun onSuccess() {
+                if (error != null) {
+                    com.intellij.openapi.ui.Messages.showErrorDialog(project, error, "CKB Error")
+                    return
+                }
                 val r = report ?: return
                 val violations = r.drift.size
                 val severity = if (r.drift.any { it.severity == "Critical" }) "🔴" else if (violations > 0) "🟡" else "✅"
@@ -145,19 +149,19 @@ class AnalyzeImpactAction : AnAction("Analyze Impact at Cursor") {
                     appendLine("Effort: ${imp.estimated_effort}")
                     appendLine()
 
-                    if (imp.directly_affected.isNotEmpty()) {
-                        appendLine("Directly affected (${imp.directly_affected.size}):")
-                        imp.directly_affected.take(8).forEach { appendLine("  • $it") }
-                        if (imp.directly_affected.size > 8)
-                            appendLine("  ...and ${imp.directly_affected.size - 8} more")
+                    if (imp.direct_impacts.isNotEmpty()) {
+                        appendLine("Directly affected (${imp.direct_impacts.size}):")
+                        imp.direct_impacts.take(8).forEach { appendLine("  • ${it.node} (${it.path}:${it.line})") }
+                        if (imp.direct_impacts.size > 8)
+                            appendLine("  ...and ${imp.direct_impacts.size - 8} more")
                         appendLine()
                     }
 
-                    if (imp.transitively_affected.isNotEmpty()) {
-                        appendLine("Transitively affected (${imp.transitively_affected.size}):")
-                        imp.transitively_affected.take(5).forEach { appendLine("  • $it") }
-                        if (imp.transitively_affected.size > 5)
-                            appendLine("  ...and ${imp.transitively_affected.size - 5} more")
+                    if (imp.indirect_impacts.isNotEmpty()) {
+                        appendLine("Transitively affected (${imp.indirect_impacts.size}):")
+                        imp.indirect_impacts.take(5).forEach { appendLine("  • ${it.node} (${it.path}:${it.line})") }
+                        if (imp.indirect_impacts.size > 5)
+                            appendLine("  ...and ${imp.indirect_impacts.size - 5} more")
                     }
                 }
 

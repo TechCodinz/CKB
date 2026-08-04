@@ -12,7 +12,7 @@ name = "ckb-mcp-server"
 path = "src/main.rs"
 
 [dependencies]
-ckb-core = { path = "../core" }
+ckb-core = { path = "../core", version = "0.1.0" }
 axum = "0.7"
 tokio = { version = "1.35", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -21,3 +21,4 @@ anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 tower-http = { version = "0.5", features = ["cors"] }
+reqwest = { version = "0.11", features = ["json"] }

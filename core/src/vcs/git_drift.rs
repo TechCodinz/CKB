@@ -111,7 +111,7 @@ impl GitDriftAnalyzer {
         }
 
         let total_violations: usize = entries.iter().map(|e| e.estimated_violations_introduced).sum();
-        let highest_risk = entries.iter().max_by(|a, b| a.risk_score.partial_cmp(&b.risk_score).unwrap()).cloned();
+        let highest_risk = entries.iter().max_by(|a, b| a.risk_score.partial_cmp(&b.risk_score).unwrap_or(std::cmp::Ordering::Equal)).cloned();
 
         let trend = Self::compute_trend(&entries);
 

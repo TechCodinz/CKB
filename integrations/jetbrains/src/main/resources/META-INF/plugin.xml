@@ -2,7 +2,7 @@
     <id>dev.ckb.jetbrains</id>
     <name>CKB – Architectural Intelligence</name>
     <vendor email="support@ckb.dev" url="https://ckb.dev">CKB</vendor>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
 
     <description><![CDATA[
         <b>CKB – Code Knowledge Base</b><br><br>
@@ -27,19 +27,21 @@
                     icon="/icons/ckb_tool_window.svg"
                     factoryClass="dev.ckb.toolwindow.CkbToolWindowFactory"/>
 
-        <!-- External Annotator for inline diagnostics -->
-        <externalAnnotator
-                language="JAVA"
-                implementationClass="dev.ckb.annotator.CkbAnnotator"/>
-        <externalAnnotator
-                language="kotlin"
-                implementationClass="dev.ckb.annotator.CkbAnnotator"/>
-        <externalAnnotator
-                language="Python"
-                implementationClass="dev.ckb.annotator.CkbAnnotator"/>
-        <externalAnnotator
-                language="TypeScript"
-                implementationClass="dev.ckb.annotator.CkbAnnotator"/>
+        <!-- NOTE: inline-annotation support (externalAnnotator registrations
+             for Java/Kotlin/Python/TypeScript) was removed here — it pointed
+             at dev.ckb.annotator.CkbAnnotator, a class that doesn't exist
+             anywhere in this plugin's source. Registering an extension point
+             implementation class that can't be found throws
+             ClassNotFoundException at plugin load time, which would likely
+             have disabled the whole plugin for every user, not just broken
+             the annotation feature. The tool window (CkbToolWindowFactory)
+             still shows violations; a real inline-annotator implementation
+             (mirroring what the VS Code extension's DiagnosticCollection
+             does) is a legitimate follow-up, not done here — writing one
+             blind, with no IntelliJ Platform SDK available to verify
+             against and no compiler in this environment, risked replacing
+             one broken implementation with a different, harder-to-notice
+             one. -->
 
         <!-- Application settings -->
         <applicationConfigurable

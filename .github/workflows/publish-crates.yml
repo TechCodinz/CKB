@@ -11,7 +11,7 @@ jobs:
     name: Publish Crates to Crates.io
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -20,6 +20,20 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: cargo publish --manifest-path core/Cargo.toml
+
+      # ckb-cli and ckb-mcp-server both depend on ckb-core via a path
+      # dependency with a version pinned alongside it (required for
+      # crates.io to accept publishing them at all — a path-only dependency
+      # with no version can't be published). crates.io needs a few seconds
+      # to index a freshly-published crate before dependents referencing it
+      # can be published, hence the wait.
+      - name: Wait for crates.io to index ckb-core
+        run: sleep 30
+
+      - name: Publish ckb-cli
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --manifest-path cli/Cargo.toml
 
       - name: Publish ckb-mcp-server
         env:

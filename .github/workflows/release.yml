@@ -4,11 +4,19 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch: {}
+
+# Without this, GITHUB_TOKEN may default to read-only depending on the
+# repo/org's token settings, and creating the release below would fail with
+# a 403 rather than an obvious error.
+permissions:
+  contents: write
 
 jobs:
   build-release:
     name: Build and Release
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
@@ -25,7 +33,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -36,8 +44,23 @@ jobs:
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: sudo apt-get install -y gcc-aarch64-linux-gnu
 
+      - name: Configure cross-compile linker (Linux ARM)
+        # Installing the cross-gcc above isn't enough on its own — cargo
+        # still needs to be told to use it as the linker for this target,
+        # or the link step fails even after a successful compile.
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          mkdir -p .cargo
+          echo '[target.aarch64-unknown-linux-gnu]' >> .cargo/config.toml
+          echo 'linker = "aarch64-linux-gnu-gcc"' >> .cargo/config.toml
+
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }} -p cli
+        # `-p` takes the package NAME from Cargo.toml ([package].name),
+        # which is "ckb-cli" — not "cli" (the directory name). The previous
+        # `-p cli` would fail immediately with "package `cli` not found"
+        # for every single matrix entry, since no package is actually named
+        # that.
+        run: cargo build --release --target ${{ matrix.target }} -p ckb-cli
 
       - name: Package Binary (Unix)
         if: runner.os != 'Windows'
@@ -54,7 +77,7 @@ jobs:
           Move-Item ckb-${{ matrix.target }}.zip ..\..\..
 
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             ckb-${{ matrix.target }}.tar.gz

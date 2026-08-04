@@ -27,6 +27,36 @@ pub struct TestCoverageGapReport {
 
 pub struct TestCoverageAnalyzer;
 
+/// `path_str.contains("test")` (the previous check) also matches `latest.rs`,
+/// `contest.py`, `attestation.go`, `protestor.ts`, etc. — any production file
+/// with "test" or "spec" as a mere substring got silently misclassified as a
+/// test file, or treated as "covered" if a false-positive-matching file called
+/// into it, hiding real gaps from the report. This checks path *segments* and
+/// filename conventions instead of raw substrings.
+fn is_test_path(path: &str) -> bool {
+    let normalized = path.replace('\\', "/");
+    let segments: Vec<&str> = normalized.split('/').collect();
+
+    let dir_is_test = segments.iter().any(|s| {
+        matches!(*s, "test" | "tests" | "spec" | "specs" | "__tests__" | "__test__")
+    });
+    if dir_is_test {
+        return true;
+    }
+
+    let filename = segments.last().copied().unwrap_or("");
+    let stem = filename.split('.').next().unwrap_or(filename);
+    stem.starts_with("test_")
+        || stem.ends_with("_test")
+        || stem.ends_with("Test")
+        || stem.starts_with("spec_")
+        || stem.ends_with("_spec")
+        || stem.ends_with(".test")
+        || stem.ends_with(".spec")
+        || filename.contains(".test.")
+        || filename.contains(".spec.")
+}
+
 impl TestCoverageAnalyzer {
     /// Analyze coverage gaps between test files and production nodes in graph
     pub fn analyze_gaps(graph: &DependencyGraph) -> anyhow::Result<TestCoverageGapReport> {
@@ -37,7 +67,7 @@ impl TestCoverageAnalyzer {
 
         for node in &nodes {
             let path_str = node.path.to_string_lossy();
-            if path_str.contains("test") || path_str.contains("spec") || node.name.starts_with("test_") {
+            if is_test_path(&path_str) || node.name.starts_with("test_") {
                 test_nodes.push(node);
             } else {
                 prod_nodes.push(node);
@@ -49,7 +79,7 @@ impl TestCoverageAnalyzer {
 
         for prod_node in &prod_nodes {
             let callers = graph.get_callers(&prod_node.id);
-            let is_tested = callers.iter().any(|c| c.0.contains("test") || c.0.contains("spec"));
+            let is_tested = callers.iter().any(|c| is_test_path(&c.0));
 
             if is_tested {
                 covered_count += 1;
@@ -89,5 +119,47 @@ impl TestCoverageAnalyzer {
             untested_hotpaths,
             high_priority_gaps_count: high_priority_count,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Regression tests for the bug this function was rewritten to fix: the
+    // original `path.contains("test")` check misclassified any file with
+    // "test"/"spec" as a mere substring — not a path segment — as a test
+    // file, silently hiding real coverage gaps. These lock in the fix.
+
+    #[test]
+    fn recognizes_real_test_files() {
+        assert!(is_test_path("src/tests/helpers.rs"));
+        assert!(is_test_path("src/__tests__/component.tsx"));
+        assert!(is_test_path("lib/test/utils.py"));
+        assert!(is_test_path("src/test_utils.py"));
+        assert!(is_test_path("src/utils_test.go"));
+        assert!(is_test_path("src/UtilsTest.java"));
+        assert!(is_test_path("src/component.test.tsx"));
+        assert!(is_test_path("src/component.spec.ts"));
+        assert!(is_test_path("spec/models/user_spec.rb"));
+    }
+
+    #[test]
+    fn does_not_misclassify_production_files_with_test_as_a_substring() {
+        // This is the exact regression: these all contain "test" as a raw
+        // substring but are ordinary production files, not test files.
+        assert!(!is_test_path("src/latest.rs"));
+        assert!(!is_test_path("src/latest_handler.rs"));
+        assert!(!is_test_path("src/contest.py"));
+        assert!(!is_test_path("src/attestation.go"));
+        assert!(!is_test_path("src/protestor.ts"));
+        assert!(!is_test_path("src/detestable.rs"));
+        assert!(!is_test_path("src/contest_score.py"));
+    }
+
+    #[test]
+    fn handles_windows_style_paths() {
+        assert!(is_test_path("src\\tests\\helpers.rs"));
+        assert!(!is_test_path("src\\latest.rs"));
     }
 }

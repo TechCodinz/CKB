@@ -39,7 +39,7 @@ impl RustParser {
                 || child.kind() == "use_list" || child.kind() == "identifier"
                 || child.kind() == "scoped_use_list"
             {
-                let text = child.utf8_text(source.as_bytes()).unwrap().to_string();
+                let text = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
                 let parts: Vec<String> = text.split("::").map(|s| s.trim().to_string()).collect();
                 let source_path = parts.first().cloned().unwrap_or_default();
                 return Some(Import {
@@ -138,7 +138,7 @@ impl RustParser {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" || child.kind() == "type_identifier" {
-                return Some(child.utf8_text(source.as_bytes()).unwrap().to_string());
+                return Some(child.utf8_text(source.as_bytes()).unwrap_or("").to_string());
             }
         }
         None
@@ -173,7 +173,7 @@ impl RustParser {
 
 impl LanguageParserTrait for RustParser {
     fn parse(&self, path: &str, content: &str) -> Result<FileAnalysis> {
-        let tree = self.parser.lock().unwrap().parse(content, None)
+        let tree = self.parser.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).parse(content, None)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse Rust file"))?;
 
         let root = tree.root_node();
@@ -203,5 +203,81 @@ impl LanguageParserTrait for RustParser {
             calls: Vec::new(),
             type_relations: Vec::new(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::SymbolKind;
+
+    #[test]
+    fn extracts_a_top_level_function() {
+        let parser = RustParser::new();
+        let analysis = parser.parse("hello.rs", "fn hello() {}").expect("parse should succeed");
+
+        assert_eq!(analysis.exports.len(), 1);
+        assert_eq!(analysis.exports[0].name, "hello");
+        assert_eq!(analysis.exports[0].kind, SymbolKind::Function);
+        assert!(!analysis.exports[0].public); // not `pub fn`
+
+        // Always emits exactly one File-kind node representing the file itself.
+        assert_eq!(analysis.nodes.len(), 1);
+        assert_eq!(analysis.nodes[0].kind, NodeKind::File);
+    }
+
+    #[test]
+    fn extracts_a_public_struct() {
+        let parser = RustParser::new();
+        let analysis = parser.parse("lib.rs", "pub struct Widget { id: u32 }").expect("parse should succeed");
+
+        assert_eq!(analysis.exports.len(), 1);
+        assert_eq!(analysis.exports[0].name, "Widget");
+        assert_eq!(analysis.exports[0].kind, SymbolKind::Class);
+        assert!(analysis.exports[0].public);
+    }
+
+    #[test]
+    fn extracts_use_declarations_as_imports() {
+        let parser = RustParser::new();
+        let analysis = parser.parse("main.rs", "use std::collections::HashMap;\nfn main() {}")
+            .expect("parse should succeed");
+
+        assert_eq!(analysis.imports.len(), 1);
+        assert_eq!(analysis.imports[0].source, "std");
+    }
+
+    #[test]
+    fn handles_empty_content_without_panicking() {
+        let parser = RustParser::new();
+        let result = parser.parse("empty.rs", "");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().exports.len(), 0);
+    }
+
+    #[test]
+    fn survives_repeated_parses_on_the_same_instance() {
+        // Exercises the lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        // path repeatedly on one shared parser instance — the same pattern a
+        // long-running scan hammers across many files. This doesn't induce
+        // an actual panic-poisoning scenario (that's awkward to do safely in
+        // a unit test), but it does confirm the lock is correctly released
+        // and reacquired across many sequential calls without deadlocking.
+        let parser = RustParser::new();
+        for i in 0..50 {
+            let src = format!("fn f{}() {{}}", i);
+            let analysis = parser.parse("repeat.rs", &src).expect("parse should succeed");
+            assert_eq!(analysis.exports[0].name, format!("f{}", i));
+        }
+    }
+
+    #[test]
+    fn handles_malformed_syntax_without_panicking() {
+        // Tree-sitter is error-tolerant by design (it produces a best-effort
+        // tree with ERROR nodes rather than failing outright), so this
+        // should still return Ok rather than panic or Err.
+        let parser = RustParser::new();
+        let result = parser.parse("broken.rs", "fn oops( { this is not valid rust @@@ %%");
+        assert!(result.is_ok());
     }
 }

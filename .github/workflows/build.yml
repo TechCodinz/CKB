@@ -1,1 +1,138 @@
-# build.yml
+name: Build & Test
+
+# This is the actual safety net for the whole project: runs on every push
+# and PR, and is the first thing that should catch a compile error before
+# it reaches main. Previously this file was an empty stub (literally just a
+# comment), meaning there was no automated verification anywhere in the
+# repo — every change across every prior session here was written and
+# merged without ever being compiled.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache Cargo/target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build workspace (core, cli, mcp-server)
+        # Scoped to these three packages deliberately — bindings/wasm is a
+        # workspace member but only builds for the wasm32 target (its
+        # wasm-bindgen externs don't resolve on a native target), so a plain
+        # `cargo build --workspace` here would fail on that crate specifically.
+        run: cargo build --release -p ckb-core -p ckb-cli -p ckb-mcp-server
+
+      - name: Run tests
+        run: cargo test --release -p ckb-core -p ckb-cli -p ckb-mcp-server
+
+      - name: Clippy
+        run: cargo clippy -p ckb-core -p ckb-cli -p ckb-mcp-server --all-targets -- -D warnings
+        continue-on-error: true # informational for now — not a merge blocker until the codebase is clippy-clean
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo/target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build WASM bindings
+        run: cargo build --release -p ckb-wasm --target wasm32-unknown-unknown
+
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Generate Prisma client
+        working-directory: backend
+        run: npx prisma generate
+
+      - name: Type-check
+        working-directory: backend
+        run: npx tsc --noEmit
+
+      - name: Build
+        working-directory: backend
+        run: npm run build
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Type-check
+        working-directory: web
+        run: npx tsc --noEmit
+
+      - name: Build
+        working-directory: web
+        run: npm run build
+
+  vscode-extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: integrations/vscode/package-lock.json
+
+      - name: Install dependencies
+        working-directory: integrations/vscode
+        run: npm ci
+
+      - name: Compile
+        working-directory: integrations/vscode
+        run: npm run compile
+
+  sdks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Node SDK syntax check
+        run: node --check bindings/node/index.js
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Python SDK syntax check
+        run: python3 -m py_compile bindings/python/ckb/core.py bindings/python/ckb/__init__.py bindings/python/setup.py

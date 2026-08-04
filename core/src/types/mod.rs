@@ -202,6 +202,32 @@ pub struct ImpactedNode {
     pub line: u32,
 }
 
+/// A single change within a multi-edit session (see `SessionImpactSummary`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionChange {
+    pub file: String,
+    pub line: u32,
+    pub change_type: ChangeType,
+}
+
+/// Aggregated blast-radius view across an entire editing session (e.g. every
+/// file an AI coding agent touched in one pass), instead of one
+/// `ImpactAnalysis` per edit that nobody has time to read individually.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionImpactSummary {
+    pub changes_analyzed: usize,
+    pub unique_affected_nodes: usize,
+    pub unique_affected_files: usize,
+    pub affected_files: Vec<String>,
+    pub highest_risk_score: f32,
+    pub average_risk_score: f32,
+    /// Affected node IDs (`"path::function"`) that have zero test coverage,
+    /// per the real `TestCoverageAnalyzer` — i.e. "this session touched code
+    /// with no tests protecting it."
+    pub untested_affected_nodes: Vec<String>,
+    pub per_change: Vec<ImpactAnalysis>,
+}
+
 /// Kind of impact
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ImpactKind {

@@ -4,6 +4,7 @@ node_modules/
 out/
 dist/
 build/
+.gradle/
 
 # Environment
 .env
@@ -36,3 +37,5 @@ ckb_data/
 # Test artifacts
 *.sarif
 *.snap
+*.vsix
+*.jar

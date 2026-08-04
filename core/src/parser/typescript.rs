@@ -41,7 +41,7 @@ impl TypeScriptParser {
         for child in node.children(&mut cursor) {
             match child.kind() {
                 "string" => {
-                    source_str = Some(child.utf8_text(source.as_bytes()).unwrap().to_string());
+                    source_str = Some(child.utf8_text(source.as_bytes()).unwrap_or("").to_string());
                 }
                 "import_clause" => {
                     symbols = self.extract_import_symbols(child, source);
@@ -63,7 +63,7 @@ impl TypeScriptParser {
         
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" {
-                symbols.push(child.utf8_text(source.as_bytes()).unwrap().to_string());
+                symbols.push(child.utf8_text(source.as_bytes()).unwrap_or("").to_string());
             }
         }
         
@@ -86,8 +86,18 @@ impl TypeScriptParser {
                         exports.push(Symbol {
                             name,
                             kind: SymbolKind::Class,
-                            exported: true,
-                            public: true,
+                            // Reached directly (not via the "export_statement"
+                            // branch above), meaning this declaration has no
+                            // `export` keyword — it's module-private. This
+                            // previously marked every top-level class/function
+                            // as exported:true/public:true unconditionally,
+                            // regardless of whether `export` was actually
+                            // present, which meant downstream consumers
+                            // (boundary inference, API-surface analysis)
+                            // couldn't distinguish a module's real public
+                            // surface from its private internals.
+                            exported: false,
+                            public: false,
                         });
                     }
                 }
@@ -96,8 +106,8 @@ impl TypeScriptParser {
                         exports.push(Symbol {
                             name,
                             kind: SymbolKind::Function,
-                            exported: true,
-                            public: true,
+                            exported: false,
+                            public: false,
                         });
                     }
                 }
@@ -133,7 +143,7 @@ impl TypeScriptParser {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" {
-                return Some(child.utf8_text(source.as_bytes()).unwrap().to_string());
+                return Some(child.utf8_text(source.as_bytes()).unwrap_or("").to_string());
             }
         }
         None
@@ -142,7 +152,7 @@ impl TypeScriptParser {
 
 impl LanguageParserTrait for TypeScriptParser {
     fn parse(&self, path: &str, content: &str) -> Result<FileAnalysis> {
-        let tree = self.parser.lock().unwrap().parse(content, None)
+        let tree = self.parser.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).parse(content, None)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse file"))?;
         
         let root = tree.root_node();
@@ -193,7 +203,7 @@ impl JavaScriptParser {
 
 impl LanguageParserTrait for JavaScriptParser {
     fn parse(&self, path: &str, content: &str) -> Result<FileAnalysis> {
-        let tree = self.parser.lock().unwrap().parse(content, None)
+        let tree = self.parser.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).parse(content, None)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse JavaScript file"))?;
 
         let root = tree.root_node();
@@ -225,5 +235,58 @@ impl LanguageParserTrait for JavaScriptParser {
             calls: Vec::new(),
             type_relations: Vec::new(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::SymbolKind;
+
+    #[test]
+    fn exported_function_is_marked_exported() {
+        let parser = TypeScriptParser::new();
+        let analysis = parser.parse("hello.ts", "export function hello() {}\n").expect("parse should succeed");
+
+        let hello = analysis.exports.iter().find(|s| s.name == "hello").expect("function should be extracted");
+        assert_eq!(hello.kind, SymbolKind::Function);
+        assert!(hello.exported);
+        assert!(hello.public);
+    }
+
+    #[test]
+    fn non_exported_function_is_not_marked_exported() {
+        // Regression test: this previously marked every top-level function
+        // as exported:true/public:true regardless of whether `export` was
+        // actually present.
+        let parser = TypeScriptParser::new();
+        let analysis = parser.parse("internal.ts", "function helper() {}\n").expect("parse should succeed");
+
+        let helper = analysis.exports.iter().find(|s| s.name == "helper").expect("function should be extracted");
+        assert!(!helper.exported, "a function with no `export` keyword must not be marked exported");
+        assert!(!helper.public);
+    }
+
+    #[test]
+    fn exported_class_is_marked_exported() {
+        let parser = TypeScriptParser::new();
+        let analysis = parser.parse("widget.ts", "export class Widget {}\n").expect("parse should succeed");
+
+        let widget = analysis.exports.iter().find(|s| s.name == "Widget").expect("class should be extracted");
+        assert_eq!(widget.kind, SymbolKind::Class);
+        assert!(widget.exported);
+    }
+
+    #[test]
+    fn handles_empty_content_without_panicking() {
+        let parser = TypeScriptParser::new();
+        assert!(parser.parse("empty.ts", "").is_ok());
+    }
+
+    #[test]
+    fn handles_malformed_syntax_without_panicking() {
+        let parser = TypeScriptParser::new();
+        let result = parser.parse("broken.ts", "export function oops( { not valid @@@ %%");
+        assert!(result.is_ok());
     }
 }

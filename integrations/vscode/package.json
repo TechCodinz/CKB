@@ -2,7 +2,7 @@
     "name": "ckb-vscode",
     "displayName": "CKB - Code Knowledge Base",
     "description": "Real-time architectural intelligence — detect violations, analyze impact, visualize dependencies",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "publisher": "TechCodinz",
     "icon": "icon.png",
     "license": "MIT",
@@ -77,13 +77,24 @@
             "properties": {
                 "ckb.serverUrl": {
                     "type": "string",
-                    "default": "https://ckb-mcp-server.onrender.com",
-                    "description": "URL of the CKB server. Default is live engine: https://ckb-mcp-server.onrender.com"
+                    "default": "http://localhost:3000",
+                    "description": "URL of a CKB MCP server to use when the local `ckb` CLI isn't found. Only useful if you've started one yourself (e.g. via \"CKB: Start MCP Server\") — a remote server can't read paths on your local machine, so this must point at something that can actually see your workspace."
+                },
+                "ckb.apiKey": {
+                    "type": "string",
+                    "default": "",
+                    "markdownDescription": "API key sent as `X-API-Key` when talking to a CKB server (see `ckb.serverUrl`). Required if that server was started with `CKB_API_KEY` set, or with per-user backend auth configured.",
+                    "editPresentation": "singlelineText"
                 },
                 "ckb.autoScanOnOpen": {
                     "type": "boolean",
                     "default": true,
                     "description": "Automatically scan project when workspace opens"
+                },
+                "ckb.rescanOnSave": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically re-scan (debounced) when a source file changes"
                 },
                 "ckb.showDiagnostics": {
                     "type": "boolean",

@@ -59,7 +59,7 @@ impl PatternDetectorEngine {
         }
         
         // Sort by confidence
-        patterns.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
+        patterns.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal));
         
         Ok(patterns)
     }

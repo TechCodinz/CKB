@@ -81,7 +81,8 @@ class CkbToolWindowPanel(private val project: Project) : JPanel(BorderLayout()) 
         statsLabel.text = "  ${report.files_processed} files · ${report.nodes} nodes · ${report.edges} edges · ${report.patterns.size} patterns"
 
         violationsModel.clear()
-        report.drift.sortedByDescending { it.severity }.forEach { v ->
+        val severityRank = mapOf("Critical" to 3, "Error" to 2, "Warning" to 1, "Info" to 0)
+        report.drift.sortedByDescending { severityRank[it.severity] ?: -1 }.forEach { v ->
             val severityIcon = when (v.severity) {
                 "Critical" -> "🔴"
                 "Error" -> "🟠"

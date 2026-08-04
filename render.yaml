@@ -1,3 +1,6 @@
+# Public repo deploy config — the CKB engine/MCP server only.
+# The backend (billing, auth, dashboard API) has its own render.yaml in the
+# private repo — see OPEN_SOURCE_STRATEGY.md for why these are split.
 services:
   - type: web
     name: ckb-mcp-server
@@ -9,26 +12,23 @@ services:
     envVars:
       - key: RUST_LOG
         value: info
-      - key: DATABASE_URL
-        sync: false   # Set this manually in Render dashboard
-  - type: web
-    name: ckb-backend-api
-    env: node
-    plan: free
-    rootDir: backend
-    buildCommand: npm install && npm run build
-    startCommand: npm start
-    healthCheckPath: /health
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: DATABASE_URL
-        sync: false   # Set this manually in Render dashboard
-      - key: JWT_SECRET
-        sync: false   # Set this manually in Render dashboard
-      - key: COINBASE_PRO_LINK
+      # Simple/single-tenant auth (see CKB_BACKEND_URL below for the
+      # alternative per-user mode). At least one of these two auth modes
+      # should be set before this is reachable from anywhere but localhost.
+      - key: CKB_API_KEY
         sync: false
-      - key: COINBASE_TEAM_LINK
+      # Per-user auth + usage-based billing mode: validates keys against
+      # the private backend instead of a single shared key. If set, takes
+      # priority over CKB_API_KEY. CKB_INTERNAL_SECRET must match the
+      # backend's INTERNAL_API_SECRET (private repo) exactly.
+      - key: CKB_BACKEND_URL
         sync: false
-      - key: FRONTEND_URL
-        sync: false   # Your Vercel URL
+      - key: CKB_INTERNAL_SECRET
+        sync: false
+      - key: CKB_ALLOWED_ORIGIN
+        sync: false
+      - key: CKB_BIND_ALL
+        value: "1" # required on Render — the service must bind 0.0.0.0, not the safer localhost-only default meant for local dev
+      # Optional: powers the ckb_explain_violation / ckb_ask features.
+      - key: ANTHROPIC_API_KEY
+        sync: false

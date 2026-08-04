@@ -36,7 +36,7 @@ impl JavaParser {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "scoped_identifier" {
-                let text = child.utf8_text(source.as_bytes()).unwrap().to_string();
+                let text = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
                 let parts: Vec<String> = text.split('.').map(|s| s.to_string()).collect();
                 let last = parts.last().cloned().unwrap_or_default();
                 return Some(Import {
@@ -114,7 +114,7 @@ impl JavaParser {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" {
-                return Some(child.utf8_text(source.as_bytes()).unwrap().to_string());
+                return Some(child.utf8_text(source.as_bytes()).unwrap_or("").to_string());
             }
         }
         None
@@ -149,7 +149,7 @@ impl JavaParser {
 
 impl LanguageParserTrait for JavaParser {
     fn parse(&self, path: &str, content: &str) -> Result<FileAnalysis> {
-        let tree = self.parser.lock().unwrap().parse(content, None)
+        let tree = self.parser.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).parse(content, None)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse Java file"))?;
 
         let root = tree.root_node();
@@ -179,5 +179,56 @@ impl LanguageParserTrait for JavaParser {
             calls: Vec::new(),
             type_relations: Vec::new(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::SymbolKind;
+
+    #[test]
+    fn extracts_a_public_class() {
+        let parser = JavaParser::new();
+        let analysis = parser.parse("Widget.java", "public class Widget {\n    public void run() {}\n}\n")
+            .expect("parse should succeed");
+
+        let widget = analysis.exports.iter().find(|s| s.name == "Widget");
+        assert!(widget.is_some());
+        let widget = widget.unwrap();
+        assert_eq!(widget.kind, SymbolKind::Class);
+        assert!(widget.public);
+        assert!(widget.exported);
+    }
+
+    #[test]
+    fn marks_package_private_class_as_not_public() {
+        let parser = JavaParser::new();
+        let analysis = parser.parse("Internal.java", "class Internal {}\n").expect("parse should succeed");
+
+        let internal = analysis.exports.iter().find(|s| s.name == "Internal").expect("class should be extracted");
+        assert!(!internal.public);
+    }
+
+    #[test]
+    fn extracts_an_interface() {
+        let parser = JavaParser::new();
+        let analysis = parser.parse("Shape.java", "public interface Shape {\n    double area();\n}\n")
+            .expect("parse should succeed");
+
+        assert!(analysis.exports.iter().any(|s| s.name == "Shape" && s.kind == SymbolKind::Interface));
+    }
+
+    #[test]
+    fn handles_empty_content_without_panicking() {
+        let parser = JavaParser::new();
+        assert!(parser.parse("Empty.java", "").is_ok());
+    }
+
+    #[test]
+    fn handles_malformed_syntax_without_panicking() {
+        let parser = JavaParser::new();
+        let result = parser.parse("Broken.java", "public class {{{ this is not valid java @@@");
+        assert!(result.is_ok());
     }
 }
