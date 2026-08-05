@@ -29,6 +29,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('ckb.impact', analyzeImpact),
         vscode.commands.registerCommand('ckb.showStatus', showStatus),
         vscode.commands.registerCommand('ckb.startServer', startMcpServer),
+        vscode.commands.registerCommand('ckb.setApiKey', setApiKey),
     );
 
     // File watcher for real-time analysis
@@ -408,6 +409,22 @@ function onFileChange(uri: vscode.Uri) {
     debounceTimer = setTimeout(() => {
         scanProject();
     }, 2000);
+}
+
+async function setApiKey() {
+    const currentKey = vscode.workspace.getConfiguration('ckb').get<string>('apiKey') || '';
+    const key = await vscode.window.showInputBox({
+        prompt: 'Enter your CKB API Key (from dashboard /api-keys)',
+        value: currentKey,
+        password: true,
+        placeHolder: 'ckb_...',
+        ignoreFocusOut: true,
+    });
+
+    if (key !== undefined) {
+        await vscode.workspace.getConfiguration('ckb').update('apiKey', key.trim(), vscode.ConfigurationTarget.Global);
+        vscode.window.showInformationMessage('CKB API Key updated successfully!');
+    }
 }
 
 export function deactivate() {

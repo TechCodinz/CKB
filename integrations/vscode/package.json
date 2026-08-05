@@ -56,6 +56,11 @@
                 "command": "ckb.startServer",
                 "title": "CKB: Start MCP Server",
                 "icon": "$(server)"
+            },
+            {
+                "command": "ckb.setApiKey",
+                "title": "CKB: Set API Key",
+                "icon": "$(key)"
             }
         ],
         "keybindings": [
