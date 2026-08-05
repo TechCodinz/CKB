@@ -1,5 +1,4 @@
 use wasm_bindgen::prelude::*;
-use serde_json::Value;
 
 /// Scan a codebase from WASM (browser/Node.js context)
 /// Note: full scan requires the CKB MCP server; this is a lightweight wrapper

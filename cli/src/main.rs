@@ -446,12 +446,12 @@ async fn impact_command(args: ImpactArgs, format: String) -> Result<()> {
     Ok(())
 }
 
-async fn snapshots_command(args: SnapshotsArgs, format: String) -> Result<()> {
+async fn snapshots_command(args: SnapshotsArgs, _format: String) -> Result<()> {
     println!("No snapshots found for {}", args.path.display());
     Ok(())
 }
 
-async fn compare_command(args: CompareArgs, format: String) -> Result<()> {
+async fn compare_command(_args: CompareArgs, _format: String) -> Result<()> {
     Ok(())
 }
 
@@ -723,7 +723,8 @@ fn display_impact_report(impact: &ckb_core::ImpactAnalysis, show_tree: bool) {
     }
 }
 
-fn display_snapshots(snapshots: &[ckb_core::SnapshotMetadata], verbose: bool) {
+#[allow(dead_code)]
+fn display_snapshots(snapshots: &[ckb_core::SnapshotMetadata], _verbose: bool) {
     if snapshots.is_empty() {
         println!("No snapshots found.");
         return;
@@ -834,7 +835,7 @@ fn generate_graphml(report: &ScanReport) -> String {
 
 fn generate_mermaid(report: &ScanReport) -> String {
     let mut mmd = String::from("graph TD\n");
-    for (i, pattern) in report.patterns.iter().enumerate() {
+    for (_i, pattern) in report.patterns.iter().enumerate() {
         mmd.push_str(&format!("  subgraph {}\n", pattern.name.replace(' ', "_")));
         for boundary in &pattern.boundaries {
             for node_id in &boundary.nodes {
@@ -929,7 +930,7 @@ struct ArchitectureSuggestion {
     example: Option<String>,
 }
 
-fn generate_suggestions(report: &ScanReport, count: usize, focus: Option<String>) -> Result<Vec<ArchitectureSuggestion>> {
+fn generate_suggestions(report: &ScanReport, count: usize, _focus: Option<String>) -> Result<Vec<ArchitectureSuggestion>> {
     let mut suggestions = Vec::new();
 
     // Generate suggestions based on violations
@@ -983,19 +984,23 @@ fn generate_suggestions(report: &ScanReport, count: usize, focus: Option<String>
     Ok(suggestions)
 }
 
-fn display_snapshot_diff(diff: &SnapshotDiff) {
+#[allow(dead_code)]
+fn display_snapshot_diff(_diff: &SnapshotDiff) {
     println!("Snapshot comparison: (not yet implemented)");
 }
 
+#[allow(dead_code)]
 fn format_change(change: i64) -> String {
     if change > 0 { format!("+{}", change) }
     else if change < 0 { format!("{}", change) }
     else { "0".to_string() }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct SnapshotDiff {}
 
+#[allow(dead_code)]
 fn display_custom_violations(violations: &[DriftViolation]) {
     display_drift_report(violations);
 }
