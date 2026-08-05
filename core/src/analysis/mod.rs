@@ -75,10 +75,10 @@ impl ArchitectureAnalyzer {
     }
 
     /// Extract minimal token-optimized subgraph context slice specifically formatted for Frontier LLM prompts
-    pub fn slice_context_for_prompt(&self, graph: &DependencyGraph, file: &str, depth: usize) -> Result<String> {
+    pub fn slice_context_for_prompt(&self, graph: &DependencyGraph, file: &str, _depth: usize) -> Result<String> {
         let node_id = NodeId(format!("{}::file", file));
         let callers = graph.get_callers(&node_id);
-        let callees = graph.get_callees(&node_id);
+        let _callees = graph.get_callees(&node_id);
         let deps = graph.get_dependencies(&node_id)?;
 
         let mut out = String::new();
@@ -127,7 +127,7 @@ impl ArchitectureAnalyzer {
     }
 
     /// Self-Healing Refactoring Engine: Uses graph partitioning to suggest exact decoupled interface extractions
-    pub fn suggest_decoupling_refactor(&self, graph: &DependencyGraph, cycle_nodes: &[NodeId]) -> Result<String> {
+    pub fn suggest_decoupling_refactor(&self, _graph: &DependencyGraph, cycle_nodes: &[NodeId]) -> Result<String> {
         let mut refactor_plan = String::new();
         refactor_plan.push_str("🛠️ **CKB Self-Healing Refactoring Recommendation**\n\n");
         refactor_plan.push_str("Detected tightly coupled cycle. Proposed Interface Isolation Plan:\n");
@@ -151,8 +151,8 @@ impl ArchitectureAnalyzer {
         Ok(risk)
     }
     
-    fn check_boundary(&self, graph: &DependencyGraph, boundary: &ArchitectureBoundary) -> Result<Vec<DriftViolation>> {
-        let mut violations = Vec::new();
+    fn check_boundary(&self, _graph: &DependencyGraph, _boundary: &ArchitectureBoundary) -> Result<Vec<DriftViolation>> {
+        let violations = Vec::new();
         Ok(violations)
     }
 }

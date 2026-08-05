@@ -2,7 +2,6 @@
 
 use std::collections::{HashMap, HashSet};
 use petgraph::graph::{DiGraph, NodeIndex};
-use petgraph::algo::has_path_connecting;
 use crate::types::*;
 use crate::parser::FileAnalysis;
 use anyhow::Result;
@@ -184,7 +183,7 @@ impl DependencyGraph {
         callees
     }
     
-    pub fn find_affected_nodes(&self, file: &str, line: u32) -> Result<HashSet<NodeId>> {
+    pub fn find_affected_nodes(&self, file: &str, _line: u32) -> Result<HashSet<NodeId>> {
         let mut affected = HashSet::new();
         
         // Find the node at the given location
@@ -198,7 +197,7 @@ impl DependencyGraph {
         Ok(affected)
     }
     
-    pub fn calculate_impact(&self, affected: &HashSet<NodeId>, change_type: ChangeType) -> Result<ImpactAnalysis> {
+    pub fn calculate_impact(&self, affected: &HashSet<NodeId>, _change_type: ChangeType) -> Result<ImpactAnalysis> {
         let mut direct = Vec::new();
         let mut indirect = Vec::new();
         let mut visited = HashSet::new();

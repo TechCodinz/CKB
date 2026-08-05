@@ -336,6 +336,9 @@ impl Pattern {
 }
 
 // Convenience functions
+#[allow(non_snake_case)]
 fn PathPattern(s: &str) -> Pattern { Pattern::new_path(s) }
+#[allow(non_snake_case)]
 fn NamingPattern(s: &str) -> Pattern { Pattern::new_naming(s) }
+#[allow(non_snake_case)]
 fn AnnotationPattern(s: &str) -> Pattern { Pattern::new_annotation(s) }

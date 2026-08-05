@@ -9,8 +9,7 @@ mod java;
 use std::path::Path;
 use std::collections::HashMap;
 use anyhow::Result;
-use tree_sitter::{Parser, Language};
-use crate::types::{Node, NodeKind, Symbol, Import, FunctionCall, TypeRelation};
+use crate::types::{Node, Symbol, Import, FunctionCall, TypeRelation};
 
 pub struct LanguageParser {
     parsers: HashMap<String, Box<dyn LanguageParserTrait + Send + Sync>>,

@@ -1,7 +1,8 @@
 //! Storage model definitions for serialization
 
+#![allow(dead_code)]
+
 use serde::{Serialize, Deserialize};
-use crate::types::*;
 use std::collections::HashMap;
 
 /// Serializable representation of the full graph state

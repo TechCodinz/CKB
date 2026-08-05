@@ -60,7 +60,7 @@ impl FederatedGraphEngine {
     /// topology, which is a larger feature to build on top of this.
     pub fn federate(reports: &HashMap<String, ScanReport>) -> FederationReport {
         let mut total_nodes = 0;
-        let mut total_edges = 0;
+        let mut _total_edges = 0;
         let mut repos = Vec::new();
         let mut cross_edges = Vec::new();
 

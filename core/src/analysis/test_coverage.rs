@@ -3,7 +3,6 @@
 
 use serde::{Deserialize, Serialize};
 use crate::graph::DependencyGraph;
-use crate::types::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UntestedHotpath {

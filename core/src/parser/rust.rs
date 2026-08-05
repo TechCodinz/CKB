@@ -124,7 +124,7 @@ impl RustParser {
         exports
     }
 
-    fn is_public(&self, node: Node, source: &str) -> bool {
+    fn is_public(&self, node: Node, _source: &str) -> bool {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "visibility_modifier" {

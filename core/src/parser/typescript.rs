@@ -4,7 +4,6 @@ use tree_sitter::{Parser, Node};
 use crate::parser::{LanguageParserTrait, FileAnalysis};
 use crate::types::{Node as CkbNode, NodeKind, Symbol, SymbolKind, Import, ImportKind};
 use anyhow::Result;
-use std::collections::HashSet;
 
 pub struct TypeScriptParser {
     parser: std::sync::Mutex<Parser>,
