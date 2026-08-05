@@ -2,8 +2,11 @@
 
 > **Architectural intelligence for AI-era development.** CKB scans your codebase, builds a dependency graph, detects architectural drift, and exposes everything through the Model Context Protocol so AI coding assistants like Cursor, Claude Desktop, and Continue.dev understand your architecture in real time.
 
-[![Build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/yourusername/ckb)
-[![License](https://img.shields.io/badge/license-MIT%20%2F%20Apache--2.0-blue)](LICENSE)
+[![Build Status](https://github.com/TechCodinz/CKB/workflows/build/badge.svg)](https://github.com/TechCodinz/CKB/actions)
+[![VS Code Marketplace](https://img.shields.io/vscode-marketplace/v/TechCodinz.ckb-vscode?color=blue&logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=TechCodinz.ckb-vscode)
+[![Open VSX](https://img.shields.io/open-vsx/v/TechCodinz/ckb-vscode?color=purple)](https://open-vsx.org/extension/TechCodinz/ckb-vscode)
+[![MCP 1.0](https://img.shields.io/badge/MCP-1.0-emerald?logo=anthropic)](https://modelcontextprotocol.io)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange)](https://www.rust-lang.org/)
 
 ---
