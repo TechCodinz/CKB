@@ -49,7 +49,7 @@ jobs:
         # Get it from https://dev.azure.com → Personal Access Tokens
         # with scope: Marketplace → Manage
         env:
-          VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
+          VSCE_TOKEN: ${{ secrets.VSCE_TOKEN || '' }}
         run: |
           if [ -z "$VSCE_TOKEN" ]; then
             echo "VSCE_TOKEN secret is not configured. Skipping VS Code Marketplace publish."
