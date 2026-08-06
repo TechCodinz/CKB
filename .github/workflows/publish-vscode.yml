@@ -44,7 +44,6 @@ jobs:
           retention-days: 90
 
       - name: Publish to VS Code Marketplace
-        if: ${{ secrets.VSCE_TOKEN != '' }}
         working-directory: integrations/vscode
         # VSCE_TOKEN must be set as a repository secret.
         # Get it from https://dev.azure.com → Personal Access Tokens
@@ -52,6 +51,10 @@ jobs:
         env:
           VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
         run: |
+          if [ -z "$VSCE_TOKEN" ]; then
+            echo "VSCE_TOKEN secret is not configured. Skipping VS Code Marketplace publish."
+            exit 0
+          fi
           if [ "${{ github.event.inputs.pre-release }}" = "true" ]; then
             npx vsce publish --pre-release --pat "$VSCE_TOKEN"
           else
