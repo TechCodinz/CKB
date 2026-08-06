@@ -23,6 +23,17 @@
 | **CI/CD integration** | SARIF, JUnit, and JSON output for GitHub Actions, GitLab CI, etc. |
 | **VS Code extension** | Real-time diagnostics and status bar integration |
 | **Web Dashboard** | React-based UI with charts, graph visualization, and violation tracking |
+## User & Integration Guide
+
+📖 **Complete User Guide**: For detailed setup instructions across IDEs, AI models, CLI, Cloud APIs, and CI/CD pipelines, see [USER_GUIDE.md](USER_GUIDE.md).
+
+- ⚡ **[VS Code Extension](USER_GUIDE.md#1-vs-code-extension-setup--usage)**: Set API Key via Command Palette (`CKB: Set API Key`) and visualize real-time AST graphs.
+- 🤖 **[AI Integration](USER_GUIDE.md#2-ai-assistant-integration-claude-code-codex-cursor-windsurf)**: Connect Claude Code, OpenAI Codex, Cursor, and Windsurf via MCP 1.0 (`ckb-mcp-server --stdio`).
+- 💻 **[CLI Reference](USER_GUIDE.md#3-cli-reference--commands)**: Run `ckb scan`, `ckb check`, `ckb impact`, and `ckb export`.
+- ☁️ **[Cloud Dashboard & API](USER_GUIDE.md#4-cloud-web-dashboard--rest-api-usage)**: Generate API Keys and query architectural data via REST API.
+- ⚙️ **[CI/CD Pipelines](USER_GUIDE.md#5-cicd-pipeline-integration-github-actions)**: Automate drift detection in GitHub Actions workflows.
+
+---
 
 ## Quick Start
 
