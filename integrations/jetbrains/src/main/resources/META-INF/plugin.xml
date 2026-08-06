@@ -1,8 +1,9 @@
 <idea-plugin>
     <id>dev.ckb.jetbrains</id>
-    <name>CKB – Architectural Intelligence</name>
+    <name>CKB - Architectural Intelligence</name>
     <vendor email="support@ckb.dev" url="https://ckb.dev">CKB</vendor>
     <version>1.0.1</version>
+    <idea-version since-build="233" until-build="243.*"/>
 
     <description><![CDATA[
         <b>CKB – Code Knowledge Base</b><br><br>
