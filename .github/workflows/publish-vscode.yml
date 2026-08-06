@@ -44,6 +44,7 @@ jobs:
           retention-days: 90
 
       - name: Publish to VS Code Marketplace
+        if: ${{ secrets.VSCE_TOKEN != '' }}
         working-directory: integrations/vscode
         # VSCE_TOKEN must be set as a repository secret.
         # Get it from https://dev.azure.com → Personal Access Tokens
