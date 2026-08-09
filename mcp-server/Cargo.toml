@@ -28,6 +28,10 @@ name = "reality_server_v4"
 path = "src/bin/reality_server_v4.rs"
 
 [[bin]]
+name = "reality_server_v5"
+path = "src/bin/reality_server_v5.rs"
+
+[[bin]]
 name = "architecture_memory_mcp"
 path = "src/bin/architecture_memory_mcp_v3.rs"
 
