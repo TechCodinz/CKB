@@ -30,7 +30,7 @@ impl PythonParser {
                 "import_statement" => {
                     let mut c = child.walk();
                     for item in child.children(&mut c) {
-                        if matches!(item.kind(), "dotted_name" | "aliased_import") {
+                        if matches!(item.kind(), "dotted_name" | "aliased_import" | "identifier") {
                             let text = item.utf8_text(source.as_bytes()).unwrap_or("");
                             let package = text.split_whitespace().next().unwrap_or("");
                             if !package.is_empty() {
@@ -55,12 +55,14 @@ impl PythonParser {
     }
 
     fn parse_from_import(&self, node: Node, source: &str) -> Option<Import> {
-        let module = node.child_by_field_name("module_name")
-            .or_else(|| {
-                let mut cursor = node.walk();
-                node.children(&mut cursor)
-                    .find(|n| matches!(n.kind(), "dotted_name" | "relative_import" | "identifier"))
-            })?;
+        let module = if let Some(module) = node.child_by_field_name("module_name") {
+            module
+        } else {
+            let mut cursor = node.walk();
+            let found = node.children(&mut cursor)
+                .find(|n| matches!(n.kind(), "dotted_name" | "relative_import" | "identifier"));
+            found?
+        };
         let module_name = module.utf8_text(source.as_bytes()).ok()?.to_string();
         let mut symbols = Vec::new();
         let mut cursor = node.walk();
@@ -82,10 +84,11 @@ impl PythonParser {
             if !text.is_empty() { return Some(text.to_string()); }
         }
         let mut cursor = node.walk();
-        node.children(&mut cursor)
+        let result = node.children(&mut cursor)
             .find(|n| n.kind() == "identifier")
             .and_then(|n| n.utf8_text(source.as_bytes()).ok())
-            .map(str::to_string)
+            .map(str::to_string);
+        result
     }
 
     fn extract_exports(&self, root: Node, source: &str) -> Vec<Symbol> {
