@@ -1,12 +1,14 @@
 # Public repo deploy config — production CKB engine/MCP REST server.
-# Reality vNext is validated as a separate target before promotion so the
-# established production API remains available during architecture work.
+# Reality vNext is compiled beside the established server on every deploy, but
+# production keeps starting the proven ckb-mcp-server binary until the bridge
+# passes its staged contract checks. A bridge compile failure cannot replace
+# the currently healthy production instance.
 services:
   - type: web
     name: ckb-mcp-server
     env: rust
     plan: free
-    buildCommand: cargo build --release -p ckb-mcp-server --bin ckb-mcp-server
+    buildCommand: cargo build --release -p ckb-mcp-server --bin ckb-mcp-server --bin reality_bridge
     startCommand: ./target/release/ckb-mcp-server
     healthCheckPath: /health
     envVars:
