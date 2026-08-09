@@ -58,15 +58,17 @@ impl RustParser {
             if !text.is_empty() { return Some(text.to_string()); }
         }
         let mut cursor = node.walk();
-        node.children(&mut cursor)
+        let result = node.children(&mut cursor)
             .find(|n| matches!(n.kind(), "identifier" | "type_identifier"))
             .and_then(|n| n.utf8_text(source.as_bytes()).ok())
-            .map(str::to_string)
+            .map(str::to_string);
+        result
     }
 
     fn is_public(&self, node: Node) -> bool {
         let mut cursor = node.walk();
-        node.children(&mut cursor).any(|n| n.kind() == "visibility_modifier")
+        let result = node.children(&mut cursor).any(|n| n.kind() == "visibility_modifier");
+        result
     }
 
     fn extract_exports(&self, root: Node, source: &str) -> Vec<Symbol> {
@@ -154,8 +156,6 @@ impl RustParser {
             "type_item" => if let Some(name) = self.item_name(node, source) { self.push_node(path, node, NodeKind::Type, name.clone(), name, nodes); },
             "impl_item" => {
                 next_impl = self.impl_target(node, source);
-                // When the impl has two type identifiers, the first is commonly
-                // the trait and the last is the concrete type: impl Trait for Type.
                 let mut cursor = node.walk();
                 let ids: Vec<String> = node.children(&mut cursor)
                     .filter(|n| matches!(n.kind(), "type_identifier" | "scoped_type_identifier"))
