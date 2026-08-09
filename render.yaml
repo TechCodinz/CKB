@@ -6,7 +6,10 @@ services:
     name: ckb-mcp-server
     env: rust
     plan: free
-    buildCommand: cargo build --release -p ckb-mcp-server --bin reality_server_v4
+    # Build the deployed Reality server and the stdio Architecture Memory MCP
+    # together. Render therefore becomes a production compile gate for the two
+    # core binaries even while GitHub Actions is unavailable.
+    buildCommand: cargo build --release -p ckb-mcp-server --bin reality_server_v4 --bin architecture_memory_mcp
     startCommand: ./target/release/reality_server_v4
     healthCheckPath: /health
     envVars:
