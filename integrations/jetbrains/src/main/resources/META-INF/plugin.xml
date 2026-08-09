@@ -1,98 +1,77 @@
 <idea-plugin>
     <id>dev.ckb.jetbrains</id>
-    <name>CKB - Architectural Intelligence</name>
+    <name>CKB - Living Architecture Intelligence</name>
     <vendor email="support@ckb.dev" url="https://ckb.dev">CKB</vendor>
-    <version>1.0.1</version>
+    <version>1.2.0</version>
     <idea-version since-build="233" until-build="243.*"/>
 
     <description><![CDATA[
-        <b>CKB – Code Knowledge Base</b><br><br>
-        Real-time architectural intelligence for your JetBrains IDE.<br><br>
+        <b>CKB – Living Architecture Intelligence</b><br><br>
+        Explore software as an evidence-backed internal system instead of a flat collection of files.<br><br>
         <ul>
-            <li>🔍 Scan your codebase for architectural violations</li>
-            <li>🛡️ See dependency violations as inline errors and warnings</li>
-            <li>⚡ Analyze impact of changes before you make them</li>
-            <li>🗺️ Visualize your dependency graph</li>
-            <li>🤖 MCP server integration for AI tools (Claude, Cursor, etc.)</li>
+            <li>🌌 Living Architecture Reality cockpit inside the IDE</li>
+            <li>⚡ Deep activity hotspots, change sensitivity and architecture boundaries</li>
+            <li>🧠 Bounded architecture memory for AI/model context without dumping the whole repository</li>
+            <li>🛡️ Evidence-backed architecture findings and dependency drift</li>
+            <li>🔮 Change ripple analysis before code is modified</li>
+            <li>🟢 Runtime evidence stays separate from static structure and predicted impact</li>
+            <li>🤖 MCP/agent integration for model-neutral architecture intelligence</li>
         </ul>
-        Supports: IntelliJ IDEA, PyCharm, WebStorm, GoLand, Rider, Android Studio.
+        Supports IntelliJ IDEA, PyCharm, WebStorm, GoLand, Rider and Android Studio families where platform compatibility permits.
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <!-- Tool Window -->
         <toolWindow id="CKB"
-                    displayName="CKB"
+                    displayName="CKB Living Reality"
                     anchor="bottom"
                     icon="/icons/ckb_tool_window.svg"
                     factoryClass="dev.ckb.toolwindow.CkbToolWindowFactory"/>
 
-        <!-- NOTE: inline-annotation support (externalAnnotator registrations
-             for Java/Kotlin/Python/TypeScript) was removed here — it pointed
-             at dev.ckb.annotator.CkbAnnotator, a class that doesn't exist
-             anywhere in this plugin's source. Registering an extension point
-             implementation class that can't be found throws
-             ClassNotFoundException at plugin load time, which would likely
-             have disabled the whole plugin for every user, not just broken
-             the annotation feature. The tool window (CkbToolWindowFactory)
-             still shows violations; a real inline-annotator implementation
-             (mirroring what the VS Code extension's DiagnosticCollection
-             does) is a legitimate follow-up, not done here — writing one
-             blind, with no IntelliJ Platform SDK available to verify
-             against and no compiler in this environment, risked replacing
-             one broken implementation with a different, harder-to-notice
-             one. -->
-
-        <!-- Application settings -->
         <applicationConfigurable
                 parentId="tools"
                 instance="dev.ckb.settings.CkbSettingsConfigurable"
                 id="dev.ckb.settings"
-                displayName="CKB Settings"/>
+                displayName="CKB Living Architecture"/>
         <applicationService
                 serviceImplementation="dev.ckb.settings.CkbSettings"/>
     </extensions>
 
     <actions>
-        <!-- CKB Menu Group -->
-        <group id="CkbMenuGroup" text="CKB" popup="true">
+        <group id="CkbMenuGroup" text="CKB Living Architecture" popup="true">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
 
             <action id="CkbScanAction"
                     class="dev.ckb.actions.ScanProjectAction"
                     text="Scan Project"
-                    description="Run full CKB architectural scan"
-                    icon="AllIcons.Actions.Find">
-            </action>
+                    description="Refresh the evidence-backed CKB architecture scan"
+                    icon="AllIcons.Actions.Find"/>
             <action id="CkbCheckAction"
                     class="dev.ckb.actions.CheckArchitectureAction"
                     text="Check Architecture"
-                    description="Check for architectural violations"
-                    icon="AllIcons.General.InspectionsOK">
-            </action>
+                    description="Check current architecture findings"
+                    icon="AllIcons.General.InspectionsOK"/>
             <action id="CkbImpactAction"
                     class="dev.ckb.actions.AnalyzeImpactAction"
-                    text="Analyze Impact at Cursor"
-                    description="Analyze impact of change at current cursor position"
+                    text="Analyze Change Ripple at Cursor"
+                    description="Predict direct and transitive architectural impact at the current cursor"
                     icon="AllIcons.Debugger.Watch">
                 <keyboard-shortcut keymap="$default" first-keystroke="shift ctrl I"/>
             </action>
             <action id="CkbGraphAction"
                     class="dev.ckb.actions.ShowGraphAction"
-                    text="Show Dependency Graph"
-                    description="Open dependency graph visualization"
-                    icon="AllIcons.Toolwindows.Dependencies">
-            </action>
+                    text="Open Architecture Graph"
+                    description="Open CKB architecture graph visualization"
+                    icon="AllIcons.Toolwindows.Dependencies"/>
         </group>
 
-        <!-- Editor Context Menu -->
         <group id="CkbEditorGroup">
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
             <action id="CkbImpactContextAction"
                     class="dev.ckb.actions.AnalyzeImpactAction"
-                    text="CKB: Analyze Impact Here"
-                    description="Analyze architectural impact at this location"
+                    text="CKB: Analyze Change Ripple Here"
+                    description="Predict architectural impact at this source location"
                     icon="AllIcons.Debugger.Watch"/>
         </group>
     </actions>
