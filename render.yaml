@@ -6,8 +6,8 @@ services:
     name: ckb-mcp-server
     env: rust
     plan: free
-    buildCommand: cargo build --release -p ckb-mcp-server --bin reality_server_v3
-    startCommand: ./target/release/reality_server_v3
+    buildCommand: cargo build --release -p ckb-mcp-server --bin reality_server_v4
+    startCommand: ./target/release/reality_server_v4
     healthCheckPath: /health
     envVars:
       - key: RUST_LOG
