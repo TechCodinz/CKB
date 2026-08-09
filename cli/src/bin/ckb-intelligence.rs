@@ -10,7 +10,10 @@
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use ckb_core::{ArchitectureMemoryEngine, CkbEngine, DeepActivityAnalyzer, ScanReport};
+use ckb_core::{
+    ArchitectureMemoryEngine, CkbEngine, DeepActivityAnalyzer, PatchTransaction,
+    PatchTransactionEngine, ScanReport, ValidationCommand,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashSet;
@@ -52,6 +55,30 @@ enum Command {
         depth: usize,
         #[arg(long, default_value_t = 32)]
         limit: usize,
+    },
+    /// Prepare and validate a unified diff on an isolated Git branch/worktree.
+    PreparePatch {
+        path: PathBuf,
+        patch_file: PathBuf,
+        validation_file: PathBuf,
+        state_file: PathBuf,
+        #[arg(long, default_value = "HEAD")]
+        baseline: String,
+    },
+    /// Explicitly commit a validated isolated transaction; never merges or pushes.
+    CommitPatch {
+        state_file: PathBuf,
+        /// Must exactly match the stagedTreeId returned by prepare-patch.
+        #[arg(long)]
+        confirm_staged_tree: String,
+        #[arg(long)]
+        message: String,
+    },
+    /// Remove a transaction worktree, optionally deleting its isolated branch.
+    CleanupPatch {
+        state_file: PathBuf,
+        #[arg(long, default_value_t = false)]
+        delete_branch: bool,
     },
 }
 
@@ -143,6 +170,26 @@ fn parser_concurrency() -> usize {
     // a useful ceiling for IDE responsiveness, but cap it so very large hosts
     // do not turn a workspace scan into an allocation/open-file storm.
     (logical.saturating_mul(2)).clamp(4, 32)
+}
+
+fn read_transaction(path: &Path) -> Result<PatchTransaction> {
+    let bytes = std::fs::read(path)
+        .with_context(|| format!("Cannot read transaction state {}", path.display()))?;
+    serde_json::from_slice(&bytes)
+        .with_context(|| format!("Invalid transaction state {}", path.display()))
+}
+
+fn write_transaction(path: &Path, transaction: &PatchTransaction) -> Result<()> {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    std::fs::create_dir_all(parent)?;
+    let name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("transaction.json");
+    let temporary = parent.join(format!(".{name}.{}.tmp", std::process::id()));
+    std::fs::write(&temporary, serde_json::to_vec_pretty(transaction)?)?;
+    std::fs::rename(&temporary, path)?;
+    Ok(())
 }
 
 async fn load_graph(path: &PathBuf) -> Result<(CkbEngine, ScanReport, u128, bool)> {
@@ -249,6 +296,79 @@ async fn main() -> Result<()> {
                 "dna": dna,
                 "memory": memory,
                 "evidencePolicy": "static-runtime-predicted-separated",
+                "synthetic": false
+            }))?);
+        }
+        Command::PreparePatch {
+            path,
+            patch_file,
+            validation_file,
+            state_file,
+            baseline,
+        } => {
+            let patch = std::fs::read_to_string(&patch_file)
+                .with_context(|| format!("Cannot read patch {}", patch_file.display()))?;
+            let validation_bytes = std::fs::read(&validation_file).with_context(|| {
+                format!("Cannot read validation plan {}", validation_file.display())
+            })?;
+            let validations: Vec<ValidationCommand> = serde_json::from_slice(&validation_bytes)
+                .with_context(|| {
+                    format!(
+                        "Validation plan {} must be a JSON array of label/program/args objects",
+                        validation_file.display()
+                    )
+                })?;
+            let transaction =
+                PatchTransactionEngine::prepare(&path, &baseline, &patch, &validations)?;
+            write_transaction(&state_file, &transaction)?;
+            println!("{}", serde_json::to_string(&json!({
+                "kind": "patch-transaction",
+                "operation": "prepare-and-validate",
+                "transaction": transaction,
+                "stateFile": state_file,
+                "confirmationRequired": true,
+                "mutationApplied": false,
+                "activeCheckoutModified": false,
+                "synthetic": false
+            }))?);
+        }
+        Command::CommitPatch {
+            state_file,
+            confirm_staged_tree,
+            message,
+        } => {
+            let mut transaction = read_transaction(&state_file)?;
+            if confirm_staged_tree != transaction.staged_tree_id {
+                anyhow::bail!(
+                    "confirmation does not match the validated staged tree; no commit was created"
+                );
+            }
+            let committed_sha = PatchTransactionEngine::commit(&mut transaction, &message)?;
+            write_transaction(&state_file, &transaction)?;
+            println!("{}", serde_json::to_string(&json!({
+                "kind": "patch-transaction",
+                "operation": "commit-isolated-branch",
+                "transactionId": transaction.transaction_id,
+                "branchName": transaction.branch_name,
+                "committedSha": committed_sha,
+                "merged": false,
+                "pushed": false,
+                "activeCheckoutModified": false,
+                "synthetic": false
+            }))?);
+        }
+        Command::CleanupPatch {
+            state_file,
+            delete_branch,
+        } => {
+            let transaction = read_transaction(&state_file)?;
+            PatchTransactionEngine::cleanup(&transaction, delete_branch)?;
+            println!("{}", serde_json::to_string(&json!({
+                "kind": "patch-transaction",
+                "operation": "cleanup",
+                "transactionId": transaction.transaction_id,
+                "worktreeRemoved": true,
+                "branchDeleted": delete_branch,
                 "synthetic": false
             }))?);
         }
