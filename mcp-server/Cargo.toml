@@ -23,6 +23,10 @@ path = "src/bin/reality_server_v2.rs"
 name = "reality_server_v3"
 path = "src/bin/reality_server_v3.rs"
 
+[[bin]]
+name = "architecture_memory_mcp"
+path = "src/bin/architecture_memory_mcp.rs"
+
 [dependencies]
 ckb-core = { path = "../core", version = "0.1.0" }
 axum = "0.7"
