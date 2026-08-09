@@ -135,6 +135,11 @@
                     "markdownDescription": "API key sent as `X-API-Key` only to the configured `ckb.serverUrl`.",
                     "editPresentation": "singlelineText"
                 },
+                "ckb.cloudApiUrl": {
+                    "type": "string",
+                    "default": "https://ckb-backend-api.onrender.com",
+                    "description": "Authenticated CKB Cloud API used by the programmatic patch-transaction agent. Local source paths and source contents are never uploaded by this client."
+                },
                 "ckb.cliBinary": {
                     "type": "string",
                     "default": "ckb",
