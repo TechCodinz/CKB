@@ -2,12 +2,15 @@
 # The authenticated gateway is the public process. It starts the tenant-isolated
 # Reality v5 engine on localhost, forwards only authenticated traffic, and keeps
 # expensive scans bounded while exposing a public health endpoint.
+#
+# The local `ckb-intelligence` binary is also compiled as a release gate because
+# VS Code/JetBrains use that facade for deep local activity + architecture memory.
 services:
   - type: web
     name: ckb-mcp-server
     env: rust
     plan: free
-    buildCommand: cargo build --release -p ckb-mcp-server --bin ckb-mcp-server --bin reality_bridge --bin reality_server_v5 --bin reality_gateway
+    buildCommand: cargo build --release -p ckb-mcp-server --bin ckb-mcp-server --bin reality_bridge --bin reality_server_v5 --bin reality_gateway && cargo build --release -p ckb-cli --bin ckb-intelligence
     startCommand: ./target/release/reality_gateway
     healthCheckPath: /health
     envVars:
