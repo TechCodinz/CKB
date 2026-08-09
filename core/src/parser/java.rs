@@ -35,23 +35,26 @@ impl JavaParser {
     }
 
     fn name(&self, node: Node, source: &str) -> Option<String> {
-        node.child_by_field_name("name")
+        if let Some(name) = node.child_by_field_name("name")
             .and_then(|n| n.utf8_text(source.as_bytes()).ok())
             .map(str::to_string)
-            .or_else(|| {
-                let mut cursor = node.walk();
-                node.children(&mut cursor)
-                    .find(|n| n.kind() == "identifier")
-                    .and_then(|n| n.utf8_text(source.as_bytes()).ok())
-                    .map(str::to_string)
-            })
+        {
+            return Some(name);
+        }
+        let mut cursor = node.walk();
+        let result = node.children(&mut cursor)
+            .find(|n| n.kind() == "identifier")
+            .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+            .map(str::to_string);
+        result
     }
 
     fn has_modifier(&self, node: Node, source: &str, modifier: &str) -> bool {
         let mut cursor = node.walk();
-        node.children(&mut cursor).any(|child| {
+        let result = node.children(&mut cursor).any(|child| {
             child.kind() == "modifiers" && child.utf8_text(source.as_bytes()).unwrap_or("").split_whitespace().any(|m| m == modifier)
-        })
+        });
+        result
     }
 
     fn extract_exports(&self, root: Node, source: &str) -> Vec<Symbol> {
