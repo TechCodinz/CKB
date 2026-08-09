@@ -1,33 +1,16 @@
-# Public repo deploy config — the CKB engine/Reality API server.
-# The backend (billing, auth, dashboard API) has its own render.yaml in the
-# private repo — see OPEN_SOURCE_STRATEGY.md for why these are split.
+# TEMPORARY compiler-diagnostic deployment. The served artifact contains only
+# cargo check output for the public Reality v5 source; it is removed as soon as
+# the exact compiler error is recovered and fixed.
 services:
   - type: web
     name: ckb-mcp-server
     env: rust
     plan: free
-    # Diagnostic isolation: the long-standing standard server has a real /health
-    # endpoint and depends on the same ckb-core. A green deploy proves shared
-    # core + package compilation is healthy and confines the remaining failure
-    # to the experimental Reality server binary. No frontend contract is being
-    # changed while this probe runs.
-    buildCommand: cargo build --release -p ckb-mcp-server --bin ckb-mcp-server
-    startCommand: ./target/release/ckb-mcp-server
+    buildCommand: bash -lc 'cargo check -p ckb-mcp-server --bin reality_server_v5 > reality_v5_build.log 2>&1 || true; cargo build --release -p ckb-mcp-server --bin build_diagnostic_server'
+    startCommand: ./target/release/build_diagnostic_server
     healthCheckPath: /health
     envVars:
       - key: RUST_LOG
         value: info
-      - key: CKB_API_KEY
-        sync: false
-      - key: CKB_ALLOWED_ORIGIN
-        sync: false
       - key: CKB_BIND_ALL
         value: "1"
-      - key: CKB_REALITY_DATA_DIR
-        value: "/opt/render/project/src/ckb_reality_data"
-      - key: CKB_BACKEND_URL
-        sync: false
-      - key: CKB_INTERNAL_SECRET
-        sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
