@@ -6,8 +6,8 @@ services:
     name: ckb-mcp-server
     env: rust
     plan: free
-    buildCommand: cargo build --release -p ckb-mcp-server --bin reality_server_v2
-    startCommand: ./target/release/reality_server_v2
+    buildCommand: cargo build --release -p ckb-mcp-server --bin reality_server_v3
+    startCommand: ./target/release/reality_server_v3
     healthCheckPath: /health
     envVars:
       - key: RUST_LOG
@@ -18,6 +18,8 @@ services:
         sync: false
       - key: CKB_BIND_ALL
         value: "1"
+      - key: CKB_REALITY_DATA_DIR
+        value: "/opt/render/project/src/ckb_reality_data"
       - key: CKB_BACKEND_URL
         sync: false
       - key: CKB_INTERNAL_SECRET
