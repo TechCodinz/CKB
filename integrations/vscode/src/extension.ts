@@ -14,6 +14,7 @@ import {
     stateFromBundle,
 } from './intelligence';
 import { CkbRealityViewProvider } from './realityView';
+import { CkbTransactionAgent } from './transactions';
 
 const execFileAsync = promisify(execFile);
 
@@ -469,6 +470,13 @@ export async function activate(context: vscode.ExtensionContext) {
             setTimeout(() => deepAnalyze({ quiet: true, reveal: false }), 700);
         }
     }
+
+    // Programmatic, UI-neutral API for trusted IDE agents. Every mutating
+    // operation still requires exact identifiers and remains isolated.
+    return {
+        version: 'ckb-ide-agent-api-v1',
+        transactions: new CkbTransactionAgent(context, workspaceRoot),
+    };
 }
 
 export function deactivate() {
