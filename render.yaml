@@ -1,13 +1,12 @@
 # Public repo deploy config — production CKB Reality/architecture engine.
-# The evidence-backed Reality bridge owns the current public Explorer contract.
-# reality_server_v5 is compiled beside it as the per-project persistence candidate
-# so Render acts as a real Rust build gate before any production promotion.
+# Production remains on the proven bridge while Render compile-validates the
+# authenticated gateway + tenant-isolated v5 engine as one deployable unit.
 services:
   - type: web
     name: ckb-mcp-server
     env: rust
     plan: free
-    buildCommand: cargo build --release -p ckb-mcp-server --bin ckb-mcp-server --bin reality_bridge --bin reality_server_v5
+    buildCommand: cargo build --release -p ckb-mcp-server --bin ckb-mcp-server --bin reality_bridge --bin reality_server_v5 --bin reality_gateway
     startCommand: ./target/release/reality_bridge
     healthCheckPath: /health
     envVars:
@@ -24,6 +23,8 @@ services:
       - key: CKB_BACKEND_URL
         sync: false
       - key: CKB_INTERNAL_SECRET
+        sync: false
+      - key: CKB_API_KEY
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
