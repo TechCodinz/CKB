@@ -35,7 +35,10 @@ impl DependencyGraph {
         self.graph.node_weights().cloned().collect()
     }
 
-    pub fn record_runtime_trace(&mut self, node_id: NodeId, executions: u64, latency_ms: f32) {
+    /// Merge a full runtime observation while preserving weighted latency and
+    /// weighted error rate. This is the canonical path for OTLP-derived
+    /// telemetry where both timing and failure evidence are available.
+    pub fn record_runtime_metrics(&mut self, node_id: NodeId, metrics: RuntimeMetrics) {
         let entry = self.runtime_traces.entry(node_id).or_insert(RuntimeMetrics {
             execution_count: 0,
             avg_latency_ms: 0.0,
@@ -44,14 +47,31 @@ impl DependencyGraph {
         });
 
         let previous_count = entry.execution_count;
-        let new_count = previous_count.saturating_add(executions);
+        let incoming_count = metrics.execution_count;
+        let new_count = previous_count.saturating_add(incoming_count);
         if new_count > 0 {
-            let weighted = (entry.avg_latency_ms as f64 * previous_count as f64)
-                + (latency_ms as f64 * executions as f64);
-            entry.avg_latency_ms = (weighted / new_count as f64) as f32;
+            let weighted_latency = (entry.avg_latency_ms as f64 * previous_count as f64)
+                + (metrics.avg_latency_ms as f64 * incoming_count as f64);
+            let weighted_errors = (entry.error_rate as f64 * previous_count as f64)
+                + (metrics.error_rate as f64 * incoming_count as f64);
+            entry.avg_latency_ms = (weighted_latency / new_count as f64) as f32;
+            entry.error_rate = (weighted_errors / new_count as f64) as f32;
         }
         entry.execution_count = new_count;
-        entry.is_hotpath = entry.execution_count > 1000;
+        entry.is_hotpath = entry.is_hotpath || metrics.is_hotpath || entry.execution_count > 1000;
+    }
+
+    /// Compatibility helper for callers that only know execution count and
+    /// latency. Such observations carry no measured errors and therefore merge
+    /// with an explicit 0.0 error-rate contribution rather than overwriting
+    /// prior OTLP failure evidence.
+    pub fn record_runtime_trace(&mut self, node_id: NodeId, executions: u64, latency_ms: f32) {
+        self.record_runtime_metrics(node_id, RuntimeMetrics {
+            execution_count: executions,
+            avg_latency_ms: latency_ms,
+            error_rate: 0.0,
+            is_hotpath: executions > 1000,
+        });
     }
 
     pub fn get_runtime_metrics(&self, node_id: &NodeId) -> Option<&RuntimeMetrics> {
@@ -478,5 +498,27 @@ mod tests {
         let m = graph.get_runtime_metrics(&id).unwrap();
         assert_eq!(m.execution_count, 101);
         assert!((m.avg_latency_ms - 19.80198).abs() < 0.01);
+    }
+
+    #[test]
+    fn runtime_error_rate_is_weighted_and_preserved() {
+        let mut graph = DependencyGraph::new();
+        let id = NodeId("src/a.ts::work".into());
+        graph.record_runtime_metrics(id.clone(), RuntimeMetrics {
+            execution_count: 10,
+            avg_latency_ms: 20.0,
+            error_rate: 0.5,
+            is_hotpath: false,
+        });
+        graph.record_runtime_metrics(id.clone(), RuntimeMetrics {
+            execution_count: 10,
+            avg_latency_ms: 40.0,
+            error_rate: 0.1,
+            is_hotpath: false,
+        });
+        let m = graph.get_runtime_metrics(&id).unwrap();
+        assert_eq!(m.execution_count, 20);
+        assert!((m.avg_latency_ms - 30.0).abs() < 0.001);
+        assert!((m.error_rate - 0.3).abs() < 0.001);
     }
 }
