@@ -1,4 +1,4 @@
-use ckb_core::{ArchitectureMemoryEngine, DependencyGraph, FileAnalysis, LanguageParser};
+use ckb_core::{ArchitectureMemoryEngine, CausalArchitectureEngine, DependencyGraph, FileAnalysis, LanguageParser, NodeId};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -99,6 +99,31 @@ fn tool_list() -> Value {
                 "name": "ckb_code_dna",
                 "description": "Return explainable Code DNA health/risk metrics derived from graph topology, cycles and observed runtime telemetry. Scores are heuristics, not fabricated learned probabilities.",
                 "inputSchema": { "type": "object", "properties": {} }
+            },
+            {
+                "name": "ckb_causal_path",
+                "description": "Explain the shortest proven directed architecture path from one exact CKB node ID to another, including relationship evidence and explicit runtime-observation flags.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "source": { "type": "string", "description": "Exact CKB node ID, for example src/auth.ts::login" },
+                        "target": { "type": "string", "description": "Exact CKB node ID" },
+                        "max_depth": { "type": "integer", "minimum": 1, "maximum": 32, "default": 12 }
+                    },
+                    "required": ["source", "target"]
+                }
+            },
+            {
+                "name": "ckb_failure_cone",
+                "description": "Return the real transitive upstream dependent cone for a node. This is change/failure propagation evidence from the current graph, not a claim that a runtime failure has occurred.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "root": { "type": "string", "description": "Exact CKB node ID" },
+                        "max_depth": { "type": "integer", "minimum": 1, "maximum": 32, "default": 12 }
+                    },
+                    "required": ["root"]
+                }
             }
         ]
     })
@@ -170,6 +195,31 @@ async fn call_tool(session: &Arc<RwLock<MemorySession>>, name: &str, args: &Valu
                 Err(e) => error_result(format!("Code DNA analysis failed: {e}")),
             }
         }
+        "ckb_causal_path" => {
+            let state = session.read().await;
+            let Some(graph) = state.graph.as_ref() else {
+                return error_result("No architecture memory loaded. Call ckb_memory_scan first.");
+            };
+            let Some(source) = args.get("source").and_then(Value::as_str) else { return error_result("source is required"); };
+            let Some(target) = args.get("target").and_then(Value::as_str) else { return error_result("target is required"); };
+            let max_depth = args.get("max_depth").and_then(Value::as_u64).unwrap_or(12) as usize;
+            match CausalArchitectureEngine::shortest_path(graph, &NodeId(source.to_string()), &NodeId(target.to_string()), max_depth) {
+                Ok(report) => text_result(serde_json::to_value(report).unwrap_or(Value::Null)),
+                Err(e) => error_result(format!("Causal path analysis failed: {e}")),
+            }
+        }
+        "ckb_failure_cone" => {
+            let state = session.read().await;
+            let Some(graph) = state.graph.as_ref() else {
+                return error_result("No architecture memory loaded. Call ckb_memory_scan first.");
+            };
+            let Some(root) = args.get("root").and_then(Value::as_str) else { return error_result("root is required"); };
+            let max_depth = args.get("max_depth").and_then(Value::as_u64).unwrap_or(12) as usize;
+            match CausalArchitectureEngine::failure_cone(graph, &NodeId(root.to_string()), max_depth) {
+                Ok(report) => text_result(serde_json::to_value(report).unwrap_or(Value::Null)),
+                Err(e) => error_result(format!("Failure-cone analysis failed: {e}")),
+            }
+        }
         _ => error_result(format!("Unknown tool: {name}")),
     }
 }
@@ -181,8 +231,8 @@ async fn handle(session: &Arc<RwLock<MemorySession>>, request: Value) -> Value {
         "initialize" => json!({
             "protocolVersion": "2024-11-05",
             "capabilities": { "tools": {} },
-            "serverInfo": { "name": "ckb-architecture-memory", "version": "2.0.0" },
-            "instructions": "Scan a repository once with ckb_memory_scan. Then use memory/query tools before editing so the model receives bounded architecture context instead of repeatedly rediscovering the codebase."
+            "serverInfo": { "name": "ckb-architecture-memory", "version": "2.1.0" },
+            "instructions": "Scan a repository once with ckb_memory_scan. Then query bounded architecture memory, Code DNA, proven causal paths, or failure cones before editing so models reason from CKB evidence instead of rediscovering or guessing the codebase."
         }),
         "notifications/initialized" => return Value::Null,
         "tools/list" => tool_list(),
