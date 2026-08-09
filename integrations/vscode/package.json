@@ -1,8 +1,8 @@
 {
     "name": "ckb-vscode",
-    "displayName": "CKB - Code Knowledge Base",
-    "description": "Real-time architectural intelligence — detect violations, analyze impact, visualize dependencies",
-    "version": "1.1.0",
+    "displayName": "CKB - Living Architecture Intelligence",
+    "description": "See software architecture as a living system: deep activity, change ripple, runtime evidence and model-ready architecture memory.",
+    "version": "1.2.0",
     "publisher": "TechCodinz",
     "icon": "icon.png",
     "license": "MIT",
@@ -16,7 +16,11 @@
         "analysis",
         "mcp",
         "ai",
-        "code-quality"
+        "code-quality",
+        "architecture-memory",
+        "runtime-intelligence",
+        "blast-radius",
+        "code-graph"
     ],
     "engines": {
         "vscode": "^1.85.0"
@@ -24,14 +28,50 @@
     "categories": [
         "Linters",
         "Other",
-        "Programming Languages"
+        "Programming Languages",
+        "Visualization"
     ],
     "activationEvents": [
-        "onStartupFinished"
+        "onStartupFinished",
+        "onView:ckb.realityView"
     ],
     "main": "./out/extension.js",
     "contributes": {
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "ckb-reality",
+                    "title": "CKB Reality",
+                    "icon": "icon.png"
+                }
+            ]
+        },
+        "views": {
+            "ckb-reality": [
+                {
+                    "type": "webview",
+                    "id": "ckb.realityView",
+                    "name": "Living Architecture Reality",
+                    "contextualTitle": "CKB Living Reality"
+                }
+            ]
+        },
         "commands": [
+            {
+                "command": "ckb.openReality",
+                "title": "CKB: Open Living Architecture Reality",
+                "icon": "$(rocket)"
+            },
+            {
+                "command": "ckb.deepActivity",
+                "title": "CKB: Deep Activity Analysis",
+                "icon": "$(pulse)"
+            },
+            {
+                "command": "ckb.queryMemory",
+                "title": "CKB: Query Architecture Memory",
+                "icon": "$(database)"
+            },
             {
                 "command": "ckb.scan",
                 "title": "CKB: Scan Project",
@@ -44,12 +84,17 @@
             },
             {
                 "command": "ckb.impact",
-                "title": "CKB: Analyze Impact",
-                "icon": "$(pulse)"
+                "title": "CKB: Analyze Change Ripple at Cursor",
+                "icon": "$(git-compare)"
+            },
+            {
+                "command": "ckb.openExplorer",
+                "title": "CKB: Open Cloud Project Explorer",
+                "icon": "$(globe)"
             },
             {
                 "command": "ckb.showStatus",
-                "title": "CKB: Show Status",
+                "title": "CKB: Architecture Actions",
                 "icon": "$(info)"
             },
             {
@@ -71,40 +116,73 @@
                 "when": "editorTextFocus"
             },
             {
-                "command": "ckb.scan",
-                "key": "shift+ctrl+s",
-                "mac": "shift+cmd+s",
-                "when": "editorTextFocus"
+                "command": "ckb.queryMemory",
+                "key": "shift+ctrl+m",
+                "mac": "shift+cmd+m"
             }
         ],
         "configuration": {
-            "title": "CKB",
+            "title": "CKB Living Architecture Intelligence",
             "properties": {
                 "ckb.serverUrl": {
                     "type": "string",
                     "default": "http://localhost:3000",
-                    "description": "URL of a CKB MCP server to use when the local `ckb` CLI isn't found. Only useful if you've started one yourself (e.g. via \"CKB: Start MCP Server\") — a remote server can't read paths on your local machine, so this must point at something that can actually see your workspace."
+                    "description": "CKB server used only as a fallback or explicit Reality/MCP connection. A remote server cannot read local filesystem paths unless the project is uploaded/scanned through a supported remote source flow."
                 },
                 "ckb.apiKey": {
                     "type": "string",
                     "default": "",
-                    "markdownDescription": "API key sent as `X-API-Key` when talking to a CKB server (see `ckb.serverUrl`). Required if that server was started with `CKB_API_KEY` set, or with per-user backend auth configured.",
+                    "markdownDescription": "API key sent as `X-API-Key` only to the configured `ckb.serverUrl`.",
                     "editPresentation": "singlelineText"
+                },
+                "ckb.cliBinary": {
+                    "type": "string",
+                    "default": "ckb",
+                    "description": "Executable name/path for the standard CKB CLI."
+                },
+                "ckb.intelligenceBinary": {
+                    "type": "string",
+                    "default": "ckb-intelligence",
+                    "description": "Executable name/path for the high-performance CKB IDE intelligence facade (deep activity, Code DNA and bounded architecture memory)."
+                },
+                "ckb.analysisTimeoutMs": {
+                    "type": "number",
+                    "default": 120000,
+                    "minimum": 30000,
+                    "maximum": 600000,
+                    "description": "Maximum duration of a local deep architecture analysis or CKB server request."
                 },
                 "ckb.autoScanOnOpen": {
                     "type": "boolean",
                     "default": true,
-                    "description": "Automatically scan project when workspace opens"
+                    "description": "Hydrate Living Architecture Reality shortly after a workspace opens."
                 },
                 "ckb.rescanOnSave": {
                     "type": "boolean",
                     "default": true,
-                    "description": "Automatically re-scan (debounced) when a source file changes"
+                    "description": "Coalesce source-file changes and refresh architecture intelligence after editing activity settles."
+                },
+                "ckb.rescanDebounceMs": {
+                    "type": "number",
+                    "default": 1400,
+                    "minimum": 350,
+                    "maximum": 30000,
+                    "description": "Quiet period used to coalesce rapid file changes into one analysis pass."
+                },
+                "ckb.deepAnalysisOnSave": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Refresh deep activity + architecture memory after the debounced save/change window. Disable for extremely large repos if you prefer manual deep analysis."
                 },
                 "ckb.showDiagnostics": {
                     "type": "boolean",
                     "default": true,
-                    "description": "Show architectural violations as inline errors/warnings"
+                    "description": "Show evidence-backed architecture findings as inline diagnostics."
+                },
+                "ckb.cloudExplorerUrl": {
+                    "type": "string",
+                    "default": "https://ckb-nu.vercel.app/project/current",
+                    "description": "Cloud Project Explorer opened from the Living Reality cockpit."
                 }
             }
         },
@@ -114,6 +192,23 @@
                     "when": "editorTextFocus",
                     "command": "ckb.impact",
                     "group": "ckb@1"
+                },
+                {
+                    "when": "editorTextFocus",
+                    "command": "ckb.queryMemory",
+                    "group": "ckb@2"
+                }
+            ],
+            "view/title": [
+                {
+                    "command": "ckb.deepActivity",
+                    "when": "view == ckb.realityView",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "ckb.queryMemory",
+                    "when": "view == ckb.realityView",
+                    "group": "navigation@2"
                 }
             ]
         }
