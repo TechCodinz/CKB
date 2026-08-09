@@ -21,6 +21,30 @@ use crate::types::*;
 use anyhow::Result;
 use std::collections::HashSet;
 
+// Reality sessions and architecture snapshots need an owned graph while the
+// live graph remains behind an RwLock. DependencyGraph is already fully
+// bincode/serde-persistable, so use that same proven representation for an
+// internal snapshot clone instead of exposing or duplicating its private
+// petgraph/index bookkeeping. This also keeps every clone structurally
+// consistent with the on-disk representation CKB restores later.
+impl Clone for DependencyGraph {
+    fn clone(&self) -> Self {
+        let bytes = bincode::serialize(self)
+            .expect("CKB DependencyGraph serialization must succeed for snapshot cloning");
+        bincode::deserialize(&bytes)
+            .expect("CKB DependencyGraph deserialization must succeed for snapshot cloning")
+    }
+}
+
+impl std::fmt::Debug for DependencyGraph {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DependencyGraph")
+            .field("nodes", &self.node_count())
+            .field("edges", &self.edge_count())
+            .finish_non_exhaustive()
+    }
+}
+
 pub struct ArchitectureAnalyzer {
     pattern_detectors: Vec<Box<dyn PatternDetector>>,
     boundary_inferencers: Vec<Box<dyn BoundaryInferencer>>,
