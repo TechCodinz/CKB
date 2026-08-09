@@ -1,6 +1,6 @@
 //! Dependency graph construction and querying
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use petgraph::graph::{DiGraph, NodeIndex};
 use crate::types::*;
 use crate::parser::FileAnalysis;
@@ -28,7 +28,9 @@ impl DependencyGraph {
         self.graph.node_weights().cloned().collect()
     }
 
-    /// Record live dynamic runtime trace telemetry for a node
+    /// Record runtime telemetry using a count-weighted latency average.
+    /// The previous implementation averaged averages 50/50 regardless of how
+    /// many observations each batch represented, which distorted live data.
     pub fn record_runtime_trace(&mut self, node_id: NodeId, executions: u64, latency_ms: f32) {
         let entry = self.runtime_traces.entry(node_id).or_insert(RuntimeMetrics {
             execution_count: 0,
@@ -37,31 +39,31 @@ impl DependencyGraph {
             is_hotpath: false,
         });
 
-        entry.execution_count += executions;
-        entry.avg_latency_ms = (entry.avg_latency_ms + latency_ms) / 2.0;
-        if entry.execution_count > 1000 {
-            entry.is_hotpath = true;
+        let previous_count = entry.execution_count;
+        let new_count = previous_count.saturating_add(executions);
+        if new_count > 0 {
+            let weighted = (entry.avg_latency_ms as f64 * previous_count as f64)
+                + (latency_ms as f64 * executions as f64);
+            entry.avg_latency_ms = (weighted / new_count as f64) as f32;
         }
+        entry.execution_count = new_count;
+        entry.is_hotpath = entry.execution_count > 1000;
     }
 
-    /// Retrieve dynamic runtime execution metrics for a node
     pub fn get_runtime_metrics(&self, node_id: &NodeId) -> Option<&RuntimeMetrics> {
         self.runtime_traces.get(node_id)
     }
-    
+
     pub fn add_file(&mut self, analysis: &FileAnalysis) -> Result<()> {
-        // Add nodes for each declaration
         for node in &analysis.nodes {
             self.add_node(node.clone());
         }
-        
-        // Add import edges
+
         for import in &analysis.imports {
             let from_id = NodeId(format!("{}::file", analysis.path));
             let to_id = NodeId(format!("{}::file", import.source));
-            
-            if let (Some(from_idx), Some(to_idx)) = (self.node_indices.get(&from_id), 
-                                                      self.node_indices.get(&to_id)) {
+
+            if let (Some(from_idx), Some(to_idx)) = (self.node_indices.get(&from_id), self.node_indices.get(&to_id)) {
                 self.graph.add_edge(*from_idx, *to_idx, Edge {
                     id: uuid::Uuid::new_v4(),
                     from: from_id.clone(),
@@ -73,7 +75,6 @@ impl DependencyGraph {
             }
         }
 
-        // Add function call edges
         for call in &analysis.calls {
             let from_id = NodeId(format!("{}::{}", analysis.path, call.caller_name));
             let to_id = NodeId(format!("{}::{}", analysis.path, call.callee_name));
@@ -89,7 +90,6 @@ impl DependencyGraph {
             }
         }
 
-        // Add type relationship edges
         for rel in &analysis.type_relations {
             let from_id = NodeId(format!("{}::{}", analysis.path, rel.source_type));
             let to_id = NodeId(format!("{}::{}", analysis.path, rel.target_type));
@@ -108,23 +108,22 @@ impl DependencyGraph {
                 });
             }
         }
-        
+
         Ok(())
     }
-    
+
     fn add_node(&mut self, node: Node) -> NodeIndex {
         if let Some(idx) = self.node_indices.get(&node.id) {
             return *idx;
         }
-        
+
         let idx = self.graph.add_node(node.clone());
         self.node_indices.insert(node.id.clone(), idx);
         self.reverse_indices.insert(idx, node.id);
         idx
     }
-    
+
     pub fn build_call_graph(&mut self) -> Result<()> {
-        // Traverses node weights to construct calls edges between identified symbols
         let node_list: Vec<(NodeId, String)> = self.graph.node_weights()
             .map(|n| (n.id.clone(), n.name.clone()))
             .collect();
@@ -149,18 +148,15 @@ impl DependencyGraph {
         }
         Ok(())
     }
-    
+
     pub fn build_type_graph(&mut self) -> Result<()> {
-        // Infers structural type inheritance edges
         Ok(())
     }
 
-    /// Find callers of a specific node
     pub fn get_callers(&self, node_id: &NodeId) -> Vec<NodeId> {
         let mut callers = Vec::new();
         if let Some(idx) = self.node_indices.get(node_id) {
-            let neighbors = self.graph.neighbors_directed(*idx, petgraph::Direction::Incoming);
-            for n_idx in neighbors {
+            for n_idx in self.graph.neighbors_directed(*idx, petgraph::Direction::Incoming) {
                 if let Some(n_id) = self.reverse_indices.get(&n_idx) {
                     callers.push(n_id.clone());
                 }
@@ -169,12 +165,10 @@ impl DependencyGraph {
         callers
     }
 
-    /// Find callees of a specific node
     pub fn get_callees(&self, node_id: &NodeId) -> Vec<NodeId> {
         let mut callees = Vec::new();
         if let Some(idx) = self.node_indices.get(node_id) {
-            let neighbors = self.graph.neighbors_directed(*idx, petgraph::Direction::Outgoing);
-            for n_idx in neighbors {
+            for n_idx in self.graph.neighbors_directed(*idx, petgraph::Direction::Outgoing) {
                 if let Some(n_id) = self.reverse_indices.get(&n_idx) {
                     callees.push(n_id.clone());
                 }
@@ -182,73 +176,81 @@ impl DependencyGraph {
         }
         callees
     }
-    
-    pub fn find_affected_nodes(&self, file: &str, _line: u32) -> Result<HashSet<NodeId>> {
+
+    /// Resolve a line to the most specific declaration CKB currently knows.
+    /// Parsers store declaration start lines; until end-spans are available,
+    /// the declaration with the greatest start line <= requested line is a
+    /// substantially more precise target than marking every node in the file.
+    pub fn find_affected_nodes(&self, file: &str, line: u32) -> Result<HashSet<NodeId>> {
+        let normalized = file.replace('\\', "/");
+        let mut candidates: Vec<(&NodeId, &Node)> = self.node_indices.iter()
+            .filter_map(|(id, idx)| {
+                let node = &self.graph[*idx];
+                let path = node.path.to_string_lossy().replace('\\', "/");
+                if path == normalized { Some((id, node)) } else { None }
+            })
+            .collect();
+
         let mut affected = HashSet::new();
-        
-        // Find the node at the given location
-        for (id, idx) in &self.node_indices {
-            let node = &self.graph[*idx];
-            if node.path.to_string_lossy() == file {
-                affected.insert(id.clone());
-            }
+        if candidates.is_empty() { return Ok(affected); }
+
+        candidates.sort_by_key(|(_, node)| node.line);
+        if let Some((id, _)) = candidates.iter().rev().find(|(_, node)| node.line <= line && node.kind != NodeKind::File) {
+            affected.insert((*id).clone());
+            return Ok(affected);
         }
-        
+
+        // Fall back to the file node, or the earliest declaration if a parser
+        // did not emit a dedicated file node.
+        if let Some((id, _)) = candidates.iter().find(|(_, n)| n.kind == NodeKind::File) {
+            affected.insert((*id).clone());
+        } else if let Some((id, _)) = candidates.first() {
+            affected.insert((*id).clone());
+        }
         Ok(affected)
     }
-    
+
+    /// Traverse ALL incoming dependents using BFS. Direct impacts are depth 1;
+    /// every deeper reachable dependent is an indirect impact. Confidence
+    /// decays with graph distance rather than using a fixed two-hop ceiling.
     pub fn calculate_impact(&self, affected: &HashSet<NodeId>, _change_type: ChangeType) -> Result<ImpactAnalysis> {
         let mut direct = Vec::new();
         let mut indirect = Vec::new();
-        let mut visited = HashSet::new();
-        
-        for node_id in affected {
-            visited.insert(node_id.clone());
-            if let Some(idx) = self.node_indices.get(node_id) {
-                // Direct dependents (incoming edges)
-                let neighbors = self.graph.neighbors_directed(*idx, petgraph::Direction::Incoming);
-                for neighbor_idx in neighbors {
-                    if let Some(neighbor_id) = self.reverse_indices.get(&neighbor_idx) {
-                        if !visited.contains(neighbor_id) {
-                            visited.insert(neighbor_id.clone());
-                            direct.push(ImpactedNode {
-                                node: neighbor_id.clone(),
-                                impact_kind: ImpactKind::CompileBreak,
-                                confidence: 0.95,
-                                path: self.graph[neighbor_idx].path.clone(),
-                                line: self.graph[neighbor_idx].line,
-                            });
+        let mut visited: HashSet<NodeId> = affected.iter().cloned().collect();
+        let mut queue: VecDeque<(NodeIndex, usize)> = VecDeque::new();
+        let mut max_depth = 0usize;
 
-                            // Indirect dependents (hop 2)
-                            let second_neighbors = self.graph.neighbors_directed(neighbor_idx, petgraph::Direction::Incoming);
-                            for ind_idx in second_neighbors {
-                                if let Some(ind_id) = self.reverse_indices.get(&ind_idx) {
-                                    if !visited.contains(ind_id) {
-                                        visited.insert(ind_id.clone());
-                                        indirect.push(ImpactedNode {
-                                            node: ind_id.clone(),
-                                            impact_kind: ImpactKind::Behavioral,
-                                            confidence: 0.70,
-                                            path: self.graph[ind_idx].path.clone(),
-                                            line: self.graph[ind_idx].line,
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+        for node_id in affected {
+            if let Some(idx) = self.node_indices.get(node_id) {
+                queue.push_back((*idx, 0));
             }
         }
-        
-        let risk_score = ((direct.len() * 2 + indirect.len()) as f32 / 10.0).min(1.0);
-        let effort = if risk_score > 0.7 {
-            "High".to_string()
-        } else if risk_score > 0.3 {
-            "Medium".to_string()
-        } else {
-            "Low".to_string()
-        };
+
+        while let Some((current_idx, depth)) = queue.pop_front() {
+            for neighbor_idx in self.graph.neighbors_directed(current_idx, petgraph::Direction::Incoming) {
+                let Some(neighbor_id) = self.reverse_indices.get(&neighbor_idx).cloned() else { continue; };
+                if !visited.insert(neighbor_id.clone()) { continue; }
+
+                let next_depth = depth + 1;
+                max_depth = max_depth.max(next_depth);
+                let confidence = (0.95_f32 * 0.85_f32.powi((next_depth.saturating_sub(1)) as i32)).max(0.25);
+                let impacted = ImpactedNode {
+                    node: neighbor_id,
+                    impact_kind: if next_depth == 1 { ImpactKind::CompileBreak } else { ImpactKind::Behavioral },
+                    confidence,
+                    path: self.graph[neighbor_idx].path.clone(),
+                    line: self.graph[neighbor_idx].line,
+                };
+
+                if next_depth == 1 { direct.push(impacted); } else { indirect.push(impacted); }
+                queue.push_back((neighbor_idx, next_depth));
+            }
+        }
+
+        let breadth = direct.len() as f32 * 2.0 + indirect.len() as f32;
+        let depth_factor = (max_depth as f32 * 0.08).min(0.24);
+        let risk_score = ((breadth / 20.0) + depth_factor).min(1.0);
+        let effort = if risk_score >= 0.70 { "High" } else if risk_score >= 0.30 { "Medium" } else { "Low" }.to_string();
 
         Ok(ImpactAnalysis {
             direct_impacts: direct,
@@ -257,42 +259,24 @@ impl DependencyGraph {
             estimated_effort: effort,
         })
     }
-    
-    pub fn node_count(&self) -> usize {
-        self.graph.node_count()
-    }
-    
-    pub fn edge_count(&self) -> usize {
-        self.graph.edge_count()
-    }
 
-    /// Get all nodes in the graph
-    pub fn nodes(&self) -> Vec<&Node> {
-        self.graph.node_weights().collect()
-    }
+    pub fn node_count(&self) -> usize { self.graph.node_count() }
+    pub fn edge_count(&self) -> usize { self.graph.edge_count() }
+    pub fn nodes(&self) -> Vec<&Node> { self.graph.node_weights().collect() }
+    pub fn edges(&self) -> Vec<&Edge> { self.graph.edge_weights().collect() }
 
-    /// Get all edges in the graph
-    pub fn edges(&self) -> Vec<&Edge> {
-        self.graph.edge_weights().collect()
-    }
-
-    /// Find a node by its file path
     pub fn find_node_by_path(&self, path: &str) -> Option<&Node> {
         for idx in self.graph.node_indices() {
             let node = &self.graph[idx];
-            if node.path.to_string_lossy() == path {
-                return Some(node);
-            }
+            if node.path.to_string_lossy() == path { return Some(node); }
         }
         None
     }
 
-    /// Get all dependencies (outgoing edges) for a node
     pub fn get_dependencies(&self, node_id: &NodeId) -> Result<Vec<NodeId>> {
         let mut deps = Vec::new();
         if let Some(idx) = self.node_indices.get(node_id) {
-            let neighbors = self.graph.neighbors_directed(*idx, petgraph::Direction::Outgoing);
-            for neighbor_idx in neighbors {
+            for neighbor_idx in self.graph.neighbors_directed(*idx, petgraph::Direction::Outgoing) {
                 if let Some(neighbor_id) = self.reverse_indices.get(&neighbor_idx) {
                     deps.push(neighbor_id.clone());
                 }
@@ -301,69 +285,50 @@ impl DependencyGraph {
         Ok(deps)
     }
 
-    /// Extract a subgraph containing only the specified nodes
     pub fn extract_subgraph(&self, node_ids: &HashSet<NodeId>) -> Result<DependencyGraph> {
         let mut subgraph = DependencyGraph::new();
-
         for node_id in node_ids {
             if let Some(idx) = self.node_indices.get(node_id) {
                 subgraph.add_node(self.graph[*idx].clone());
             }
         }
 
-        // Add edges between nodes in the subgraph
         for edge in self.graph.edge_indices() {
             if let Some((from_idx, to_idx)) = self.graph.edge_endpoints(edge) {
                 let from_id = self.reverse_indices.get(&from_idx);
                 let to_id = self.reverse_indices.get(&to_idx);
-
                 if let (Some(from), Some(to)) = (from_id, to_id) {
                     if node_ids.contains(from) && node_ids.contains(to) {
-                        if let Some(from_new) = subgraph.node_indices.get(from) {
-                            if let Some(to_new) = subgraph.node_indices.get(to) {
-                                subgraph.graph.add_edge(*from_new, *to_new, self.graph[edge].clone());
-                            }
+                        if let (Some(from_new), Some(to_new)) = (subgraph.node_indices.get(from), subgraph.node_indices.get(to)) {
+                            subgraph.graph.add_edge(*from_new, *to_new, self.graph[edge].clone());
                         }
                     }
                 }
             }
         }
-
         Ok(subgraph)
     }
 
-    /// Get incoming degree (number of dependents)
     pub fn incoming_degree(&self, node_id: &NodeId) -> Result<usize> {
-        if let Some(idx) = self.node_indices.get(node_id) {
-            Ok(self.graph.neighbors_directed(*idx, petgraph::Direction::Incoming).count())
-        } else {
-            Ok(0)
-        }
+        Ok(self.node_indices.get(node_id)
+            .map(|idx| self.graph.neighbors_directed(*idx, petgraph::Direction::Incoming).count())
+            .unwrap_or(0))
     }
 
-    /// Get outgoing degree (number of dependencies)
     pub fn outgoing_degree(&self, node_id: &NodeId) -> Result<usize> {
-        if let Some(idx) = self.node_indices.get(node_id) {
-            Ok(self.graph.neighbors_directed(*idx, petgraph::Direction::Outgoing).count())
-        } else {
-            Ok(0)
-        }
+        Ok(self.node_indices.get(node_id)
+            .map(|idx| self.graph.neighbors_directed(*idx, petgraph::Direction::Outgoing).count())
+            .unwrap_or(0))
     }
 
-    /// Find all cycles in the graph using DFS
     pub fn find_cycles(&self) -> Result<Vec<Vec<NodeId>>> {
         let mut cycles = Vec::new();
         let sccs = petgraph::algo::kosaraju_scc(&self.graph);
-
         for scc in sccs {
             if scc.len() > 1 {
-                let cycle: Vec<NodeId> = scc.iter()
-                    .filter_map(|idx| self.reverse_indices.get(idx).cloned())
-                    .collect();
-                cycles.push(cycle);
+                cycles.push(scc.iter().filter_map(|idx| self.reverse_indices.get(idx).cloned()).collect());
             }
         }
-
         Ok(cycles)
     }
 }
