@@ -200,7 +200,6 @@ impl DeepActivityAnalyzer {
             let error_intensity = error_rate.clamp(0.0, 1.0);
             let cycle_pressure = if cycle_members.contains(&node.id) { 1.0 } else { 0.0 };
             let fan_in_pressure = Self::normalized_log(fan_in as f32, max_degree.max(1.0));
-            let fan_out_pressure = Self::normalized_log(fan_out as f32, max_degree.max(1.0));
 
             let activity_index = (
                 structural_centrality * 0.34
@@ -351,6 +350,86 @@ impl DeepActivityAnalyzer {
             scoring_policy: "explainable-indices: graph-centrality + fan-in/out + observed-call-volume + observed-latency + observed-errors + hotpath + cycle-membership; not failure probabilities".into(),
             evidence_policy: "static-runtime-predicted-separated".into(),
             synthetic: false,
+        })
+    }
+}
+
+impl crate::CkbEngine {
+    /// Full repository scan optimized for interactive IDE usage on large systems.
+    ///
+    /// The historical scanner spawned one Tokio task for every discovered source
+    /// file at once. That is fast on small repositories, but a very large mono-
+    /// repo can create thousands of tasks, buffers, parser allocations and open
+    /// file operations simultaneously. This variant keeps only a bounded number
+    /// of parser tasks in flight while preserving a full, exact graph.
+    pub async fn scan_codebase_bounded(
+        &self,
+        path: &str,
+        requested_concurrency: usize,
+    ) -> Result<crate::ScanReport, anyhow::Error> {
+        let started_at = std::time::Instant::now();
+        let concurrency = requested_concurrency.clamp(1, 128);
+
+        let mut files = Vec::new();
+        for entry in ignore::Walk::new(path) {
+            let entry = entry?;
+            let candidate = entry.path();
+            if !candidate.is_file() { continue; }
+            let Some(extension) = candidate.extension() else { continue; };
+            if self.parser.is_supported_extension(extension) {
+                files.push(candidate.to_string_lossy().to_string());
+            }
+        }
+        files.sort_unstable();
+
+        let mut pending = files.into_iter();
+        let mut tasks = tokio::task::JoinSet::new();
+        let mut file_analyses = Vec::new();
+
+        for _ in 0..concurrency {
+            let Some(file) = pending.next() else { break; };
+            let parser = self.parser.clone();
+            tasks.spawn(async move { parser.parse_file(&file).await });
+        }
+
+        while let Some(result) = tasks.join_next().await {
+            match result {
+                Ok(Ok(analysis)) => file_analyses.push(analysis),
+                Ok(Err(error)) => tracing::debug!("CKB parser skipped a source file: {}", error),
+                Err(error) => tracing::warn!("CKB bounded parser task failed: {}", error),
+            }
+            if let Some(file) = pending.next() {
+                let parser = self.parser.clone();
+                tasks.spawn(async move { parser.parse_file(&file).await });
+            }
+        }
+        file_analyses.sort_by(|a, b| a.path.cmp(&b.path));
+
+        // A full bounded scan is a new active reality. Persisted historical
+        // snapshots remain in storage, but stale live nodes cannot survive from
+        // a previous scan of the same engine instance.
+        let mut graph = self.graph.write().await;
+        *graph = DependencyGraph::new();
+        for analysis in &file_analyses {
+            graph.add_file(analysis)?;
+        }
+        graph.build_call_graph()?;
+        graph.build_type_graph()?;
+
+        let patterns = self.analyzer.detect_patterns(&graph)?;
+        let drift = self.analyzer.detect_drift(&graph, &patterns)?;
+        let snapshot_id = self.storage.store_snapshot(&graph).await?;
+
+        Ok(crate::ScanReport {
+            files_processed: file_analyses.len(),
+            nodes: graph.node_count(),
+            edges: graph.edge_count(),
+            patterns,
+            drift,
+            snapshot_id,
+            duration_ms: started_at.elapsed().as_secs_f64() * 1000.0,
+            package_identity: Self::detect_package_identity(path),
+            external_dependencies: Self::collect_external_dependencies(&file_analyses),
         })
     }
 }
