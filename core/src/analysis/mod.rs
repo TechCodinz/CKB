@@ -258,3 +258,21 @@ pub trait PatternDetector: Send + Sync {
 pub trait BoundaryInferencer: Send + Sync {
     fn infer(&self, graph: &DependencyGraph) -> Result<Vec<ArchitectureBoundary>>;
 }
+
+// Stable server bridge API. These methods intentionally return owned snapshots
+// so web/MCP handlers never hold CkbEngine's internal locks while serializing
+// or performing higher-level intelligence work. GraphStorage remains the sole
+// source of persisted architecture snapshot truth.
+impl crate::CkbEngine {
+    pub async fn architecture_graph_snapshot(&self) -> DependencyGraph {
+        self.graph.read().await.clone()
+    }
+
+    pub async fn architecture_snapshot_metadata(&self) -> Result<Vec<crate::SnapshotMetadata>> {
+        self.storage.list_snapshots().await
+    }
+
+    pub async fn architecture_snapshot_graph(&self, snapshot_id: &str) -> Result<Option<DependencyGraph>> {
+        self.storage.load_snapshot(snapshot_id).await
+    }
+}
