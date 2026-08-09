@@ -1,13 +1,14 @@
-# TEMPORARY compiler-diagnostic deployment. The served artifact contains only
-# cargo check output for the public Reality v5 source; it is removed as soon as
-# the exact compiler error is recovered and fixed.
-# Diagnostic trigger: shared core + standard server were verified green first.
+# TEMPORARY build-isolation deployment.
+# The standard CKB server already proved shared ckb-core compiles on Render.
+# This probe tests only the tiny diagnostic binary with no nested shell or
+# Reality cargo-check command. It will be removed after the exact blocker is
+# isolated; it does not change the Project Explorer UI.
 services:
   - type: web
     name: ckb-mcp-server
     env: rust
     plan: free
-    buildCommand: bash -lc 'cargo check -p ckb-mcp-server --bin reality_server_v5 > reality_v5_build.log 2>&1 || true; cargo build --release -p ckb-mcp-server --bin build_diagnostic_server'
+    buildCommand: cargo build --release -p ckb-mcp-server --bin build_diagnostic_server
     startCommand: ./target/release/build_diagnostic_server
     healthCheckPath: /health
     envVars:
