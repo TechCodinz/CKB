@@ -132,6 +132,19 @@ fn cache_root(workspace: &Path) -> PathBuf {
     base.join("ckb").join("ide-intelligence").join(hash)
 }
 
+fn parser_concurrency() -> usize {
+    if let Ok(value) = std::env::var("CKB_IDE_PARSE_CONCURRENCY") {
+        if let Ok(parsed) = value.parse::<usize>() {
+            return parsed.clamp(1, 128);
+        }
+    }
+    let logical = std::thread::available_parallelism().map(|value| value.get()).unwrap_or(4);
+    // Parsing is CPU-heavy with short I/O phases. Two tasks per logical CPU is
+    // a useful ceiling for IDE responsiveness, but cap it so very large hosts
+    // do not turn a workspace scan into an allocation/open-file storm.
+    (logical.saturating_mul(2)).clamp(4, 32)
+}
+
 async fn load_graph(path: &PathBuf) -> Result<(CkbEngine, ScanReport, u128, bool)> {
     let started = Instant::now();
     let canonical = std::fs::canonicalize(path)
@@ -155,11 +168,7 @@ async fn load_graph(path: &PathBuf) -> Result<(CkbEngine, ScanReport, u128, bool
         }
     }
 
-    // A changed fingerprint always starts from an empty live graph. Historical
-    // persisted snapshots remain intact, but stale symbols from the previous
-    // active graph cannot leak into the fresh IDE reality.
-    engine.reset_architecture_graph().await;
-    let report = engine.scan_codebase(&canonical_string).await?;
+    let report = engine.scan_codebase_bounded(&canonical_string, parser_concurrency()).await?;
     let meta = CacheMeta {
         workspace: canonical_string,
         fingerprint,
@@ -186,6 +195,7 @@ async fn main() -> Result<()> {
                 "scan": scan,
                 "scanWallMs": wall_ms,
                 "cacheHit": cache_hit,
+                "parseConcurrency": parser_concurrency(),
                 "activity": activity,
                 "evidencePolicy": "static-runtime-predicted-separated",
                 "synthetic": false
@@ -201,6 +211,7 @@ async fn main() -> Result<()> {
                 "snapshotId": scan.snapshot_id,
                 "scanWallMs": wall_ms,
                 "cacheHit": cache_hit,
+                "parseConcurrency": parser_concurrency(),
                 "memory": memory,
                 "synthetic": false
             }))?);
@@ -215,6 +226,7 @@ async fn main() -> Result<()> {
                 "snapshotId": scan.snapshot_id,
                 "scanWallMs": wall_ms,
                 "cacheHit": cache_hit,
+                "parseConcurrency": parser_concurrency(),
                 "dna": dna,
                 "synthetic": false
             }))?);
@@ -226,12 +238,13 @@ async fn main() -> Result<()> {
             let dna = ArchitectureMemoryEngine::code_dna(&graph)?;
             let memory = ArchitectureMemoryEngine::query(&graph, &query, depth, limit)?;
             println!("{}", serde_json::to_string(&json!({
-                "version": "ckb-ide-intelligence-v2",
+                "version": "ckb-ide-intelligence-v3",
                 "kind": "architecture-intelligence-bundle",
                 "source": "ckb-core-local-workspace",
                 "scan": scan,
                 "scanWallMs": wall_ms,
                 "cacheHit": cache_hit,
+                "parseConcurrency": parser_concurrency(),
                 "activity": activity,
                 "dna": dna,
                 "memory": memory,
