@@ -78,8 +78,6 @@ impl OtlpReceiver {
             return out;
         }
 
-        // Standard OTLP/HTTP JSON encodes attributes as
-        // [{"key":"code.filepath","value":{"stringValue":"src/a.rs"}}, ...]
         if let Some(items) = value.as_array() {
             for item in items {
                 let Some(key) = item.get("key").and_then(|v| v.as_str()) else { continue; };
@@ -101,8 +99,15 @@ impl OtlpReceiver {
     fn status_is_error(status: Option<&serde_json::Value>) -> bool {
         let Some(status) = status else { return false; };
         if let Some(code) = status.get("code") {
-            if code.as_u64() == Some(2) || code.as_u64() == Some(1) { return true; }
+            // OTLP StatusCode enum: UNSET=0, OK=1, ERROR=2.
+            // Numeric OK must never be counted as an error.
+            if let Some(n) = code.as_u64() {
+                return n == 2;
+            }
             if let Some(s) = code.as_str() {
+                if let Ok(n) = s.parse::<u64>() {
+                    return n == 2;
+                }
                 return matches!(s.to_ascii_uppercase().as_str(), "ERROR" | "STATUS_CODE_ERROR");
             }
         }
@@ -123,9 +128,6 @@ impl OtlpReceiver {
             return arr.clone();
         }
 
-        // Standard OTLP structure supports multiple resources and scopes. The
-        // previous receiver read only the first resource/scope and silently
-        // discarded the rest; V2 walks every span in the envelope.
         let mut spans = Vec::new();
         if let Some(resources) = root.get("resourceSpans").and_then(|v| v.as_array()) {
             for resource in resources {
@@ -145,8 +147,6 @@ impl OtlpReceiver {
     }
 
     fn canonical_node_id(span: &NormalizedSpan) -> NodeId {
-        // OpenTelemetry semantic conventions have evolved over time, so accept
-        // both modern and commonly emitted legacy keys.
         let file = span.attributes.get("code.file.path")
             .or_else(|| span.attributes.get("code.filepath"))
             .or_else(|| span.attributes.get("code.file.name"));
@@ -166,8 +166,6 @@ impl OtlpReceiver {
         }
     }
 
-    /// Parse OTLP/HTTP JSON and aggregate RuntimeMetrics by the strongest
-    /// source-aware identity available on each span.
     pub fn ingest_spans(raw_payload: &str) -> anyhow::Result<HashMap<NodeId, RuntimeMetrics>> {
         let root: serde_json::Value = serde_json::from_str(raw_payload)?;
         let raw_spans = Self::collect_span_values(&root);
@@ -193,8 +191,6 @@ impl OtlpReceiver {
                 execution_count: count,
                 avg_latency_ms,
                 error_rate,
-                // Hotpath is intentionally an observed-volume heuristic only;
-                // downstream ranking can combine it with repository baselines.
                 is_hotpath: count > 500,
             });
         }
@@ -242,5 +238,16 @@ mod tests {
         assert_eq!(m.execution_count, 2);
         assert!((m.avg_latency_ms - 3.5).abs() < 0.001);
         assert!((m.error_rate - 0.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn numeric_otlp_ok_is_not_an_error_but_numeric_error_is() {
+        let payload = r#"[
+          {"name":"ok","startTimeUnixNano":"0","endTimeUnixNano":"1000000","attributes":{},"status":{"code":1}},
+          {"name":"bad","startTimeUnixNano":"0","endTimeUnixNano":"1000000","attributes":{},"status":{"code":2}}
+        ]"#;
+        let metrics = OtlpReceiver::ingest_spans(payload).unwrap();
+        assert_eq!(metrics.get(&NodeId("ok".into())).unwrap().error_rate, 0.0);
+        assert_eq!(metrics.get(&NodeId("bad".into())).unwrap().error_rate, 1.0);
     }
 }
