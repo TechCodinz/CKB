@@ -1,8 +1,8 @@
 {
     "name": "ckb-vscode",
-    "displayName": "CKB - Living Architecture Intelligence",
-    "description": "See software architecture as a living system: deep activity, change ripple, runtime evidence and model-ready architecture memory.",
-    "version": "1.2.0",
+    "displayName": "CKB - Invisible Reality Architecture Intelligence",
+    "description": "See what code hides: semantic architecture, molecular data-flow paths, runtime evidence, fault pressure, ripple analysis and model-ready software memory inside VS Code.",
+    "version": "1.3.0",
     "publisher": "TechCodinz",
     "icon": "icon.png",
     "license": "MIT",
@@ -20,7 +20,11 @@
         "architecture-memory",
         "runtime-intelligence",
         "blast-radius",
-        "code-graph"
+        "code-graph",
+        "data-flow",
+        "observability",
+        "software-visualization",
+        "code-intelligence"
     ],
     "engines": {
         "vscode": "^1.85.0"
@@ -41,7 +45,7 @@
             "activitybar": [
                 {
                     "id": "ckb-reality",
-                    "title": "CKB Reality",
+                    "title": "CKB Invisible Reality",
                     "icon": "icon.png"
                 }
             ]
@@ -51,16 +55,16 @@
                 {
                     "type": "webview",
                     "id": "ckb.realityView",
-                    "name": "Living Architecture Reality",
-                    "contextualTitle": "CKB Living Reality"
+                    "name": "Invisible Reality V5",
+                    "contextualTitle": "CKB Molecular Software Microscope"
                 }
             ]
         },
         "commands": [
             {
                 "command": "ckb.openReality",
-                "title": "CKB: Open Living Architecture Reality",
-                "icon": "$(rocket)"
+                "title": "CKB: Open Invisible Reality V5",
+                "icon": "$(telescope)"
             },
             {
                 "command": "ckb.deepActivity",
@@ -89,7 +93,7 @@
             },
             {
                 "command": "ckb.openExplorer",
-                "title": "CKB: Open Cloud Project Explorer",
+                "title": "CKB: Open Cloud Living Universe",
                 "icon": "$(globe)"
             },
             {
@@ -122,7 +126,7 @@
             }
         ],
         "configuration": {
-            "title": "CKB Living Architecture Intelligence",
+            "title": "CKB Invisible Reality Architecture Intelligence",
             "properties": {
                 "ckb.serverUrl": {
                     "type": "string",
@@ -160,7 +164,7 @@
                 "ckb.autoScanOnOpen": {
                     "type": "boolean",
                     "default": true,
-                    "description": "Hydrate Living Architecture Reality shortly after a workspace opens."
+                    "description": "Hydrate Invisible Reality shortly after a workspace opens."
                 },
                 "ckb.rescanOnSave": {
                     "type": "boolean",
@@ -187,7 +191,7 @@
                 "ckb.cloudExplorerUrl": {
                     "type": "string",
                     "default": "https://ckb-nu.vercel.app/project/current",
-                    "description": "Cloud Project Explorer opened from the Living Reality cockpit."
+                    "description": "Cloud Project Explorer opened from the Invisible Reality cockpit."
                 }
             }
         },
