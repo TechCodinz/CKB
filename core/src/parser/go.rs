@@ -35,16 +35,18 @@ impl GoParser {
     }
 
     fn name(&self, node: Node, source: &str) -> Option<String> {
-        node.child_by_field_name("name")
+        if let Some(name) = node.child_by_field_name("name")
             .and_then(|n| n.utf8_text(source.as_bytes()).ok())
             .map(str::to_string)
-            .or_else(|| {
-                let mut cursor = node.walk();
-                node.children(&mut cursor)
-                    .find(|n| matches!(n.kind(), "identifier" | "field_identifier" | "type_identifier"))
-                    .and_then(|n| n.utf8_text(source.as_bytes()).ok())
-                    .map(str::to_string)
-            })
+        {
+            return Some(name);
+        }
+        let mut cursor = node.walk();
+        let result = node.children(&mut cursor)
+            .find(|n| matches!(n.kind(), "identifier" | "field_identifier" | "type_identifier"))
+            .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+            .map(str::to_string);
+        result
     }
 
     fn exported(name: &str) -> bool { name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) }
@@ -99,9 +101,9 @@ impl GoParser {
     fn method_receiver(&self, node: Node, source: &str) -> Option<String> {
         let receiver = node.child_by_field_name("receiver")?;
         let text = receiver.utf8_text(source.as_bytes()).ok()?;
-        let mut tokens = text.split(|c: char| !(c.is_alphanumeric() || c == '_')).filter(|s| !s.is_empty());
+        let tokens = text.split(|c: char| !(c.is_alphanumeric() || c == '_')).filter(|s| !s.is_empty());
         let mut last = None;
-        while let Some(t) = tokens.next() { if t != "func" { last = Some(t.to_string()); } }
+        for t in tokens { if t != "func" { last = Some(t.to_string()); } }
         last
     }
 
