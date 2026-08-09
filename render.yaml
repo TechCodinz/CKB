@@ -1,19 +1,26 @@
 # Public repo deploy config — production CKB Reality/architecture engine.
-# Production remains on the proven bridge while Render compile-validates the
-# authenticated gateway + tenant-isolated v5 engine as one deployable unit.
+# The authenticated gateway is the public process. It starts the tenant-isolated
+# Reality v5 engine on localhost, forwards only authenticated traffic, and keeps
+# expensive scans bounded while exposing a public health endpoint.
 services:
   - type: web
     name: ckb-mcp-server
     env: rust
     plan: free
     buildCommand: cargo build --release -p ckb-mcp-server --bin ckb-mcp-server --bin reality_bridge --bin reality_server_v5 --bin reality_gateway
-    startCommand: ./target/release/reality_bridge
+    startCommand: ./target/release/reality_gateway
     healthCheckPath: /health
     envVars:
       - key: RUST_LOG
         value: info
       - key: CKB_ALLOW_LOCAL_SCAN
         value: "0"
+      - key: CKB_MAX_CONCURRENT_SCANS
+        value: "1"
+      - key: CKB_MAX_RUNTIME_TRACES
+        value: "100"
+      - key: CKB_MAX_SPANS_PER_TRACE
+        value: "1000"
       - key: CKB_ALLOWED_ORIGIN
         sync: false
       - key: CKB_BIND_ALL
@@ -22,8 +29,10 @@ services:
         value: "/opt/render/project/src/ckb_reality_data"
       - key: CKB_BACKEND_URL
         sync: false
+      # Must match INTERNAL_API_SECRET on the private ckb-backend-api service.
       - key: CKB_INTERNAL_SECRET
         sync: false
+      # Optional operator/API-key path. The cloud browser never receives it.
       - key: CKB_API_KEY
         sync: false
       - key: ANTHROPIC_API_KEY
