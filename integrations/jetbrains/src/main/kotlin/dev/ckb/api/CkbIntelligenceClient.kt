@@ -17,7 +17,7 @@ import kotlin.concurrent.thread
 object CkbIntelligenceClient {
     private val gson = Gson()
 
-    private fun run(projectPath: String, args: List<String>, timeoutSeconds: Long = 180): JsonObject {
+    internal fun run(projectPath: String, args: List<String>, timeoutSeconds: Long = 180): JsonObject {
         val executable = CkbSettings.instance.intelligenceBinary.ifBlank { "ckb-intelligence" }
         val command = mutableListOf(executable)
         command.addAll(args)
@@ -89,4 +89,16 @@ object CkbIntelligenceClient {
 
     fun dna(projectPath: String): JsonObject =
         run(projectPath, listOf("dna", projectPath))
+
+    fun preparePatch(projectPath: String, patchFile: String, validationFile: String, stateFile: String, baseline: String = "HEAD"): JsonObject =
+        run(projectPath, listOf("prepare-patch", projectPath, patchFile, validationFile, stateFile, "--baseline", baseline))
+
+    fun commitPatch(projectPath: String, stateFile: String, stagedTreeId: String, message: String): JsonObject =
+        run(projectPath, listOf("commit-patch", stateFile, "--confirm-staged-tree", stagedTreeId, "--message", message))
+
+    fun rescanPatch(projectPath: String, stateFile: String): JsonObject =
+        run(projectPath, listOf("rescan-patch", stateFile))
+
+    fun rollbackPatch(projectPath: String, stateFile: String, committedSha: String): JsonObject =
+        run(projectPath, listOf("rollback-patch", stateFile, "--confirm-committed-sha", committedSha))
 }
