@@ -1,5 +1,9 @@
 //! Git History Architectural Drift Timeline
-//! Parses git log output to correlate commits with architectural violations over time
+//!
+//! V2 principle: history shown to users must come from real Git commits. This
+//! module therefore fails explicitly when Git cannot be read and records real
+//! per-commit file/churn data. Architectural-risk fields remain clearly named
+//! estimates until commit-by-commit graph rescanning is enabled.
 
 use serde::{Deserialize, Serialize};
 use std::process::Command;
@@ -11,6 +15,8 @@ pub struct DriftTimelineEntry {
     pub date: String,
     pub message: String,
     pub files_changed: Vec<String>,
+    pub additions: usize,
+    pub deletions: usize,
     pub estimated_violations_introduced: usize,
     pub risk_score: f32,
 }
@@ -31,88 +37,80 @@ pub enum DriftTrend {
     Worsening,
 }
 
+#[derive(Default)]
+struct CommitAccumulator {
+    meta: Option<(String, String, String, String)>,
+    files: Vec<String>,
+    additions: usize,
+    deletions: usize,
+}
+
 pub struct GitDriftAnalyzer;
 
 impl GitDriftAnalyzer {
-    /// Analyze git history in `repo_path` and build a drift timeline
     pub fn build_timeline(repo_path: &str, max_commits: usize) -> anyhow::Result<DriftTimeline> {
+        if max_commits == 0 {
+            return Ok(DriftTimeline {
+                commits_analyzed: 0,
+                total_violations_over_time: 0,
+                highest_risk_commit: None,
+                trend: DriftTrend::Stable,
+                entries: vec![],
+            });
+        }
+
+        let limit = max_commits.min(500).to_string();
         let output = Command::new("git")
             .args([
                 "-C", repo_path,
                 "log",
-                "--format=%H|%an|%ad|%s",
-                "--date=short",
-                "--name-only",
-                &format!("-{}", max_commits),
+                "--format=CKB_COMMIT|%H|%an|%aI|%s",
+                "--numstat",
+                "-n", &limit,
             ])
-            .output();
+            .output()
+            .map_err(|e| anyhow::anyhow!("failed to execute git for architecture history: {e}"))?;
 
-        let raw = match output {
-            Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
-            _ => {
-                // Return a synthetic placeholder if git is unavailable in this environment
-                return Ok(DriftTimeline {
-                    commits_analyzed: 0,
-                    total_violations_over_time: 0,
-                    highest_risk_commit: None,
-                    trend: DriftTrend::Stable,
-                    entries: vec![],
-                });
-            }
-        };
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(anyhow::anyhow!("git history unavailable for {repo_path}: {}", stderr.trim()));
+        }
 
-        let mut entries: Vec<DriftTimelineEntry> = Vec::new();
-        let mut current_meta: Option<(String, String, String, String)> = None;
-        let mut current_files: Vec<String> = Vec::new();
+        let raw = String::from_utf8_lossy(&output.stdout);
+        let mut entries = Vec::new();
+        let mut current = CommitAccumulator::default();
 
         for line in raw.lines() {
-            if line.contains('|') && line.split('|').count() == 4 {
-                // Flush previous commit
-                if let Some((hash, author, date, msg)) = current_meta.take() {
-                    let violations = Self::estimate_violations(&current_files);
-                    let risk = Self::compute_risk(&current_files, violations);
-                    entries.push(DriftTimelineEntry {
-                        commit_hash: hash,
-                        author,
-                        date,
-                        message: msg,
-                        files_changed: current_files.clone(),
-                        estimated_violations_introduced: violations,
-                        risk_score: risk,
-                    });
-                    current_files.clear();
+            if let Some(meta) = line.strip_prefix("CKB_COMMIT|") {
+                Self::flush(&mut current, &mut entries);
+                let parts: Vec<&str> = meta.splitn(4, '|').collect();
+                if parts.len() == 4 {
+                    current.meta = Some((
+                        parts[0].to_string(),
+                        parts[1].to_string(),
+                        parts[2].to_string(),
+                        parts[3].to_string(),
+                    ));
                 }
-
-                let parts: Vec<&str> = line.splitn(4, '|').collect();
-                current_meta = Some((
-                    parts[0].to_string(),
-                    parts[1].to_string(),
-                    parts[2].to_string(),
-                    parts[3].to_string(),
-                ));
-            } else if !line.trim().is_empty() {
-                current_files.push(line.trim().to_string());
+                continue;
             }
+
+            if line.trim().is_empty() { continue; }
+            let cols: Vec<&str> = line.splitn(3, '\t').collect();
+            if cols.len() != 3 { continue; }
+
+            // Binary changes are represented by '-' in numstat. We keep the
+            // file in the real change set but do not invent line counts.
+            if cols[0] != "-" { current.additions += cols[0].parse::<usize>().unwrap_or(0); }
+            if cols[1] != "-" { current.deletions += cols[1].parse::<usize>().unwrap_or(0); }
+            current.files.push(cols[2].to_string());
         }
+        Self::flush(&mut current, &mut entries);
 
-        // Flush last commit
-        if let Some((hash, author, date, msg)) = current_meta {
-            let violations = Self::estimate_violations(&current_files);
-            let risk = Self::compute_risk(&current_files, violations);
-            entries.push(DriftTimelineEntry {
-                commit_hash: hash,
-                author,
-                date,
-                message: msg,
-                files_changed: current_files,
-                estimated_violations_introduced: violations,
-                risk_score: risk,
-            });
-        }
-
-        let total_violations: usize = entries.iter().map(|e| e.estimated_violations_introduced).sum();
-        let highest_risk = entries.iter().max_by(|a, b| a.risk_score.partial_cmp(&b.risk_score).unwrap_or(std::cmp::Ordering::Equal)).cloned();
-
+        let total_violations = entries.iter().map(|e| e.estimated_violations_introduced).sum();
+        let highest_risk = entries.iter()
+            .max_by(|a, b| a.risk_score.partial_cmp(&b.risk_score).unwrap_or(std::cmp::Ordering::Equal))
+            .cloned();
         let trend = Self::compute_trend(&entries);
 
         Ok(DriftTimeline {
@@ -124,29 +122,59 @@ impl GitDriftAnalyzer {
         })
     }
 
-    /// Heuristic: cross-layer files in same commit = likely boundary violation
-    fn estimate_violations(files: &[String]) -> usize {
-        let boundary_keywords = ["core", "api", "ui", "infra", "domain", "service", "controller"];
-        let layers: std::collections::HashSet<&str> = files.iter()
-            .flat_map(|f| boundary_keywords.iter().filter(|k| f.contains(*k)).copied())
-            .collect();
-        if layers.len() > 1 { layers.len() - 1 } else { 0 }
+    fn flush(current: &mut CommitAccumulator, entries: &mut Vec<DriftTimelineEntry>) {
+        let Some((hash, author, date, message)) = current.meta.take() else { return; };
+        current.files.sort();
+        current.files.dedup();
+        let estimated_violations = Self::estimate_boundary_risk(&current.files);
+        let risk = Self::compute_risk(
+            current.files.len(),
+            current.additions,
+            current.deletions,
+            estimated_violations,
+        );
+        entries.push(DriftTimelineEntry {
+            commit_hash: hash,
+            author,
+            date,
+            message,
+            files_changed: std::mem::take(&mut current.files),
+            additions: std::mem::take(&mut current.additions),
+            deletions: std::mem::take(&mut current.deletions),
+            estimated_violations_introduced: estimated_violations,
+            risk_score: risk,
+        });
     }
 
-    fn compute_risk(files: &[String], violations: usize) -> f32 {
-        let base = violations as f32 * 0.3;
-        let file_factor = (files.len() as f32 / 20.0).min(0.5);
-        (base + file_factor).min(0.99)
+    /// This is deliberately an estimate, not a detected violation. It flags
+    /// commits touching multiple architectural zones so callers know which
+    /// historical commits deserve a true graph-rescan comparison.
+    fn estimate_boundary_risk(files: &[String]) -> usize {
+        let boundary_keywords = [
+            "core", "api", "ui", "web", "infra", "domain", "service",
+            "controller", "database", "storage", "auth", "billing",
+        ];
+        let layers: std::collections::HashSet<&str> = files.iter()
+            .flat_map(|f| boundary_keywords.iter().filter(|k| f.to_ascii_lowercase().contains(**k)).copied())
+            .collect();
+        layers.len().saturating_sub(1)
+    }
+
+    fn compute_risk(files: usize, additions: usize, deletions: usize, boundary_crossings: usize) -> f32 {
+        let churn = additions.saturating_add(deletions) as f32;
+        let churn_factor = (churn.ln_1p() / 10.0).min(0.35);
+        let file_factor = (files as f32 / 40.0).min(0.25);
+        let boundary_factor = (boundary_crossings as f32 * 0.12).min(0.40);
+        (churn_factor + file_factor + boundary_factor).min(1.0)
     }
 
     fn compute_trend(entries: &[DriftTimelineEntry]) -> DriftTrend {
-        if entries.len() < 3 {
-            return DriftTrend::Stable;
-        }
-        let recent: f32 = entries.iter().take(3).map(|e| e.risk_score).sum::<f32>() / 3.0;
-        let older: f32 = entries.iter().rev().take(3).map(|e| e.risk_score).sum::<f32>() / 3.0;
-        if recent > older + 0.1 { DriftTrend::Worsening }
-        else if recent < older - 0.1 { DriftTrend::Improving }
+        if entries.len() < 6 { return DriftTrend::Stable; }
+        let window = entries.len().min(5);
+        let recent = entries.iter().take(window).map(|e| e.risk_score).sum::<f32>() / window as f32;
+        let older = entries.iter().rev().take(window).map(|e| e.risk_score).sum::<f32>() / window as f32;
+        if recent > older + 0.08 { DriftTrend::Worsening }
+        else if recent < older - 0.08 { DriftTrend::Improving }
         else { DriftTrend::Stable }
     }
 }
