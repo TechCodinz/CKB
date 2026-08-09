@@ -22,6 +22,7 @@ pub enum PatchTransactionState {
     Validated,
     ValidationFailed,
     Committed,
+    RolledBack,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -67,6 +68,12 @@ pub struct PatchTransaction {
     pub validations: Vec<ValidationResult>,
     pub state: PatchTransactionState,
     pub committed_sha: Option<String>,
+    #[serde(default)]
+    pub rollback_staged_tree_id: Option<String>,
+    #[serde(default)]
+    pub rollback_validations: Vec<ValidationResult>,
+    #[serde(default)]
+    pub rollback_committed_sha: Option<String>,
     pub mutation_scope: String,
     pub synthetic: bool,
 }
@@ -197,6 +204,9 @@ impl PatchTransactionEngine {
                     PatchTransactionState::ValidationFailed
                 },
                 committed_sha: None,
+                rollback_staged_tree_id: None,
+                rollback_validations: Vec::new(),
+                rollback_committed_sha: None,
                 mutation_scope: "isolated-git-worktree-and-branch".to_string(),
                 synthetic: false,
             })
@@ -253,6 +263,113 @@ impl PatchTransactionEngine {
         transaction.state = PatchTransactionState::Committed;
         transaction.committed_sha = Some(sha.clone());
         Ok(sha)
+    }
+
+    /// Revert a committed transaction inside its isolated worktree, validate
+    /// the reverted tree, and only then create the rollback commit.
+    ///
+    /// The caller's active checkout, remote refs and production branches are
+    /// never modified. A failed rollback validation is discarded in the
+    /// isolated worktree and no rollback commit is created.
+    pub fn rollback(transaction: &mut PatchTransaction) -> anyhow::Result<String> {
+        if transaction.state != PatchTransactionState::Committed {
+            return Err(anyhow::anyhow!(
+                "only a committed isolated transaction can be rolled back"
+            ));
+        }
+        let committed_sha = transaction
+            .committed_sha
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("committed transaction is missing its commit sha"))?;
+        let worktree = Path::new(&transaction.worktree_path);
+        let head = Self::git_text(worktree, &["rev-parse", "HEAD"])?;
+        if head != committed_sha {
+            return Err(anyhow::anyhow!(
+                "isolated branch head changed after commit; rollback refused"
+            ));
+        }
+
+        let revert = Self::git_output(worktree, &["revert", "--no-commit", committed_sha])?;
+        if !revert.status.success() {
+            let _ = Self::git_output(worktree, &["revert", "--abort"]);
+            return Err(Self::command_error("git revert --no-commit", &revert));
+        }
+
+        let rollback = (|| -> anyhow::Result<(String, Vec<ValidationResult>)> {
+            let staged_tree_id = Self::git_text(worktree, &["write-tree"])?;
+            let validations = transaction
+                .validations
+                .iter()
+                .map(|previous| ValidationCommand {
+                    label: format!("rollback: {}", previous.label),
+                    program: previous.program.clone(),
+                    args: previous.args.clone(),
+                })
+                .map(|command| Self::run_validation(worktree, &command))
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            if validations.iter().any(|result| !result.success) {
+                return Err(anyhow::anyhow!(
+                    "rollback validation failed; no rollback commit was created"
+                ));
+            }
+
+            let message = format!("revert: CKB transaction {}", transaction.transaction_id);
+            let commit = Self::git_output(
+                worktree,
+                &[
+                    "-c",
+                    "user.name=CKB Patch Transaction",
+                    "-c",
+                    "user.email=patch-transaction@ckb.invalid",
+                    "commit",
+                    "--no-gpg-sign",
+                    "-m",
+                    &message,
+                ],
+            )?;
+            if !commit.status.success() {
+                return Err(Self::command_error("git commit rollback", &commit));
+            }
+            Ok((staged_tree_id, validations))
+        })();
+
+        let (staged_tree_id, validations) = match rollback {
+            Ok(value) => value,
+            Err(error) => {
+                let _ = Self::git_output(worktree, &["reset", "--hard", "HEAD"]);
+                return Err(error);
+            }
+        };
+        let sha = Self::git_text(worktree, &["rev-parse", "HEAD"])?;
+        transaction.rollback_staged_tree_id = Some(staged_tree_id);
+        transaction.rollback_validations = validations;
+        transaction.rollback_committed_sha = Some(sha.clone());
+        transaction.state = PatchTransactionState::RolledBack;
+        Ok(sha)
+    }
+
+    /// Re-run the original validation commands against the current isolated
+    /// worktree to produce post-commit or post-rollback evidence.
+    pub fn revalidate(transaction: &PatchTransaction) -> anyhow::Result<Vec<ValidationResult>> {
+        if !matches!(
+            transaction.state,
+            PatchTransactionState::Committed | PatchTransactionState::RolledBack
+        ) {
+            return Err(anyhow::anyhow!(
+                "only committed or rolled-back transactions can be rescanned"
+            ));
+        }
+        let worktree = Path::new(&transaction.worktree_path);
+        transaction
+            .validations
+            .iter()
+            .map(|previous| ValidationCommand {
+                label: format!("post-change: {}", previous.label),
+                program: previous.program.clone(),
+                args: previous.args.clone(),
+            })
+            .map(|command| Self::run_validation(worktree, &command))
+            .collect()
     }
 
     /// Remove the isolated worktree. The branch is kept by default so a
@@ -509,6 +626,45 @@ mod tests {
         assert_eq!(
             transaction.committed_sha.as_deref(),
             Some(committed.as_str())
+        );
+        PatchTransactionEngine::cleanup(&transaction, true).unwrap();
+    }
+
+    #[test]
+    fn rollback_is_validated_and_confined_to_the_isolated_branch() {
+        let repository = repository();
+        let patch = "diff --git a/main.rs b/main.rs\n--- a/main.rs\n+++ b/main.rs\n@@ -1 +1 @@\n-fn value() -> i32 { 1 }\n+fn value() -> i32 { 9 }\n";
+        let validation = ValidationCommand::new(
+            "repository-check",
+            "git",
+            vec!["diff".into(), "--cached".into(), "--check".into()],
+        );
+        let mut transaction =
+            PatchTransactionEngine::prepare(repository.path(), "HEAD", patch, &[validation])
+                .unwrap();
+        PatchTransactionEngine::commit(&mut transaction, "feat: isolated value").unwrap();
+        let rollback = PatchTransactionEngine::rollback(&mut transaction).unwrap();
+
+        assert_eq!(transaction.state, PatchTransactionState::RolledBack);
+        assert_eq!(
+            transaction.rollback_committed_sha.as_deref(),
+            Some(rollback.as_str())
+        );
+        assert!(transaction
+            .rollback_validations
+            .iter()
+            .all(|item| item.success));
+        assert!(PatchTransactionEngine::revalidate(&transaction)
+            .unwrap()
+            .iter()
+            .all(|item| item.success));
+        assert_eq!(
+            std::fs::read_to_string(repository.path().join("main.rs")).unwrap(),
+            "fn value() -> i32 { 1 }\n",
+        );
+        assert_eq!(
+            std::fs::read_to_string(Path::new(&transaction.worktree_path).join("main.rs")).unwrap(),
+            "fn value() -> i32 { 1 }\n",
         );
         PatchTransactionEngine::cleanup(&transaction, true).unwrap();
     }
