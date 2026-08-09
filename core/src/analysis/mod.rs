@@ -264,6 +264,23 @@ pub trait BoundaryInferencer: Send + Sync {
 // or performing higher-level intelligence work. GraphStorage remains the sole
 // source of persisted architecture snapshot truth.
 impl crate::CkbEngine {
+    /// Create an engine whose sled snapshots live under a caller-selected
+    /// path. The normal constructor remains unchanged for compatibility.
+    pub fn new_with_storage_path(path: &str) -> Result<Self> {
+        let parser = std::sync::Arc::new(crate::LanguageParser::new());
+        let storage = std::sync::Arc::new(crate::GraphStorage::new(path)?);
+        let graph = std::sync::Arc::new(tokio::sync::RwLock::new(DependencyGraph::new()));
+        let analyzer = std::sync::Arc::new(ArchitectureAnalyzer::new());
+        Ok(Self { parser, graph, analyzer, storage })
+    }
+
+    /// Start a full scan from an empty live graph while retaining persisted
+    /// historical snapshots. This prevents unrelated/repeated scans from
+    /// accumulating stale nodes and edges in the active architecture model.
+    pub async fn reset_architecture_graph(&self) {
+        *self.graph.write().await = DependencyGraph::new();
+    }
+
     pub async fn architecture_graph_snapshot(&self) -> DependencyGraph {
         self.graph.read().await.clone()
     }
