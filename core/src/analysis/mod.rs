@@ -7,6 +7,7 @@ pub mod clone_detector;
 pub mod test_coverage;
 pub mod memory;
 pub mod causal;
+pub mod activity;
 
 pub use boundaries::*;
 pub use patterns::*;
@@ -15,6 +16,7 @@ pub use clone_detector::*;
 pub use test_coverage::*;
 pub use memory::*;
 pub use causal::*;
+pub use activity::*;
 
 use crate::graph::DependencyGraph;
 use crate::types::*;
