@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
-    io::{Cursor, Read, Write},
+    io::{Cursor, Write},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -60,6 +60,18 @@ struct PersistedSession {
     saved_at: String,
 }
 
+// v3 did not persist a remote repository URL. Keeping an explicit legacy
+// decoder prevents a v4 rollout from silently discarding a valid v3 graph.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PersistedSessionV3 {
+    graph: Option<DependencyGraph>,
+    report: Option<ScanReport>,
+    repo_path: Option<String>,
+    runtime_nodes: HashMap<NodeId, RuntimeMetrics>,
+    runtime_edges: HashMap<String, RuntimeEdgeObservation>,
+    saved_at: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ArchitectureSnapshot {
@@ -98,6 +110,7 @@ impl Session {
 struct AppState {
     sessions: Arc<RwLock<HashMap<String, Session>>>,
     api_key: Option<Arc<String>>,
+    require_api_key: bool,
     data_dir: Arc<PathBuf>,
     http: reqwest::Client,
 }
@@ -205,6 +218,12 @@ async fn load_session(state: &AppState, project_key: &str) -> Session {
             *s.repo_url.write().await = p.repo_url;
             *s.runtime_nodes.write().await = p.runtime_nodes;
             *s.runtime_edges.write().await = p.runtime_edges;
+        } else if let Ok(p) = bincode::deserialize::<PersistedSessionV3>(&bytes) {
+            *s.graph.write().await = p.graph;
+            *s.report.write().await = p.report;
+            *s.repo_path.write().await = p.repo_path;
+            *s.runtime_nodes.write().await = p.runtime_nodes;
+            *s.runtime_edges.write().await = p.runtime_edges;
         }
     }
     state.sessions.write().await.insert(project_key.to_string(), s.clone());
@@ -266,7 +285,8 @@ async fn auth(
     request: axum::http::Request<axum::body::Body>,
     next: Next,
 ) -> Result<Response, (StatusCode, String)> {
-    if let Some(expected) = &state.api_key {
+    if state.require_api_key {
+        let expected = state.api_key.as_ref().ok_or((StatusCode::SERVICE_UNAVAILABLE, "CKB_REQUIRE_API_KEY is enabled but CKB_API_KEY is not configured".into()))?;
         if extract_key(&headers).as_deref() != Some(expected.as_str()) {
             return Err((StatusCode::UNAUTHORIZED, "Missing or invalid CKB API key".into()));
         }
@@ -340,14 +360,32 @@ fn external_dependencies(analyses: &[FileAnalysis]) -> Vec<String> {
     deps.into_iter().collect()
 }
 
+fn repo_relative(root: &Path, file: &Path) -> String {
+    file.strip_prefix(root).unwrap_or(file).to_string_lossy().replace('\\', "/").trim_start_matches("./").to_string()
+}
+
 async fn build_graph(path: &str) -> anyhow::Result<(DependencyGraph, ScanReport)> {
     let started = std::time::Instant::now();
     let parser = LanguageParser::new();
+    let root = PathBuf::from(path);
     let files = discover(path)?;
     let mut analyses = Vec::new();
     for p in files {
-        let s = p.to_string_lossy().to_string();
-        if let Ok(a) = parser.parse_file(&s).await { analyses.push(a); }
+        let absolute = p.to_string_lossy().to_string();
+        let relative = repo_relative(&root, &p);
+        if let Ok(mut a) = parser.parse_file(&absolute).await {
+            let old_analysis_path = a.path.clone();
+            a.path = relative.clone();
+            for node in &mut a.nodes {
+                let old_id = node.id.0.clone();
+                let prefix = format!("{}::", old_analysis_path);
+                if let Some(suffix) = old_id.strip_prefix(&prefix) {
+                    node.id = NodeId(format!("{}::{}", relative, suffix));
+                }
+                node.path = PathBuf::from(&relative);
+            }
+            analyses.push(a);
+        }
     }
     if analyses.is_empty() { anyhow::bail!("No supported source files could be parsed"); }
     let mut graph = DependencyGraph::new();
@@ -392,7 +430,7 @@ fn extract_zip_safely(bytes: &[u8], target: &Path) -> anyhow::Result<PathBuf> {
         let mut entry = zip.by_index(i)?;
         total = total.saturating_add(entry.size());
         if total > MAX_EXTRACTED_BYTES { anyhow::bail!("Expanded archive exceeds safety limit"); }
-        let Some(rel) = entry.enclosed_name().map(Path::to_path_buf) else { continue; };
+        let Some(rel) = entry.enclosed_name() else { continue; };
         let out = target.join(rel);
         if entry.is_dir() {
             std::fs::create_dir_all(&out)?;
@@ -444,6 +482,7 @@ async fn health(State(state): State<AppState>) -> Json<Value> {
         "realityApi":"v4",
         "remoteGitHubScan":true,
         "zipScan":true,
+        "apiKeyRequired":state.require_api_key,
         "graphPersistence":"durable-bincode-snapshots",
         "dataDir":state.data_dir.to_string_lossy(),
         "evidencePolicy":"static-runtime-predicted-separated"
@@ -495,7 +534,7 @@ async fn scan_zip(State(state): State<AppState>, Json(req): Json<ZipScanRequest>
     let _ = std::fs::remove_dir_all(&temp);
     let (graph, report) = built.map_err(internal)?;
     let project_key = key(req.repo_name.as_deref().or(req.file_name.as_deref()), req.project_id.as_deref());
-    save_scan(&state, project_key, graph, report, None, req.file_name).await
+    save_scan(&state, project_key, graph, report, None, None).await
 }
 
 async fn report(State(state): State<AppState>, Query(q): Query<HashMap<String,String>>) -> Result<Json<ScanReport>, (StatusCode,String)> {
@@ -784,7 +823,8 @@ async fn github_history(state: &AppState, repo_url: &str, max: usize) -> anyhow:
         "files_changed":[],"additions":0,"deletions":0,
         "estimated_violations_introduced":0,"risk_score":0.0
     })).collect::<Vec<_>>();
-    Ok(json!({"entries":entries,"commits_analyzed":entries.len(),"source":"github-public-commit-api"}))
+    let count = entries.len();
+    Ok(json!({"entries":entries,"commits_analyzed":count,"source":"github-public-commit-api"}))
 }
 
 async fn history(State(state): State<AppState>, Query(q): Query<HashMap<String,String>>) -> Result<Json<Value>, (StatusCode,String)> {
@@ -905,13 +945,18 @@ async fn main() -> anyhow::Result<()> {
     let data_dir = PathBuf::from(std::env::var("CKB_REALITY_DATA_DIR").unwrap_or_else(|_|"./ckb_reality_data".into()));
     tokio::fs::create_dir_all(&data_dir).await?;
     let http = reqwest::Client::builder().timeout(std::time::Duration::from_secs(120)).build()?;
+    let require_api_key = std::env::var("CKB_REQUIRE_API_KEY")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
     let state = AppState {
         sessions:Arc::new(RwLock::new(HashMap::new())),
         api_key:std::env::var("CKB_API_KEY").ok().filter(|v|!v.is_empty()).map(Arc::new),
+        require_api_key,
         data_dir:Arc::new(data_dir),
         http,
     };
-    if state.api_key.is_none() { warn!("CKB_API_KEY is not configured; Reality API is unauthenticated"); }
+    if state.require_api_key && state.api_key.is_none() { warn!("CKB_REQUIRE_API_KEY is enabled but CKB_API_KEY is missing"); }
+    if !state.require_api_key { info!("CKB Reality browser API is public; API-key enforcement is disabled until a server-side SaaS proxy is enabled") }
 
     let protected = Router::new()
         .route("/api/v1/scan",post(scan))
