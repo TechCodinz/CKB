@@ -6,6 +6,7 @@ mod drift;
 pub mod clone_detector;
 pub mod test_coverage;
 pub mod memory;
+pub mod causal;
 
 pub use boundaries::*;
 pub use patterns::*;
@@ -13,6 +14,7 @@ pub use drift::*;
 pub use clone_detector::*;
 pub use test_coverage::*;
 pub use memory::*;
+pub use causal::*;
 
 use crate::graph::DependencyGraph;
 use crate::types::*;
