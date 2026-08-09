@@ -1,30 +1,21 @@
-use axum::{routing::get, Json, Router};
-use serde_json::{json, Value};
+use axum::{routing::get, Router};
+use std::net::SocketAddr;
 
-async fn health() -> Json<Value> {
-    Json(json!({
-        "status": "healthy",
-        "service": "ckb-build-diagnostic",
-        "temporary": true
-    }))
-}
-
-async fn diagnostics() -> String {
-    tokio::fs::read_to_string("reality_v5_build.log")
-        .await
-        .unwrap_or_else(|error| format!("No Reality v5 compiler log was produced: {error}"))
+async fn health() -> &'static str {
+    "ok"
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let app = Router::new()
-        .route("/health", get(health))
-        .route("/__ckb_build_diagnostics_v5", get(diagnostics));
-    let port = std::env::var("PORT")
+    let app = Router::new().route("/health", get(health));
+
+    let port: u16 = std::env::var("PORT")
         .ok()
-        .and_then(|value| value.parse().ok())
+        .and_then(|value| value.parse::<u16>().ok())
         .unwrap_or(3000);
-    let listener = tokio::net::TcpListener::bind(([0, 0, 0, 0], port)).await?;
+    let address = SocketAddr::from(([0, 0, 0, 0], port));
+    let listener = tokio::net::TcpListener::bind(address).await?;
+
     axum::serve(listener, app).await?;
     Ok(())
 }
