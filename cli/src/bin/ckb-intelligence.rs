@@ -74,6 +74,26 @@ enum Command {
         #[arg(long)]
         message: String,
     },
+    /// Rescan a committed or rolled-back isolated transaction for before/after evidence.
+    RescanPatch {
+        state_file: PathBuf,
+        #[arg(
+            long,
+            default_value = "post-change architecture runtime regression risk"
+        )]
+        query: String,
+        #[arg(long, default_value_t = 3)]
+        depth: usize,
+        #[arg(long, default_value_t = 32)]
+        limit: usize,
+    },
+    /// Create a validated rollback commit inside the isolated transaction branch.
+    RollbackPatch {
+        state_file: PathBuf,
+        /// Must exactly match the isolated commit being rolled back.
+        #[arg(long)]
+        confirm_committed_sha: String,
+    },
     /// Remove a transaction worktree, optionally deleting its isolated branch.
     CleanupPatch {
         state_file: PathBuf,
@@ -356,6 +376,77 @@ async fn main() -> Result<()> {
                 "activeCheckoutModified": false,
                 "synthetic": false
             }))?);
+        }
+        Command::RescanPatch {
+            state_file,
+            query,
+            depth,
+            limit,
+        } => {
+            let transaction = read_transaction(&state_file)?;
+            if transaction.committed_sha.is_none() {
+                anyhow::bail!("transaction has no isolated commit to rescan");
+            }
+            let worktree = PathBuf::from(&transaction.worktree_path);
+            let (engine, scan, wall_ms, cache_hit) = load_graph(&worktree).await?;
+            let graph = engine.architecture_graph_snapshot().await;
+            let activity = DeepActivityAnalyzer::analyze(&graph)?;
+            let dna = ArchitectureMemoryEngine::code_dna(&graph)?;
+            let memory = ArchitectureMemoryEngine::query(&graph, &query, depth, limit)?;
+            let validations = PatchTransactionEngine::revalidate(&transaction)?;
+            let validation_passed = validations.iter().all(|result| result.success);
+            println!(
+                "{}",
+                serde_json::to_string(&json!({
+                    "version": "ckb-patch-rescan-v1",
+                    "kind": "patch-transaction-rescan",
+                    "transactionId": transaction.transaction_id,
+                    "baselineCommit": transaction.baseline_commit,
+                    "committedSha": transaction.committed_sha,
+                    "rollbackCommittedSha": transaction.rollback_committed_sha,
+                    "transactionState": transaction.state,
+                    "scan": scan,
+                    "scanWallMs": wall_ms,
+                    "cacheHit": cache_hit,
+                    "activity": activity,
+                    "dna": dna,
+                    "memory": memory,
+                    "validations": validations,
+                    "validationPassed": validation_passed,
+                    "evidencePolicy": "static-runtime-predicted-separated",
+                    "activeCheckoutModified": false,
+                    "synthetic": false
+                }))?
+            );
+        }
+        Command::RollbackPatch {
+            state_file,
+            confirm_committed_sha,
+        } => {
+            let mut transaction = read_transaction(&state_file)?;
+            if transaction.committed_sha.as_deref() != Some(confirm_committed_sha.as_str()) {
+                anyhow::bail!(
+                    "rollback confirmation does not match the isolated commit; no rollback was created"
+                );
+            }
+            let rollback_sha = PatchTransactionEngine::rollback(&mut transaction)?;
+            write_transaction(&state_file, &transaction)?;
+            println!(
+                "{}",
+                serde_json::to_string(&json!({
+                    "kind": "patch-transaction",
+                    "operation": "rollback-isolated-branch",
+                    "transactionId": transaction.transaction_id,
+                    "committedSha": transaction.committed_sha,
+                    "rollbackStagedTreeId": transaction.rollback_staged_tree_id,
+                    "rollbackCommittedSha": rollback_sha,
+                    "rollbackValidations": transaction.rollback_validations,
+                    "merged": false,
+                    "pushed": false,
+                    "activeCheckoutModified": false,
+                    "synthetic": false
+                }))?
+            );
         }
         Command::CleanupPatch {
             state_file,
