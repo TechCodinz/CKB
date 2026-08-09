@@ -9,7 +9,7 @@ use axum::{
 use reqwest::Client;
 use serde_json::{json, Value};
 use std::{net::SocketAddr, sync::Arc, time::Duration};
-use tokio::process::Command;
+use tokio::{process::Command, sync::Semaphore};
 use tracing::{error, info, warn};
 
 const MAX_PROXY_BODY: usize = 90 * 1024 * 1024;
@@ -20,6 +20,9 @@ struct GatewayState {
     child_base_url: Arc<String>,
     internal_secret: Option<Arc<String>>,
     api_key: Option<Arc<String>>,
+    scan_gate: Arc<Semaphore>,
+    max_concurrent_scans: usize,
+    allow_local_scan: bool,
 }
 
 fn secret_value(name: &str) -> Option<Arc<String>> {
@@ -28,6 +31,12 @@ fn secret_value(name: &str) -> Option<Arc<String>> {
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
         .map(Arc::new)
+}
+
+fn env_flag(name: &str, default: bool) -> bool {
+    std::env::var(name)
+        .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+        .unwrap_or(default)
 }
 
 fn secure_eq(left: &str, right: &str) -> bool {
@@ -93,6 +102,23 @@ fn authorized(state: &GatewayState, headers: &HeaderMap) -> Result<(), (StatusCo
     }
 }
 
+fn json_response(status: StatusCode, value: Value) -> Response<Body> {
+    Response::builder()
+        .status(status)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(value.to_string()))
+        .unwrap_or_else(|_| Response::new(Body::empty()))
+}
+
+fn is_expensive_scan(path: &str) -> bool {
+    matches!(
+        path,
+        "/api/v1/scan"
+            | "/api/v1/intelligence/scan/github"
+            | "/api/v1/intelligence/scan/zip"
+    )
+}
+
 async fn child_health(state: &GatewayState) -> Result<Value, String> {
     let response = state
         .client
@@ -123,6 +149,8 @@ async fn health(State(state): State<GatewayState>) -> impl IntoResponse {
                 "tenantIsolation":"project-session",
                 "evidencePolicy":"static-runtime-predicted-separated",
                 "authConfigured":state.internal_secret.is_some() || state.api_key.is_some(),
+                "localFilesystemScanEnabled":state.allow_local_scan,
+                "maxConcurrentScans":state.max_concurrent_scans,
                 "child":child
             })),
         ),
@@ -144,12 +172,36 @@ async fn proxy(
     request: Request<Body>,
 ) -> Response<Body> {
     if let Err((status, message)) = authorized(&state, request.headers()) {
-        return Response::builder()
-            .status(status)
-            .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(json!({"message":message,"synthetic":false}).to_string()))
-            .unwrap_or_else(|_| Response::new(Body::empty()));
+        return json_response(status, json!({"message":message,"synthetic":false}));
     }
+
+    let request_path = request.uri().path().to_string();
+    if request_path == "/api/v1/scan" && !state.allow_local_scan {
+        return json_response(
+            StatusCode::FORBIDDEN,
+            json!({
+                "message":"Local filesystem scanning is disabled on the hosted CKB Reality service. Use an authenticated GitHub or ZIP scan.",
+                "synthetic":false
+            }),
+        );
+    }
+
+    // Repository parsing is CPU/memory/archive intensive. Serialize it by
+    // default so a burst of scan requests cannot turn a healthy API into a
+    // denial-of-wallet workload. Read-only graph/memory queries stay parallel.
+    let _scan_permit = if is_expensive_scan(&request_path) {
+        match state.scan_gate.clone().acquire_owned().await {
+            Ok(permit) => Some(permit),
+            Err(_) => {
+                return json_response(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    json!({"message":"CKB scan gate is unavailable","synthetic":false}),
+                );
+            }
+        }
+    } else {
+        None
+    };
 
     let method = match reqwest::Method::from_bytes(request.method().as_str().as_bytes()) {
         Ok(method) => method,
@@ -181,14 +233,10 @@ async fn proxy(
     let body = match to_bytes(request.into_body(), MAX_PROXY_BODY).await {
         Ok(body) => body,
         Err(error) => {
-            return Response::builder()
-                .status(StatusCode::PAYLOAD_TOO_LARGE)
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(
-                    json!({"message":format!("Request body rejected: {error}"),"synthetic":false})
-                        .to_string(),
-                ))
-                .unwrap_or_else(|_| Response::new(Body::empty()));
+            return json_response(
+                StatusCode::PAYLOAD_TOO_LARGE,
+                json!({"message":format!("Request body rejected: {error}"),"synthetic":false}),
+            );
         }
     };
 
@@ -204,8 +252,8 @@ async fn proxy(
         upstream = upstream.header(reqwest::header::ACCEPT, value);
     }
     // If the child itself is configured with a shared API key, satisfy that
-    // internal hop here. Browser/API credentials are validated at the gateway
-    // and are never blindly forwarded.
+    // private localhost hop here. Incoming browser/API credentials are never
+    // blindly forwarded to the child process.
     if let Some(api_key) = &state.api_key {
         upstream = upstream.header("x-api-key", api_key.as_str());
     }
@@ -214,17 +262,13 @@ async fn proxy(
         Ok(response) => response,
         Err(error) => {
             error!("Reality v5 upstream request failed: {}", error);
-            return Response::builder()
-                .status(StatusCode::BAD_GATEWAY)
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(
-                    json!({
-                        "message":"CKB Reality v5 is temporarily unavailable",
-                        "synthetic":false
-                    })
-                    .to_string(),
-                ))
-                .unwrap_or_else(|_| Response::new(Body::empty()));
+            return json_response(
+                StatusCode::BAD_GATEWAY,
+                json!({
+                    "message":"CKB Reality v5 is temporarily unavailable",
+                    "synthetic":false
+                }),
+            );
         }
     };
 
@@ -256,8 +300,7 @@ async fn proxy(
 }
 
 async fn wait_for_child(state: &GatewayState) -> anyhow::Result<()> {
-    let attempts = 120;
-    for _ in 0..attempts {
+    for _ in 0..120 {
         if child_health(state).await.is_ok() {
             return Ok(());
         }
@@ -279,6 +322,11 @@ async fn main() -> anyhow::Result<()> {
         .and_then(|value| value.parse::<u16>().ok())
         .unwrap_or_else(|| if gateway_port == u16::MAX { 3001 } else { gateway_port + 1 });
     let child_base_url = format!("http://127.0.0.1:{child_port}");
+    let max_concurrent_scans = std::env::var("CKB_MAX_CONCURRENT_SCANS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(1)
+        .clamp(1, 4);
 
     let client = Client::builder()
         .timeout(Duration::from_secs(300))
@@ -288,6 +336,9 @@ async fn main() -> anyhow::Result<()> {
         child_base_url: Arc::new(child_base_url),
         internal_secret: secret_value("CKB_INTERNAL_SECRET"),
         api_key: secret_value("CKB_API_KEY"),
+        scan_gate: Arc::new(Semaphore::new(max_concurrent_scans)),
+        max_concurrent_scans,
+        allow_local_scan: env_flag("CKB_ALLOW_LOCAL_SCAN", false),
     };
 
     if state.internal_secret.is_none() && state.api_key.is_none() {
