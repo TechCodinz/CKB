@@ -5,6 +5,7 @@ import com.google.gson.JsonObject
 import dev.ckb.settings.CkbSettings
 import java.io.File
 import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
 /**
  * Local, process-isolated bridge to `ckb-intelligence`.
@@ -26,24 +27,53 @@ object CkbIntelligenceClient {
             .redirectErrorStream(false)
             .start()
 
-        val stdoutThread = Thread { }
+        // Drain both pipes while the process runs. Deep memory bundles can be
+        // much larger than the OS pipe buffer; waiting before reading can
+        // otherwise deadlock the extension on large repositories.
+        val stdout = StringBuilder()
+        val stderr = StringBuilder()
+        val outThread = thread(name = "ckb-intelligence-stdout", isDaemon = true) {
+            process.inputStream.bufferedReader().use { reader ->
+                val buffer = CharArray(8192)
+                while (true) {
+                    val count = reader.read(buffer)
+                    if (count < 0) break
+                    stdout.append(buffer, 0, count)
+                }
+            }
+        }
+        val errThread = thread(name = "ckb-intelligence-stderr", isDaemon = true) {
+            process.errorStream.bufferedReader().use { reader ->
+                val buffer = CharArray(4096)
+                while (true) {
+                    val count = reader.read(buffer)
+                    if (count < 0) break
+                    stderr.append(buffer, 0, count)
+                }
+            }
+        }
+
         val completed = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
         if (!completed) {
             process.destroyForcibly()
+            outThread.join(1000)
+            errThread.join(1000)
             throw RuntimeException("CKB deep architecture analysis timed out after ${timeoutSeconds}s")
         }
+        outThread.join(2000)
+        errThread.join(2000)
 
-        val stdout = process.inputStream.bufferedReader().use { it.readText().trim() }
-        val stderr = process.errorStream.bufferedReader().use { it.readText().trim() }
-        if (stdout.isNotBlank()) {
+        val stdoutText = stdout.toString().trim()
+        val stderrText = stderr.toString().trim()
+        if (stdoutText.isNotBlank()) {
             try {
-                return gson.fromJson(stdout, JsonObject::class.java)
+                return gson.fromJson(stdoutText, JsonObject::class.java)
             } catch (_: Exception) {
                 // Preserve the actual process failure below.
             }
         }
         if (process.exitValue() != 0) {
-            throw RuntimeException(stderr.ifBlank { "CKB intelligence process exited with ${process.exitValue()}" })
+            throw RuntimeException(stderrText.ifBlank { "CKB intelligence process exited with ${process.exitValue()}" })
         }
         throw RuntimeException("CKB intelligence process returned no JSON output")
     }
