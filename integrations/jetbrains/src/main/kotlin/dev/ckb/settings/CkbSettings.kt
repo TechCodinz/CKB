@@ -16,6 +16,7 @@ class CkbSettings : PersistentStateComponent<CkbSettings.State> {
 
     data class State(
         var serverUrl: String = "http://localhost:3000",
+        var cloudApiUrl: String = "https://ckb-backend-api.onrender.com",
         var intelligenceBinary: String = "ckb-intelligence",
         var autoScanOnOpen: Boolean = true,
         var deepAnalysisOnOpen: Boolean = true,
@@ -34,6 +35,10 @@ class CkbSettings : PersistentStateComponent<CkbSettings.State> {
     var intelligenceBinary: String
         get() = myState.intelligenceBinary
         set(value) { myState = myState.copy(intelligenceBinary = value) }
+
+    var cloudApiUrl: String
+        get() = myState.cloudApiUrl
+        set(value) { myState = myState.copy(cloudApiUrl = value) }
 
     var autoScanOnOpen: Boolean
         get() = myState.autoScanOnOpen
