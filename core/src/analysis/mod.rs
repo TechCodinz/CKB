@@ -5,12 +5,14 @@ mod patterns;
 mod drift;
 pub mod clone_detector;
 pub mod test_coverage;
+pub mod memory;
 
 pub use boundaries::*;
 pub use patterns::*;
 pub use drift::*;
 pub use clone_detector::*;
 pub use test_coverage::*;
+pub use memory::*;
 
 use crate::graph::DependencyGraph;
 use crate::types::*;
@@ -61,10 +63,6 @@ impl ArchitectureAnalyzer {
             }
         }
 
-        // Also enforce independently inferred boundaries. Pattern detectors do
-        // not always emit every naming/annotation boundary, so relying only on
-        // pattern-owned boundaries previously left check_boundary effectively
-        // unreachable for many real projects.
         for boundary in self.infer_boundaries(graph)? {
             for v in self.check_boundary(graph, &boundary)? {
                 let key = format!("{:?}|{}|{}|{}", v.kind, v.from.0, v.to.0, v.boundary);
@@ -72,7 +70,6 @@ impl ArchitectureAnalyzer {
             }
         }
 
-        // Cycles are graph facts, not heuristic guesses.
         for cycle in graph.find_cycles()? {
             if cycle.len() < 2 { continue; }
             for pair in cycle.windows(2) {
@@ -169,9 +166,6 @@ impl ArchitectureAnalyzer {
         Ok(refactor_plan)
     }
 
-    /// Evidence-backed heuristic risk index. This is not presented as a
-    /// learned failure probability: it combines observed graph centrality and,
-    /// when available, real runtime error/hotpath telemetry.
     pub fn predict_failure_probability(&self, graph: &DependencyGraph, file: &str) -> Result<f32> {
         let file_node = NodeId(format!("{}::file", file));
         let inc = graph.incoming_degree(&file_node)? as f32;
