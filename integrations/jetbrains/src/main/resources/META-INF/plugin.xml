@@ -2,7 +2,7 @@
     <id>dev.ckb.jetbrains</id>
     <name>CKB - Living Architecture Intelligence</name>
     <vendor email="support@ckb.dev" url="https://ckb.dev">CKB</vendor>
-    <version>1.2.0</version>
+    <version>1.3.0</version>
     <idea-version since-build="233" until-build="243.*"/>
 
     <description><![CDATA[
@@ -10,6 +10,7 @@
         Explore software as an evidence-backed internal system instead of a flat collection of files.<br><br>
         <ul>
             <li>🌌 Living Architecture Reality cockpit inside the IDE</li>
+            <li>🔬 Invisible Reality V5 molecular software microscope</li>
             <li>⚡ Deep activity hotspots, change sensitivity and architecture boundaries</li>
             <li>🧠 Bounded architecture memory for AI/model context without dumping the whole repository</li>
             <li>🛡️ Evidence-backed architecture findings and dependency drift</li>
@@ -28,6 +29,12 @@
                     anchor="bottom"
                     icon="/icons/ckb_tool_window.svg"
                     factoryClass="dev.ckb.toolwindow.CkbToolWindowFactory"/>
+        <toolWindow id="CKB Microscope"
+                    displayName="CKB Invisible Reality V5"
+                    anchor="right"
+                    secondary="true"
+                    icon="/icons/ckb_tool_window.svg"
+                    factoryClass="dev.ckb.toolwindow.CkbMolecularToolWindowFactory"/>
 
         <applicationConfigurable
                 parentId="tools"
