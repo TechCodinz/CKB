@@ -1,6 +1,7 @@
 # TEMPORARY compiler-diagnostic deployment. The served artifact contains only
 # cargo check output for the public Reality v5 source; it is removed as soon as
 # the exact compiler error is recovered and fixed.
+# Diagnostic trigger: shared core + standard server were verified green first.
 services:
   - type: web
     name: ckb-mcp-server
