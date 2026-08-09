@@ -1,7 +1,7 @@
 //! Dependency graph construction and querying
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Component, Path};
 use petgraph::graph::{DiGraph, NodeIndex};
 use crate::types::*;
 use crate::parser::FileAnalysis;
@@ -13,9 +13,6 @@ pub struct DependencyGraph {
     node_indices: HashMap<NodeId, NodeIndex>,
     reverse_indices: HashMap<NodeIndex, NodeId>,
     runtime_traces: HashMap<NodeId, RuntimeMetrics>,
-    /// Calls/imports are retained until every file has been parsed. This lets
-    /// CKB resolve cross-file relationships against the complete symbol table
-    /// instead of incorrectly assuming caller and callee live in one file.
     #[serde(default)]
     pending_calls: Vec<(String, FunctionCall)>,
     #[serde(default)]
@@ -66,8 +63,6 @@ impl DependencyGraph {
             self.add_node(node.clone());
         }
 
-        // Defer relationship resolution until the whole repository symbol
-        // table exists. This fixes scan-order-dependent missing edges.
         self.pending_imports.extend(
             analysis.imports.iter().cloned().map(|i| (analysis.path.clone(), i))
         );
@@ -77,8 +72,6 @@ impl DependencyGraph {
 
         for rel in &analysis.type_relations {
             let from_id = NodeId(format!("{}::{}", analysis.path, rel.source_type));
-            // Prefer same-file relationships now; cross-file target types can
-            // still be resolved during build_type_graph.
             let to_id = NodeId(format!("{}::{}", analysis.path, rel.target_type));
             if let (Some(from_idx), Some(to_idx)) = (self.node_indices.get(&from_id), self.node_indices.get(&to_id)) {
                 let edge_kind = match rel.kind {
@@ -155,12 +148,9 @@ impl DependencyGraph {
             let prefix = if normalized_from.contains("/src/") { format!("{root}/src") } else { "src".to_string() };
             bases.push(format!("{}/{}", prefix.trim_end_matches('/'), rust_path));
         } else if source.contains('.') && !source.contains('/') {
-            // Python/Java style dotted module name.
             bases.push(source.replace('.', "/"));
             bases.push(format!("src/{}", source.replace('.', "/")));
         } else {
-            // Absolute/workspace-style import. Keep it as a potential path,
-            // while package imports that do not match a file remain external.
             bases.push(source.trim_start_matches('/').to_string());
             bases.push(format!("src/{}", source.trim_start_matches('/')));
         }
@@ -178,18 +168,16 @@ impl DependencyGraph {
     }
 
     fn resolve_import_path(&self, from_file: &str, source: &str, files: &HashMap<String, NodeId>) -> Option<NodeId> {
-        let normalized_files: HashMap<String, &NodeId> = files.iter()
-            .map(|(p, id)| (Self::normalize_lexical(Path::new(p)), id))
+        let normalized_files: HashMap<String, NodeId> = files.iter()
+            .map(|(p, id)| (Self::normalize_lexical(Path::new(p)), id.clone()))
             .collect();
         for candidate in Self::import_candidates(from_file, source) {
             let c = Self::normalize_lexical(Path::new(&candidate));
-            if let Some(id) = normalized_files.get(&c) { return Some((*id).clone()); }
-            // Repositories may be scanned with absolute paths while imports
-            // are project-relative. A unique suffix match is acceptable.
+            if let Some(id) = normalized_files.get(&c) { return Some(id.clone()); }
             let suffix = format!("/{c}");
-            let matches: Vec<&NodeId> = normalized_files.iter()
+            let matches: Vec<NodeId> = normalized_files.iter()
                 .filter(|(p, _)| *p == &c || p.ends_with(&suffix))
-                .map(|(_, id)| *id)
+                .map(|(_, id)| id.clone())
                 .collect();
             if matches.len() == 1 { return Some(matches[0].clone()); }
         }
@@ -204,7 +192,6 @@ impl DependencyGraph {
             .collect()
     }
 
-    /// Build resolved import and call relationships after all files are loaded.
     pub fn build_call_graph(&mut self) -> Result<()> {
         let files = self.file_nodes_by_path();
         let pending_imports = std::mem::take(&mut self.pending_imports);
@@ -248,13 +235,7 @@ impl DependencyGraph {
         Ok(())
     }
 
-    /// Resolve inheritance/implementation targets that are unique across the
-    /// repository and were not resolvable during per-file ingestion.
     pub fn build_type_graph(&mut self) -> Result<()> {
-        // Existing parsers already produce same-file edges in add_file. Future
-        // parser revisions will retain unresolved type relations just as calls
-        // are retained; this method deliberately avoids inventing name-based
-        // edges without evidence today.
         Ok(())
     }
 
@@ -400,5 +381,102 @@ impl DependencyGraph {
             }
         }
         Ok(cycles)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn node(path: &str, name: &str, kind: NodeKind, line: u32) -> Node {
+        Node {
+            id: NodeId(format!("{}::{}", path, if kind == NodeKind::File { "file" } else { name })),
+            kind,
+            name: name.to_string(),
+            path: PathBuf::from(path),
+            line,
+            column: 0,
+            exports: vec![],
+            imports: vec![],
+            metadata: HashMap::new(),
+        }
+    }
+
+    fn analysis(path: &str, nodes: Vec<Node>, imports: Vec<Import>, calls: Vec<FunctionCall>) -> FileAnalysis {
+        FileAnalysis { path: path.to_string(), nodes, imports, exports: vec![], calls, type_relations: vec![] }
+    }
+
+    #[test]
+    fn resolves_relative_imports_after_all_files_are_loaded() {
+        let mut graph = DependencyGraph::new();
+        graph.add_file(&analysis(
+            "src/a.ts",
+            vec![node("src/a.ts", "a.ts", NodeKind::File, 1)],
+            vec![Import { source: "./b".into(), symbols: vec![], kind: ImportKind::Named }],
+            vec![],
+        )).unwrap();
+        graph.add_file(&analysis(
+            "src/b.ts",
+            vec![node("src/b.ts", "b.ts", NodeKind::File, 1)],
+            vec![], vec![],
+        )).unwrap();
+
+        graph.build_call_graph().unwrap();
+        let deps = graph.get_dependencies(&NodeId("src/a.ts::file".into())).unwrap();
+        assert!(deps.contains(&NodeId("src/b.ts::file".into())));
+    }
+
+    #[test]
+    fn resolves_unique_cross_file_function_calls() {
+        let mut graph = DependencyGraph::new();
+        graph.add_file(&analysis(
+            "src/a.ts",
+            vec![
+                node("src/a.ts", "a.ts", NodeKind::File, 1),
+                node("src/a.ts", "start", NodeKind::Function, 3),
+            ],
+            vec![],
+            vec![FunctionCall { caller_name: "start".into(), callee_name: "work".into(), line: 4, column: 2 }],
+        )).unwrap();
+        graph.add_file(&analysis(
+            "src/b.ts",
+            vec![
+                node("src/b.ts", "b.ts", NodeKind::File, 1),
+                node("src/b.ts", "work", NodeKind::Function, 6),
+            ],
+            vec![], vec![],
+        )).unwrap();
+
+        graph.build_call_graph().unwrap();
+        let callees = graph.get_callees(&NodeId("src/a.ts::start".into()));
+        assert_eq!(callees, vec![NodeId("src/b.ts::work".into())]);
+    }
+
+    #[test]
+    fn line_targeting_selects_nearest_declaration_not_every_file_symbol() {
+        let mut graph = DependencyGraph::new();
+        graph.add_file(&analysis(
+            "src/a.ts",
+            vec![
+                node("src/a.ts", "a.ts", NodeKind::File, 1),
+                node("src/a.ts", "first", NodeKind::Function, 5),
+                node("src/a.ts", "second", NodeKind::Function, 30),
+            ], vec![], vec![],
+        )).unwrap();
+        let affected = graph.find_affected_nodes("src/a.ts", 35).unwrap();
+        assert_eq!(affected.len(), 1);
+        assert!(affected.contains(&NodeId("src/a.ts::second".into())));
+    }
+
+    #[test]
+    fn runtime_average_is_weighted_by_observation_count() {
+        let mut graph = DependencyGraph::new();
+        let id = NodeId("src/a.ts::work".into());
+        graph.record_runtime_trace(id.clone(), 100, 10.0);
+        graph.record_runtime_trace(id.clone(), 1, 1000.0);
+        let m = graph.get_runtime_metrics(&id).unwrap();
+        assert_eq!(m.execution_count, 101);
+        assert!((m.avg_latency_ms - 19.80198).abs() < 0.01);
     }
 }
