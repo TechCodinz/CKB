@@ -32,6 +32,10 @@ name = "reality_server_v5"
 path = "src/bin/reality_server_v5.rs"
 
 [[bin]]
+name = "reality_gateway"
+path = "src/bin/reality_gateway.rs"
+
+[[bin]]
 name = "reality_bridge"
 path = "src/bin/reality_bridge.rs"
 
