@@ -19,6 +19,10 @@ path = "src/bin/reality_server.rs"
 name = "reality_server_v2"
 path = "src/bin/reality_server_v2.rs"
 
+[[bin]]
+name = "reality_server_v3"
+path = "src/bin/reality_server_v3.rs"
+
 [dependencies]
 ckb-core = { path = "../core", version = "0.1.0" }
 axum = "0.7"
@@ -32,3 +36,4 @@ tower-http = { version = "0.5", features = ["cors"] }
 reqwest = { version = "0.11", features = ["json"] }
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.6", features = ["v4", "serde"] }
+bincode = "1.3"
