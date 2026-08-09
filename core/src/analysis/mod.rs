@@ -281,6 +281,19 @@ impl crate::CkbEngine {
         *self.graph.write().await = DependencyGraph::new();
     }
 
+    /// Lossless OTLP ingestion for Reality consumers. Unlike the older
+    /// compatibility helper, this preserves execution count, latency,
+    /// error-rate and hotpath evidence when merging observations.
+    pub async fn ingest_otlp_spans_exact(&self, raw_payload: &str) -> Result<crate::OtlpIngestReport> {
+        let metrics = crate::OtlpReceiver::ingest_spans(raw_payload)?;
+        let summary = crate::OtlpReceiver::summarize(&metrics);
+        let mut graph = self.graph.write().await;
+        for (node_id, runtime) in metrics {
+            graph.record_runtime_metrics(node_id, runtime);
+        }
+        Ok(summary)
+    }
+
     pub async fn architecture_graph_snapshot(&self) -> DependencyGraph {
         self.graph.read().await.clone()
     }
