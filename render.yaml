@@ -1,21 +1,25 @@
-# Public repo deploy config — production CKB engine/MCP REST server.
-# Reality vNext is compiled beside the established server on every deploy, but
-# production keeps starting the proven ckb-mcp-server binary until the bridge
-# passes its staged contract checks. A bridge compile failure cannot replace
-# the currently healthy production instance.
+# Public repo deploy config — production CKB Reality/architecture engine.
+# The evidence-backed Reality bridge now owns the public Explorer API contract.
+# The established ckb-mcp-server binary is still compiled on every deploy as a
+# compatibility/safety check, but production starts the bridge that the current
+# ckb-cloud Explorer is wired to consume.
 services:
   - type: web
     name: ckb-mcp-server
     env: rust
     plan: free
     buildCommand: cargo build --release -p ckb-mcp-server --bin ckb-mcp-server --bin reality_bridge
-    startCommand: ./target/release/ckb-mcp-server
+    startCommand: ./target/release/reality_bridge
     healthCheckPath: /health
     envVars:
       - key: RUST_LOG
         value: info
-      - key: CKB_API_KEY
-        sync: false
+      # Browser-facing Reality requests deliberately do not carry the private
+      # SaaS JWT or a server secret. Local filesystem scans remain disabled;
+      # remote GitHub/ZIP scans are bounded by the bridge's archive limits and
+      # serialized scan gate.
+      - key: CKB_ALLOW_LOCAL_SCAN
+        value: "0"
       - key: CKB_ALLOWED_ORIGIN
         sync: false
       - key: CKB_BIND_ALL
