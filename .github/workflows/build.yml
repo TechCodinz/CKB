@@ -29,13 +29,13 @@ jobs:
         # workspace member but only builds for the wasm32 target (its
         # wasm-bindgen externs don't resolve on a native target), so a plain
         # `cargo build --workspace` here would fail on that crate.
-        run: cargo build --release -p ckb-core -p ckb-cli -p ckb-mcp-server
+        run: cargo build --locked --release -p ckb-core -p ckb-cli -p ckb-mcp-server
 
       - name: Run tests
-        run: cargo test --release -p ckb-core -p ckb-cli -p ckb-mcp-server
+        run: cargo test --locked --release -p ckb-core -p ckb-cli -p ckb-mcp-server
 
       - name: Clippy
-        run: cargo clippy -p ckb-core -p ckb-cli -p ckb-mcp-server --all-targets -- -D warnings
+        run: cargo clippy --locked -p ckb-core -p ckb-cli -p ckb-mcp-server --all-targets -- -D warnings
         continue-on-error: true # informational — not a merge blocker until codebase is clippy-clean
 
   wasm:
@@ -56,7 +56,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build WASM bindings
-        run: cargo build --release -p ckb-wasm --target wasm32-unknown-unknown
+        run: cargo build --locked --release -p ckb-wasm --target wasm32-unknown-unknown
 
   vscode-extension:
     runs-on: ubuntu-latest

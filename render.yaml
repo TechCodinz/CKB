@@ -10,7 +10,7 @@ services:
     name: ckb-mcp-server
     env: rust
     plan: free
-    buildCommand: cargo build --release -p ckb-mcp-server --bin ckb-mcp-server --bin reality_bridge --bin reality_server_v5 --bin reality_gateway && cargo build --release -p ckb-cli --bin ckb-intelligence
+    buildCommand: cargo build --locked --release -p ckb-mcp-server --bin ckb-mcp-server --bin reality_bridge --bin reality_server_v5 --bin reality_gateway && cargo build --locked --release -p ckb-cli --bin ckb-intelligence
     startCommand: ./target/release/reality_gateway
     healthCheckPath: /health
     envVars:

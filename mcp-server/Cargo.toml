@@ -2,6 +2,7 @@
 name = "ckb-mcp-server"
 version = "0.1.0"
 edition = "2021"
+autobins = false
 description = "CKB MCP Server - Model Context Protocol server for AI integration"
 license = "MIT"
 repository = "https://github.com/TechCodinz/CKB"
@@ -10,22 +11,6 @@ readme = "../README.md"
 [[bin]]
 name = "ckb-mcp-server"
 path = "src/main.rs"
-
-[[bin]]
-name = "reality_server"
-path = "src/bin/reality_server.rs"
-
-[[bin]]
-name = "reality_server_v2"
-path = "src/bin/reality_server_v2.rs"
-
-[[bin]]
-name = "reality_server_v3"
-path = "src/bin/reality_server_v3.rs"
-
-[[bin]]
-name = "reality_server_v4"
-path = "src/bin/reality_server_v4.rs"
 
 [[bin]]
 name = "reality_server_v5"
