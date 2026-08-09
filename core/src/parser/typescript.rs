@@ -160,7 +160,7 @@ impl TypeScriptParser {
         &self,
         path: &str,
         node: Node,
-        source: &str,
+        _source: &str,
         kind: NodeKind,
         qualified_name: String,
         display_name: String,
@@ -202,20 +202,20 @@ impl TypeScriptParser {
                     self.push_decl_node(path, node, source, NodeKind::Class, name.clone(), name.clone(), nodes);
                     class_for_children = Some(name.clone());
 
-                    // Extract extends/implements relations from named children.
                     let mut cursor = node.walk();
                     for child in node.children(&mut cursor) {
-                        match child.kind() {
-                            "class_heritage" | "extends_clause" => {
-                                let text = child.utf8_text(source.as_bytes()).unwrap_or("");
-                                for token in text.split(|c: char| !(c.is_alphanumeric() || c == '_' || c == '$')) {
-                                    if !token.is_empty() && token != "extends" && token != "implements" && token != name {
-                                        relations.push(TypeRelation { source_type: name.clone(), target_type: token.to_string(), kind: TypeRelationKind::Extends });
-                                        break;
-                                    }
+                        if matches!(child.kind(), "class_heritage" | "extends_clause") {
+                            let text = child.utf8_text(source.as_bytes()).unwrap_or("");
+                            for token in text.split(|c: char| !(c.is_alphanumeric() || c == '_' || c == '$')) {
+                                if !token.is_empty() && token != "extends" && token != "implements" && token != name {
+                                    relations.push(TypeRelation {
+                                        source_type: name.clone(),
+                                        target_type: token.to_string(),
+                                        kind: TypeRelationKind::Extends,
+                                    });
+                                    break;
                                 }
                             }
-                            _ => {}
                         }
                     }
                 }
@@ -259,14 +259,18 @@ impl TypeScriptParser {
             "member_expression" | "subscript_expression" => {
                 if let Some(prop) = function.child_by_field_name("property") {
                     let text = prop.utf8_text(source.as_bytes()).ok()?;
-                    if !text.is_empty() { return Some(text.to_string()); }
+                    if !text.is_empty() {
+                        return Some(text.to_string());
+                    }
                 }
                 let mut cursor = function.walk();
-                function.children(&mut cursor)
+                let result = function
+                    .children(&mut cursor)
                     .filter(|n| matches!(n.kind(), "property_identifier" | "identifier"))
                     .last()
                     .and_then(|n| n.utf8_text(source.as_bytes()).ok())
-                    .map(str::to_string)
+                    .map(str::to_string);
+                result
             }
             _ => None,
         }
@@ -390,14 +394,9 @@ impl LanguageParserTrait for JavaScriptParser {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .parse(content, None)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse JavaScript file"))?;
-        TypeScriptParser::new().parse_tree(path, content, tree.root_node()).pipe(Ok)
+        Ok(TypeScriptParser::new().parse_tree(path, content, tree.root_node()))
     }
 }
-
-trait Pipe: Sized {
-    fn pipe<T>(self, f: impl FnOnce(Self) -> T) -> T { f(self) }
-}
-impl<T> Pipe for T {}
 
 #[cfg(test)]
 mod tests {
