@@ -6,13 +6,10 @@ services:
     name: ckb-mcp-server
     env: rust
     plan: free
-    # Temporary production isolation: v3 uses the same CKB core/persistence
-    # substrate with a smaller HTTP surface. If this build passes after the
-    # DependencyGraph snapshot-clone fix, the remaining blocker is v4-specific.
-    # If it fails, the defect is in shared core/build configuration and we keep
-    # debugging there before adding more frontend capability.
-    buildCommand: cargo build --release -p ckb-mcp-server --bin reality_server_v3
-    startCommand: ./target/release/reality_server_v3
+    # v5 keeps the v4 evidence contract while removing the minified/temporary
+    # lifetime-sensitive server code used during the earlier debugging waves.
+    buildCommand: cargo build --release -p ckb-mcp-server --bin reality_server_v5
+    startCommand: ./target/release/reality_server_v5
     healthCheckPath: /health
     envVars:
       - key: RUST_LOG
