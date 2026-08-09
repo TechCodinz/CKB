@@ -281,6 +281,19 @@ impl crate::CkbEngine {
         *self.graph.write().await = DependencyGraph::new();
     }
 
+    /// Restore the latest real persisted architecture snapshot into the live
+    /// graph after a process restart. This restores graph evidence only; it
+    /// deliberately does not reconstruct or fabricate a ScanReport, repo URL,
+    /// runtime trace stream, or history metadata that was not persisted.
+    pub async fn restore_latest_architecture_snapshot(&self) -> Result<bool> {
+        if let Some(graph) = self.storage.get_latest_snapshot().await? {
+            *self.graph.write().await = graph;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
     /// Lossless OTLP ingestion for Reality consumers. Unlike the older
     /// compatibility helper, this preserves execution count, latency,
     /// error-rate and hotpath evidence when merging observations.
