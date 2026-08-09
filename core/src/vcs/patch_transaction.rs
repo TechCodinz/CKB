@@ -35,7 +35,11 @@ pub struct ValidationCommand {
 
 impl ValidationCommand {
     pub fn new(label: impl Into<String>, program: impl Into<String>, args: Vec<String>) -> Self {
-        Self { label: label.into(), program: program.into(), args }
+        Self {
+            label: label.into(),
+            program: program.into(),
+            args,
+        }
     }
 }
 
@@ -95,28 +99,39 @@ impl PatchTransactionEngine {
 
         let baseline_commit = Self::git_text(
             &repository,
-            &["rev-parse", "--verify", &format!("{baseline_ref}^{{commit}}")],
+            &[
+                "rev-parse",
+                "--verify",
+                &format!("{baseline_ref}^{{commit}}"),
+            ],
         )?;
         let transaction_id = Uuid::new_v4().simple().to_string();
         let branch_name = format!("ckb/transaction/{}", &transaction_id[..16]);
         let worktree = std::env::temp_dir()
             .join("ckb-patch-transactions")
             .join(&transaction_id);
-        let parent = worktree.parent().ok_or_else(|| anyhow::anyhow!("invalid worktree path"))?;
+        let parent = worktree
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("invalid worktree path"))?;
         std::fs::create_dir_all(parent)?;
 
         let worktree_text = worktree.to_string_lossy().into_owned();
         let add_result = Self::git_output(
             &repository,
-            &["worktree", "add", "--detach", &worktree_text, &baseline_commit],
+            &[
+                "worktree",
+                "add",
+                "--detach",
+                &worktree_text,
+                &baseline_commit,
+            ],
         )?;
         if !add_result.status.success() {
             return Err(Self::command_error("git worktree add", &add_result));
         }
 
         let prepared = (|| -> anyhow::Result<PatchTransaction> {
-            let branch_result =
-                Self::git_output(&worktree, &["switch", "-c", &branch_name])?;
+            let branch_result = Self::git_output(&worktree, &["switch", "-c", &branch_name])?;
             if !branch_result.status.success() {
                 return Err(Self::command_error("git switch -c", &branch_result));
             }
@@ -170,7 +185,7 @@ impl PatchTransactionEngine {
                 transaction_id,
                 repository_path: repository.to_string_lossy().into_owned(),
                 baseline_commit,
-                branch_name,
+                branch_name: branch_name.clone(),
                 worktree_path: worktree_text,
                 patch_object_id,
                 staged_tree_id,
@@ -199,11 +214,15 @@ impl PatchTransactionEngine {
     /// This does not merge, push, or modify the user's original checkout.
     pub fn commit(transaction: &mut PatchTransaction, message: &str) -> anyhow::Result<String> {
         if transaction.state != PatchTransactionState::Validated {
-            return Err(anyhow::anyhow!("only a fully validated transaction can be committed"));
+            return Err(anyhow::anyhow!(
+                "only a fully validated transaction can be committed"
+            ));
         }
         let message = message.trim();
         if message.is_empty() || message.len() > 500 {
-            return Err(anyhow::anyhow!("commit message must contain 1 to 500 characters"));
+            return Err(anyhow::anyhow!(
+                "commit message must contain 1 to 500 characters"
+            ));
         }
 
         let worktree = Path::new(&transaction.worktree_path);
@@ -217,9 +236,14 @@ impl PatchTransactionEngine {
         let output = Self::git_output(
             worktree,
             &[
-                "-c", "user.name=CKB Patch Transaction",
-                "-c", "user.email=patch-transaction@ckb.invalid",
-                "commit", "--no-gpg-sign", "-m", message,
+                "-c",
+                "user.name=CKB Patch Transaction",
+                "-c",
+                "user.email=patch-transaction@ckb.invalid",
+                "commit",
+                "--no-gpg-sign",
+                "-m",
+                message,
             ],
         )?;
         if !output.status.success() {
@@ -249,7 +273,9 @@ impl PatchTransactionEngine {
     fn validate_repository(repository: &Path) -> anyhow::Result<()> {
         let output = Self::git_output(repository, &["rev-parse", "--is-inside-work-tree"])?;
         if !output.status.success() || String::from_utf8_lossy(&output.stdout).trim() != "true" {
-            return Err(anyhow::anyhow!("patch transactions require a Git working tree"));
+            return Err(anyhow::anyhow!(
+                "patch transactions require a Git working tree"
+            ));
         }
         Ok(())
     }
@@ -268,24 +294,34 @@ impl PatchTransactionEngine {
 
     fn validate_patch(patch: &str) -> anyhow::Result<BTreeSet<String>> {
         if patch.is_empty() || patch.len() > MAX_PATCH_BYTES {
-            return Err(anyhow::anyhow!("patch must contain 1 to {MAX_PATCH_BYTES} bytes"));
+            return Err(anyhow::anyhow!(
+                "patch must contain 1 to {MAX_PATCH_BYTES} bytes"
+            ));
         }
         if patch.contains("GIT binary patch") || patch.as_bytes().contains(&0) {
-            return Err(anyhow::anyhow!("binary patches are not accepted by source transactions"));
+            return Err(anyhow::anyhow!(
+                "binary patches are not accepted by source transactions"
+            ));
         }
 
         let mut paths = BTreeSet::new();
         for line in patch.lines() {
-            let Some(raw) = line.strip_prefix("+++ ") else { continue; };
+            let Some(raw) = line.strip_prefix("+++ ") else {
+                continue;
+            };
             let raw = raw.split('\t').next().unwrap_or(raw).trim();
-            if raw == "/dev/null" { continue; }
+            if raw == "/dev/null" {
+                continue;
+            }
             if raw.starts_with('"') {
                 return Err(anyhow::anyhow!("quoted patch paths are not supported"));
             }
             let path = raw.strip_prefix("b/").unwrap_or(raw).replace('\\', "/");
             let candidate = Path::new(&path);
             if candidate.is_absolute()
-                || candidate.components().any(|part| matches!(part, std::path::Component::ParentDir))
+                || candidate
+                    .components()
+                    .any(|part| matches!(part, std::path::Component::ParentDir))
                 || path == ".git"
                 || path.starts_with(".git/")
                 || path.is_empty()
@@ -300,18 +336,26 @@ impl PatchTransactionEngine {
         Ok(paths)
     }
 
-    fn run_validation(worktree: &Path, validation: &ValidationCommand) -> anyhow::Result<ValidationResult> {
+    fn run_validation(
+        worktree: &Path,
+        validation: &ValidationCommand,
+    ) -> anyhow::Result<ValidationResult> {
         if validation.program.trim().is_empty() || validation.label.trim().is_empty() {
-            return Err(anyhow::anyhow!("validation label and executable are required"));
+            return Err(anyhow::anyhow!(
+                "validation label and executable are required"
+            ));
         }
         let output = Command::new(&validation.program)
             .args(&validation.args)
             .current_dir(worktree)
             .stdin(Stdio::null())
             .output()
-            .map_err(|error| anyhow::anyhow!(
-                "failed to execute validation '{}': {error}", validation.label
-            ))?;
+            .map_err(|error| {
+                anyhow::anyhow!(
+                    "failed to execute validation '{}': {error}",
+                    validation.label
+                )
+            })?;
         Ok(ValidationResult {
             label: validation.label.clone(),
             program: validation.program.clone(),
@@ -326,7 +370,10 @@ impl PatchTransactionEngine {
     fn git_text(cwd: &Path, args: &[&str]) -> anyhow::Result<String> {
         let output = Self::git_output(cwd, args)?;
         if !output.status.success() {
-            return Err(Self::command_error(&format!("git {}", args.join(" ")), &output));
+            return Err(Self::command_error(
+                &format!("git {}", args.join(" ")),
+                &output,
+            ));
         }
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
@@ -349,7 +396,10 @@ impl PatchTransactionEngine {
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|error| anyhow::anyhow!("failed to execute git: {error}"))?;
-        child.stdin.take().ok_or_else(|| anyhow::anyhow!("git stdin unavailable"))?
+        child
+            .stdin
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("git stdin unavailable"))?
             .write_all(input)?;
         Ok(child.wait_with_output()?)
     }
@@ -367,7 +417,10 @@ impl PatchTransactionEngine {
             return Ok(());
         }
         let worktree_text = worktree.to_string_lossy().into_owned();
-        let output = Self::git_output(repository, &["worktree", "remove", "--force", &worktree_text])?;
+        let output = Self::git_output(
+            repository,
+            &["worktree", "remove", "--force", &worktree_text],
+        )?;
         if !output.status.success() {
             return Err(Self::command_error("git worktree remove", &output));
         }
@@ -393,8 +446,16 @@ mod tests {
     use super::*;
 
     fn git(cwd: &Path, args: &[&str]) {
-        let output = Command::new("git").args(args).current_dir(cwd).output().unwrap();
-        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     fn repository() -> tempfile::TempDir {
@@ -402,10 +463,19 @@ mod tests {
         git(root.path(), &["init", "-q"]);
         std::fs::write(root.path().join("main.rs"), "fn value() -> i32 { 1 }\n").unwrap();
         git(root.path(), &["add", "main.rs"]);
-        git(root.path(), &[
-            "-c", "user.name=CKB Test", "-c", "user.email=test@ckb.invalid",
-            "commit", "-q", "-m", "baseline",
-        ]);
+        git(
+            root.path(),
+            &[
+                "-c",
+                "user.name=CKB Test",
+                "-c",
+                "user.email=test@ckb.invalid",
+                "commit",
+                "-q",
+                "-m",
+                "baseline",
+            ],
+        );
         root
     }
 
@@ -418,9 +488,9 @@ mod tests {
             "git",
             vec!["diff".into(), "--cached".into(), "--check".into()],
         );
-        let mut transaction = PatchTransactionEngine::prepare(
-            repository.path(), "HEAD", patch, &[validation],
-        ).unwrap();
+        let mut transaction =
+            PatchTransactionEngine::prepare(repository.path(), "HEAD", patch, &[validation])
+                .unwrap();
 
         assert_eq!(transaction.state, PatchTransactionState::Validated);
         assert_eq!(transaction.changed_files, vec!["main.rs"]);
@@ -433,9 +503,13 @@ mod tests {
             "fn value() -> i32 { 2 }\n",
         );
 
-        let committed = PatchTransactionEngine::commit(&mut transaction, "fix: update value").unwrap();
+        let committed =
+            PatchTransactionEngine::commit(&mut transaction, "fix: update value").unwrap();
         assert_eq!(transaction.state, PatchTransactionState::Committed);
-        assert_eq!(transaction.committed_sha.as_deref(), Some(committed.as_str()));
+        assert_eq!(
+            transaction.committed_sha.as_deref(),
+            Some(committed.as_str())
+        );
         PatchTransactionEngine::cleanup(&transaction, true).unwrap();
     }
 
@@ -444,11 +518,13 @@ mod tests {
         let repository = repository();
         let patch = "diff --git a/main.rs b/main.rs\n--- a/main.rs\n+++ b/main.rs\n@@ -1 +1 @@\n-fn value() -> i32 { 1 }\n+fn value() -> i32 { 3 }\n";
         let validation = ValidationCommand::new(
-            "intentional-failure", "git", vec!["rev-parse".into(), "--verify".into(), "missing-ref".into()],
+            "intentional-failure",
+            "git",
+            vec!["rev-parse".into(), "--verify".into(), "missing-ref".into()],
         );
-        let mut transaction = PatchTransactionEngine::prepare(
-            repository.path(), "HEAD", patch, &[validation],
-        ).unwrap();
+        let mut transaction =
+            PatchTransactionEngine::prepare(repository.path(), "HEAD", patch, &[validation])
+                .unwrap();
         assert_eq!(transaction.state, PatchTransactionState::ValidationFailed);
         assert!(PatchTransactionEngine::commit(&mut transaction, "must not commit").is_err());
         PatchTransactionEngine::cleanup(&transaction, true).unwrap();
@@ -463,9 +539,9 @@ mod tests {
             "git",
             vec!["diff".into(), "--check".into()],
         );
-        let error = PatchTransactionEngine::prepare(
-            repository.path(), "HEAD", patch, &[validation],
-        ).unwrap_err();
+        let error =
+            PatchTransactionEngine::prepare(repository.path(), "HEAD", patch, &[validation])
+                .unwrap_err();
         assert!(error.to_string().contains("unsafe patch path"));
     }
 }
