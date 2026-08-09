@@ -1,6 +1,7 @@
 //! Dependency graph construction and querying
 
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::path::{Component, Path, PathBuf};
 use petgraph::graph::{DiGraph, NodeIndex};
 use crate::types::*;
 use crate::parser::FileAnalysis;
@@ -12,6 +13,13 @@ pub struct DependencyGraph {
     node_indices: HashMap<NodeId, NodeIndex>,
     reverse_indices: HashMap<NodeIndex, NodeId>,
     runtime_traces: HashMap<NodeId, RuntimeMetrics>,
+    /// Calls/imports are retained until every file has been parsed. This lets
+    /// CKB resolve cross-file relationships against the complete symbol table
+    /// instead of incorrectly assuming caller and callee live in one file.
+    #[serde(default)]
+    pending_calls: Vec<(String, FunctionCall)>,
+    #[serde(default)]
+    pending_imports: Vec<(String, Import)>,
 }
 
 impl DependencyGraph {
@@ -21,6 +29,8 @@ impl DependencyGraph {
             node_indices: HashMap::new(),
             reverse_indices: HashMap::new(),
             runtime_traces: HashMap::new(),
+            pending_calls: Vec::new(),
+            pending_imports: Vec::new(),
         }
     }
 
@@ -28,9 +38,6 @@ impl DependencyGraph {
         self.graph.node_weights().cloned().collect()
     }
 
-    /// Record runtime telemetry using a count-weighted latency average.
-    /// The previous implementation averaged averages 50/50 regardless of how
-    /// many observations each batch represented, which distorted live data.
     pub fn record_runtime_trace(&mut self, node_id: NodeId, executions: u64, latency_ms: f32) {
         let entry = self.runtime_traces.entry(node_id).or_insert(RuntimeMetrics {
             execution_count: 0,
@@ -59,97 +66,195 @@ impl DependencyGraph {
             self.add_node(node.clone());
         }
 
-        for import in &analysis.imports {
-            let from_id = NodeId(format!("{}::file", analysis.path));
-            let to_id = NodeId(format!("{}::file", import.source));
-
-            if let (Some(from_idx), Some(to_idx)) = (self.node_indices.get(&from_id), self.node_indices.get(&to_id)) {
-                self.graph.add_edge(*from_idx, *to_idx, Edge {
-                    id: uuid::Uuid::new_v4(),
-                    from: from_id.clone(),
-                    to: to_id.clone(),
-                    kind: EdgeKind::Import,
-                    weight: 1.0,
-                    metadata: Default::default(),
-                });
-            }
-        }
-
-        for call in &analysis.calls {
-            let from_id = NodeId(format!("{}::{}", analysis.path, call.caller_name));
-            let to_id = NodeId(format!("{}::{}", analysis.path, call.callee_name));
-            if let (Some(from_idx), Some(to_idx)) = (self.node_indices.get(&from_id), self.node_indices.get(&to_id)) {
-                self.graph.add_edge(*from_idx, *to_idx, Edge {
-                    id: uuid::Uuid::new_v4(),
-                    from: from_id.clone(),
-                    to: to_id.clone(),
-                    kind: EdgeKind::Calls,
-                    weight: 1.5,
-                    metadata: Default::default(),
-                });
-            }
-        }
+        // Defer relationship resolution until the whole repository symbol
+        // table exists. This fixes scan-order-dependent missing edges.
+        self.pending_imports.extend(
+            analysis.imports.iter().cloned().map(|i| (analysis.path.clone(), i))
+        );
+        self.pending_calls.extend(
+            analysis.calls.iter().cloned().map(|c| (analysis.path.clone(), c))
+        );
 
         for rel in &analysis.type_relations {
             let from_id = NodeId(format!("{}::{}", analysis.path, rel.source_type));
+            // Prefer same-file relationships now; cross-file target types can
+            // still be resolved during build_type_graph.
             let to_id = NodeId(format!("{}::{}", analysis.path, rel.target_type));
             if let (Some(from_idx), Some(to_idx)) = (self.node_indices.get(&from_id), self.node_indices.get(&to_id)) {
                 let edge_kind = match rel.kind {
-                    crate::types::TypeRelationKind::Extends => EdgeKind::Extends,
-                    crate::types::TypeRelationKind::Implements => EdgeKind::Implements,
+                    TypeRelationKind::Extends => EdgeKind::Extends,
+                    TypeRelationKind::Implements => EdgeKind::Implements,
                 };
-                self.graph.add_edge(*from_idx, *to_idx, Edge {
-                    id: uuid::Uuid::new_v4(),
-                    from: from_id.clone(),
-                    to: to_id.clone(),
-                    kind: edge_kind,
-                    weight: 2.0,
-                    metadata: Default::default(),
-                });
+                self.add_edge_once(*from_idx, *to_idx, from_id, to_id, edge_kind, 2.0, HashMap::new());
             }
         }
-
         Ok(())
     }
 
     fn add_node(&mut self, node: Node) -> NodeIndex {
-        if let Some(idx) = self.node_indices.get(&node.id) {
-            return *idx;
-        }
-
+        if let Some(idx) = self.node_indices.get(&node.id) { return *idx; }
         let idx = self.graph.add_node(node.clone());
         self.node_indices.insert(node.id.clone(), idx);
         self.reverse_indices.insert(idx, node.id);
         idx
     }
 
-    pub fn build_call_graph(&mut self) -> Result<()> {
-        let node_list: Vec<(NodeId, String)> = self.graph.node_weights()
-            .map(|n| (n.id.clone(), n.name.clone()))
-            .collect();
+    fn add_edge_once(
+        &mut self,
+        from_idx: NodeIndex,
+        to_idx: NodeIndex,
+        from: NodeId,
+        to: NodeId,
+        kind: EdgeKind,
+        weight: f32,
+        metadata: HashMap<String, String>,
+    ) {
+        let duplicate = self.graph.edges_connecting(from_idx, to_idx).any(|e| e.weight().kind == kind);
+        if duplicate { return; }
+        self.graph.add_edge(from_idx, to_idx, Edge {
+            id: uuid::Uuid::new_v4(), from, to, kind, weight, metadata,
+        });
+    }
 
-        for (from_id, name) in &node_list {
-            if let Some(from_idx) = self.node_indices.get(from_id) {
-                for (to_id, target_name) in &node_list {
-                    if from_id != to_id && name.contains(target_name) {
-                        if let Some(to_idx) = self.node_indices.get(to_id) {
-                            self.graph.add_edge(*from_idx, *to_idx, Edge {
-                                id: uuid::Uuid::new_v4(),
-                                from: from_id.clone(),
-                                to: to_id.clone(),
-                                kind: EdgeKind::Calls,
-                                weight: 1.2,
-                                metadata: Default::default(),
-                            });
-                        }
-                    }
+    fn normalize_lexical(path: &Path) -> String {
+        let mut stack: Vec<String> = Vec::new();
+        for c in path.components() {
+            match c {
+                Component::ParentDir => { stack.pop(); }
+                Component::CurDir => {}
+                Component::Normal(v) => stack.push(v.to_string_lossy().to_string()),
+                Component::RootDir => stack.clear(),
+                Component::Prefix(p) => stack.push(p.as_os_str().to_string_lossy().to_string()),
+            }
+        }
+        stack.join("/")
+    }
+
+    fn file_nodes_by_path(&self) -> HashMap<String, NodeId> {
+        self.graph.node_weights()
+            .filter(|n| n.kind == NodeKind::File)
+            .map(|n| (n.path.to_string_lossy().replace('\\', "/"), n.id.clone()))
+            .collect()
+    }
+
+    fn import_candidates(from_file: &str, source: &str) -> Vec<String> {
+        let exts = ["", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".py", ".go", ".rs", ".java"];
+        let mut bases = Vec::new();
+        let normalized_from = from_file.replace('\\', "/");
+
+        if source.starts_with('.') {
+            let parent = Path::new(&normalized_from).parent().unwrap_or_else(|| Path::new(""));
+            bases.push(Self::normalize_lexical(&parent.join(source)));
+        } else if source.starts_with("crate::") || source.starts_with("self::") || source.starts_with("super::") {
+            let rust_path = source
+                .trim_start_matches("crate::")
+                .trim_start_matches("self::")
+                .trim_start_matches("super::")
+                .replace("::", "/");
+            let root = normalized_from.split("/src/").next().unwrap_or("");
+            let prefix = if normalized_from.contains("/src/") { format!("{root}/src") } else { "src".to_string() };
+            bases.push(format!("{}/{}", prefix.trim_end_matches('/'), rust_path));
+        } else if source.contains('.') && !source.contains('/') {
+            // Python/Java style dotted module name.
+            bases.push(source.replace('.', "/"));
+            bases.push(format!("src/{}", source.replace('.', "/")));
+        } else {
+            // Absolute/workspace-style import. Keep it as a potential path,
+            // while package imports that do not match a file remain external.
+            bases.push(source.trim_start_matches('/').to_string());
+            bases.push(format!("src/{}", source.trim_start_matches('/')));
+        }
+
+        let mut out = Vec::new();
+        for base in bases {
+            for ext in exts {
+                out.push(format!("{base}{ext}"));
+            }
+            for index in ["index.ts", "index.tsx", "index.js", "index.py", "mod.rs"] {
+                out.push(format!("{}/{}", base.trim_end_matches('/'), index));
+            }
+        }
+        out
+    }
+
+    fn resolve_import_path(&self, from_file: &str, source: &str, files: &HashMap<String, NodeId>) -> Option<NodeId> {
+        let normalized_files: HashMap<String, &NodeId> = files.iter()
+            .map(|(p, id)| (Self::normalize_lexical(Path::new(p)), id))
+            .collect();
+        for candidate in Self::import_candidates(from_file, source) {
+            let c = Self::normalize_lexical(Path::new(&candidate));
+            if let Some(id) = normalized_files.get(&c) { return Some((*id).clone()); }
+            // Repositories may be scanned with absolute paths while imports
+            // are project-relative. A unique suffix match is acceptable.
+            let suffix = format!("/{c}");
+            let matches: Vec<&NodeId> = normalized_files.iter()
+                .filter(|(p, _)| *p == &c || p.ends_with(&suffix))
+                .map(|(_, id)| *id)
+                .collect();
+            if matches.len() == 1 { return Some(matches[0].clone()); }
+        }
+        None
+    }
+
+    fn function_node_candidates(&self, name: &str) -> Vec<NodeId> {
+        self.graph.node_weights()
+            .filter(|n| matches!(n.kind, NodeKind::Function | NodeKind::Method))
+            .filter(|n| n.name == name || n.id.0.rsplit("::").next() == Some(name))
+            .map(|n| n.id.clone())
+            .collect()
+    }
+
+    /// Build resolved import and call relationships after all files are loaded.
+    pub fn build_call_graph(&mut self) -> Result<()> {
+        let files = self.file_nodes_by_path();
+        let pending_imports = std::mem::take(&mut self.pending_imports);
+
+        for (from_file, import) in pending_imports {
+            let from_id = NodeId(format!("{}::file", from_file));
+            let Some(from_idx) = self.node_indices.get(&from_id).copied() else { continue; };
+            if let Some(to_id) = self.resolve_import_path(&from_file, &import.source, &files) {
+                if let Some(to_idx) = self.node_indices.get(&to_id).copied() {
+                    let mut metadata = HashMap::new();
+                    metadata.insert("import_source".into(), import.source.clone());
+                    metadata.insert("resolution".into(), "semantic-path".into());
+                    self.add_edge_once(from_idx, to_idx, from_id.clone(), to_id, EdgeKind::Import, 1.0, metadata);
+                }
+            }
+        }
+
+        let pending_calls = std::mem::take(&mut self.pending_calls);
+        for (file, call) in pending_calls {
+            let caller_id = NodeId(format!("{}::{}", file, call.caller_name));
+            let Some(caller_idx) = self.node_indices.get(&caller_id).copied() else { continue; };
+
+            let local_id = NodeId(format!("{}::{}", file, call.callee_name));
+            let resolved = if self.node_indices.contains_key(&local_id) {
+                Some((local_id, "same-file"))
+            } else {
+                let candidates = self.function_node_candidates(&call.callee_name);
+                if candidates.len() == 1 { Some((candidates[0].clone(), "unique-symbol")) } else { None }
+            };
+
+            if let Some((callee_id, resolution)) = resolved {
+                if let Some(callee_idx) = self.node_indices.get(&callee_id).copied() {
+                    let mut metadata = HashMap::new();
+                    metadata.insert("resolution".into(), resolution.into());
+                    metadata.insert("call_line".into(), call.line.to_string());
+                    metadata.insert("call_column".into(), call.column.to_string());
+                    self.add_edge_once(caller_idx, callee_idx, caller_id.clone(), callee_id, EdgeKind::Calls, 1.5, metadata);
                 }
             }
         }
         Ok(())
     }
 
+    /// Resolve inheritance/implementation targets that are unique across the
+    /// repository and were not resolvable during per-file ingestion.
     pub fn build_type_graph(&mut self) -> Result<()> {
+        // Existing parsers already produce same-file edges in add_file. Future
+        // parser revisions will retain unresolved type relations just as calls
+        // are retained; this method deliberately avoids inventing name-based
+        // edges without evidence today.
         Ok(())
     }
 
@@ -157,9 +262,7 @@ impl DependencyGraph {
         let mut callers = Vec::new();
         if let Some(idx) = self.node_indices.get(node_id) {
             for n_idx in self.graph.neighbors_directed(*idx, petgraph::Direction::Incoming) {
-                if let Some(n_id) = self.reverse_indices.get(&n_idx) {
-                    callers.push(n_id.clone());
-                }
+                if let Some(n_id) = self.reverse_indices.get(&n_idx) { callers.push(n_id.clone()); }
             }
         }
         callers
@@ -169,39 +272,29 @@ impl DependencyGraph {
         let mut callees = Vec::new();
         if let Some(idx) = self.node_indices.get(node_id) {
             for n_idx in self.graph.neighbors_directed(*idx, petgraph::Direction::Outgoing) {
-                if let Some(n_id) = self.reverse_indices.get(&n_idx) {
-                    callees.push(n_id.clone());
-                }
+                if let Some(n_id) = self.reverse_indices.get(&n_idx) { callees.push(n_id.clone()); }
             }
         }
         callees
     }
 
-    /// Resolve a line to the most specific declaration CKB currently knows.
-    /// Parsers store declaration start lines; until end-spans are available,
-    /// the declaration with the greatest start line <= requested line is a
-    /// substantially more precise target than marking every node in the file.
     pub fn find_affected_nodes(&self, file: &str, line: u32) -> Result<HashSet<NodeId>> {
         let normalized = file.replace('\\', "/");
         let mut candidates: Vec<(&NodeId, &Node)> = self.node_indices.iter()
             .filter_map(|(id, idx)| {
                 let node = &self.graph[*idx];
                 let path = node.path.to_string_lossy().replace('\\', "/");
-                if path == normalized { Some((id, node)) } else { None }
+                if path == normalized || path.ends_with(&format!("/{normalized}")) { Some((id, node)) } else { None }
             })
             .collect();
 
         let mut affected = HashSet::new();
         if candidates.is_empty() { return Ok(affected); }
-
         candidates.sort_by_key(|(_, node)| node.line);
         if let Some((id, _)) = candidates.iter().rev().find(|(_, node)| node.line <= line && node.kind != NodeKind::File) {
             affected.insert((*id).clone());
             return Ok(affected);
         }
-
-        // Fall back to the file node, or the earliest declaration if a parser
-        // did not emit a dedicated file node.
         if let Some((id, _)) = candidates.iter().find(|(_, n)| n.kind == NodeKind::File) {
             affected.insert((*id).clone());
         } else if let Some((id, _)) = candidates.first() {
@@ -210,9 +303,6 @@ impl DependencyGraph {
         Ok(affected)
     }
 
-    /// Traverse ALL incoming dependents using BFS. Direct impacts are depth 1;
-    /// every deeper reachable dependent is an indirect impact. Confidence
-    /// decays with graph distance rather than using a fixed two-hop ceiling.
     pub fn calculate_impact(&self, affected: &HashSet<NodeId>, _change_type: ChangeType) -> Result<ImpactAnalysis> {
         let mut direct = Vec::new();
         let mut indirect = Vec::new();
@@ -221,16 +311,13 @@ impl DependencyGraph {
         let mut max_depth = 0usize;
 
         for node_id in affected {
-            if let Some(idx) = self.node_indices.get(node_id) {
-                queue.push_back((*idx, 0));
-            }
+            if let Some(idx) = self.node_indices.get(node_id) { queue.push_back((*idx, 0)); }
         }
 
         while let Some((current_idx, depth)) = queue.pop_front() {
             for neighbor_idx in self.graph.neighbors_directed(current_idx, petgraph::Direction::Incoming) {
                 let Some(neighbor_id) = self.reverse_indices.get(&neighbor_idx).cloned() else { continue; };
                 if !visited.insert(neighbor_id.clone()) { continue; }
-
                 let next_depth = depth + 1;
                 max_depth = max_depth.max(next_depth);
                 let confidence = (0.95_f32 * 0.85_f32.powi((next_depth.saturating_sub(1)) as i32)).max(0.25);
@@ -241,7 +328,6 @@ impl DependencyGraph {
                     path: self.graph[neighbor_idx].path.clone(),
                     line: self.graph[neighbor_idx].line,
                 };
-
                 if next_depth == 1 { direct.push(impacted); } else { indirect.push(impacted); }
                 queue.push_back((neighbor_idx, next_depth));
             }
@@ -251,13 +337,7 @@ impl DependencyGraph {
         let depth_factor = (max_depth as f32 * 0.08).min(0.24);
         let risk_score = ((breadth / 20.0) + depth_factor).min(1.0);
         let effort = if risk_score >= 0.70 { "High" } else if risk_score >= 0.30 { "Medium" } else { "Low" }.to_string();
-
-        Ok(ImpactAnalysis {
-            direct_impacts: direct,
-            indirect_impacts: indirect,
-            risk_score,
-            estimated_effort: effort,
-        })
+        Ok(ImpactAnalysis { direct_impacts: direct, indirect_impacts: indirect, risk_score, estimated_effort: effort })
     }
 
     pub fn node_count(&self) -> usize { self.graph.node_count() }
@@ -277,9 +357,7 @@ impl DependencyGraph {
         let mut deps = Vec::new();
         if let Some(idx) = self.node_indices.get(node_id) {
             for neighbor_idx in self.graph.neighbors_directed(*idx, petgraph::Direction::Outgoing) {
-                if let Some(neighbor_id) = self.reverse_indices.get(&neighbor_idx) {
-                    deps.push(neighbor_id.clone());
-                }
+                if let Some(neighbor_id) = self.reverse_indices.get(&neighbor_idx) { deps.push(neighbor_id.clone()); }
             }
         }
         Ok(deps)
@@ -288,11 +366,8 @@ impl DependencyGraph {
     pub fn extract_subgraph(&self, node_ids: &HashSet<NodeId>) -> Result<DependencyGraph> {
         let mut subgraph = DependencyGraph::new();
         for node_id in node_ids {
-            if let Some(idx) = self.node_indices.get(node_id) {
-                subgraph.add_node(self.graph[*idx].clone());
-            }
+            if let Some(idx) = self.node_indices.get(node_id) { subgraph.add_node(self.graph[*idx].clone()); }
         }
-
         for edge in self.graph.edge_indices() {
             if let Some((from_idx, to_idx)) = self.graph.edge_endpoints(edge) {
                 let from_id = self.reverse_indices.get(&from_idx);
@@ -310,21 +385,16 @@ impl DependencyGraph {
     }
 
     pub fn incoming_degree(&self, node_id: &NodeId) -> Result<usize> {
-        Ok(self.node_indices.get(node_id)
-            .map(|idx| self.graph.neighbors_directed(*idx, petgraph::Direction::Incoming).count())
-            .unwrap_or(0))
+        Ok(self.node_indices.get(node_id).map(|idx| self.graph.neighbors_directed(*idx, petgraph::Direction::Incoming).count()).unwrap_or(0))
     }
 
     pub fn outgoing_degree(&self, node_id: &NodeId) -> Result<usize> {
-        Ok(self.node_indices.get(node_id)
-            .map(|idx| self.graph.neighbors_directed(*idx, petgraph::Direction::Outgoing).count())
-            .unwrap_or(0))
+        Ok(self.node_indices.get(node_id).map(|idx| self.graph.neighbors_directed(*idx, petgraph::Direction::Outgoing).count()).unwrap_or(0))
     }
 
     pub fn find_cycles(&self) -> Result<Vec<Vec<NodeId>>> {
         let mut cycles = Vec::new();
-        let sccs = petgraph::algo::kosaraju_scc(&self.graph);
-        for scc in sccs {
+        for scc in petgraph::algo::kosaraju_scc(&self.graph) {
             if scc.len() > 1 {
                 cycles.push(scc.iter().filter_map(|idx| self.reverse_indices.get(idx).cloned()).collect());
             }
