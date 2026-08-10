@@ -10,6 +10,9 @@ pub use workspace::*;
 #[path = "deep_causality_artifacts_v2_entry.rs"]
 mod artifacts_v2_entry;
 
+#[path = "deep_causality_events.rs"]
+mod events;
+
 #[path = "deep_causality_federation.rs"]
 pub mod federation;
 pub use federation::*;
@@ -20,10 +23,9 @@ pub use runtime::*;
 
 /// Fuse CKB's authoritative dependency/runtime graph with repository artifact
 /// evidence. The adapter preserves existing graph/runtime identity; baseline
-/// artifact extraction is followed by a higher-fidelity pass for explicit
-/// contracts, package dependencies, ORM/SQL access, Compose dependencies,
-/// config guards and test imports. No evidence class is upgraded merely because
-/// multiple sources agree.
+/// artifact extraction is followed by precision contract/ORM/infra/test
+/// extraction and explicit shared event/topic/queue identity. No evidence class
+/// is upgraded merely because multiple sources agree.
 pub fn build_deep_causality_bundle(
     graph: &DependencyGraph,
     repository: impl Into<String>,
@@ -33,6 +35,7 @@ pub fn build_deep_causality_bundle(
     let mut engine = CausalGraphAdapter::new(graph).repository(repository).build();
     CausalArtifactExtractor::enrich(&mut engine, artifacts);
     artifacts_v2_entry::enrich_deep_artifact_semantics(&mut engine, artifacts);
+    events::enrich_event_identity(&mut engine, artifacts);
     engine
 }
 
@@ -88,5 +91,16 @@ mod tests {
         }];
         let engine = build_deep_causality_bundle(&graph, "acme/api", &artifacts);
         assert!(engine.entities().any(|e| e.kind == crate::analysis::CausalEntityKind::Schema && e.name == "User"));
+    }
+
+    #[test]
+    fn producer_and_consumer_share_explicit_event_identity() {
+        let graph = DependencyGraph::new();
+        let artifacts = vec![
+            RepositoryArtifact { repository:"acme/api".into(), path:"src/publisher.ts".into(), content:"bus.publish(\"orders.created\", value);".into() },
+            RepositoryArtifact { repository:"acme/api".into(), path:"src/consumer.ts".into(), content:"bus.subscribe(\"orders.created\", handler);".into() },
+        ];
+        let engine = build_deep_causality_bundle(&graph, "acme/api", &artifacts);
+        assert_eq!(engine.entities().filter(|e| e.id == "event:orders.created").count(), 1);
     }
 }
