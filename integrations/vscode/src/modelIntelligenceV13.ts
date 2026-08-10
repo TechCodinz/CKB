@@ -137,9 +137,13 @@ export class CkbModelIntelligenceV13 implements vscode.Disposable {
 
     private async pickVerifiedModel(allowNeutral = true): Promise<any | undefined | null> {
         const entries = await this.verifiedCatalog();
-        const options: Array<{ label: string; description?: string; detail?: string; profile: any | null }> = entries.map((profile: any) => ({
+        // Context compilation may attach only fresh/selectable verified metadata.
+        // Catalog inspection and migration checks keep deprecated/retired/stale
+        // profiles visible so lifecycle truth is never erased.
+        const candidates = allowNeutral ? entries.filter((profile: any) => profile?.selectable !== false) : entries;
+        const options: Array<{ label: string; description?: string; detail?: string; profile: any | null }> = candidates.map((profile: any) => ({
             label: `${profile.provider}/${profile.model}`,
-            description: `${String(profile.availability || 'unknown').toUpperCase()} • ${String(profile.freshness || 'unknown')}`,
+            description: `${String(profile.availability || 'unknown').toUpperCase()} • ${String(profile.freshness || 'unknown')} • ${profile.selectable === false ? 'migration-only' : 'selectable'}`,
             detail: `${profile.contextWindowTokens ? `${Number(profile.contextWindowTokens).toLocaleString()} ctx` : 'context unknown'} • ${profile.maxOutputTokens ? `${Number(profile.maxOutputTokens).toLocaleString()} max output` : 'output unknown'} • ${profile.preferredApiSurface || 'API surface unknown'}`,
             profile,
         }));
@@ -243,8 +247,8 @@ export class CkbModelIntelligenceV13 implements vscode.Disposable {
             });
             const doc = await vscode.workspace.openTextDocument({ language: 'json', content: JSON.stringify(result, null, 2) });
             await vscode.window.showTextDocument(doc, { preview: true, viewColumn: vscode.ViewColumn.Beside });
-            if (result?.compatible === false) {
-                vscode.window.showWarningMessage(`CKB found ${Array.isArray(result.errors) ? result.errors.length : 1} verified request incompatibility finding(s). No model request was executed.`);
+            if (result?.compatible === false || result?.selectionEligible === false) {
+                vscode.window.showWarningMessage(`CKB compatibility inspection completed for ${profile.provider}/${profile.model}; review lifecycle/compatibility warnings before use. No model request was executed.`);
             } else {
                 vscode.window.showInformationMessage(`CKB request compatibility pass completed for ${profile.provider}/${profile.model}. No model request was executed.`);
             }
@@ -261,17 +265,17 @@ export class CkbModelIntelligenceV13 implements vscode.Disposable {
             const result = await this.request('GET', `/architecture/models/observed-registry?project_id=${encodedProject}&task=${encodeURIComponent(task)}`);
             const registry = Array.isArray(result?.registry) ? result.registry : [];
             if (!registry.length) {
-                vscode.window.showInformationMessage('CKB has no active model capability profiles yet. Models remain unranked until profiles and observed validations exist.');
+                vscode.window.showInformationMessage('CKB has no model capability profiles yet. Models remain unranked until profiles and observed validations exist.');
                 return;
             }
             const pick = await vscode.window.showQuickPick(registry.map((item: any) => ({
                 label: `${item.provider}/${item.model}`,
                 description: item.observedScore == null ? 'unranked — no observed validation evidence' : `${(item.observedScore * 100).toFixed(1)}% observed score • ${item.observations} checks`,
-                detail: `${item.recommendationEligible ? 'evidence threshold met' : 'insufficient evidence for recommendation'} • rollback ${item.rollbackRate == null ? 'unobserved' : `${(item.rollbackRate * 100).toFixed(1)}%`} • ${item.sourceKind || 'source unknown'} • task ${task}`,
+                detail: `${item.recommendationEligible ? 'recommendation evidence + lifecycle gate met' : item.confidenceBasis || 'not recommendation-eligible'} • ${item.availability || 'lifecycle unknown'} • ${item.freshness || 'freshness unknown'} • rollback ${item.rollbackRate == null ? 'unobserved' : `${(item.rollbackRate * 100).toFixed(1)}%`} • task ${task}`,
                 item,
             })), {
                 title: `CKB V13 • Observed Model Registry • ${task.toUpperCase()}`,
-                placeHolder: 'Scores summarize this project’s recorded validation outcomes only; CKB does not auto-select models',
+                placeHolder: 'Scores use this project’s recorded validations only; CKB never auto-selects a stale/deprecated/retired profile',
             });
             if (pick) {
                 const doc = await vscode.workspace.openTextDocument({ language: 'json', content: JSON.stringify(pick.item, null, 2) });
