@@ -15,6 +15,8 @@ pub mod frontier_model_profile;
 pub mod deep_causality;
 pub mod deep_causality_adapter;
 pub mod deep_causality_extractors;
+pub mod deep_causality_advanced;
+pub mod deep_causality_bundle;
 
 pub use boundaries::*;
 pub use patterns::*;
@@ -31,6 +33,8 @@ pub use frontier_model_profile::*;
 pub use deep_causality::*;
 pub use deep_causality_adapter::*;
 pub use deep_causality_extractors::*;
+pub use deep_causality_advanced::*;
+pub use deep_causality_bundle::*;
 
 use crate::graph::DependencyGraph;
 use crate::types::*;
