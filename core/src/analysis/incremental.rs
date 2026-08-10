@@ -104,7 +104,11 @@ pub struct IncrementalLearningReport {
     pub before_edges: usize,
     pub after_nodes: usize,
     pub after_edges: usize,
+    /// Runtime observations retained only for source files untouched by this
+    /// delta and exact node IDs that still exist in the rebuilt graph.
     pub runtime_observations_retained: usize,
+    /// Pre-change runtime observations intentionally detached because their
+    /// source file changed/disappeared or their exact node identity vanished.
     pub runtime_observations_dropped: usize,
     pub exact_relationship_rebuild: bool,
     pub full_source_rescan_required: bool,
@@ -132,8 +136,10 @@ impl IncrementalArchitectureEngine {
     }
 
     /// Apply verified parsed deltas and rebuild relationship resolution without
-    /// reparsing unchanged source. Existing runtime metrics are copied only to
-    /// exact node IDs that still exist after the rebuild.
+    /// reparsing unchanged source. Pre-change runtime observations are retained
+    /// only for exact node IDs in files that were not changed by this delta.
+    /// A modified source file must produce new telemetry before CKB labels its
+    /// post-change runtime as observed.
     pub fn apply_verified_delta(
         current_graph: &DependencyGraph,
         state: &mut RepositoryAnalysisState,
@@ -178,6 +184,7 @@ impl IncrementalArchitectureEngine {
             }
         }
 
+        let changed_path_set: HashSet<String> = seen.iter().cloned().collect();
         let mut next_state = state.clone();
         for delta in deltas {
             let path = normalize_identity_path(&delta.path);
@@ -218,13 +225,14 @@ impl IncrementalArchitectureEngine {
         let surviving_ids: HashSet<NodeId> = next_graph.get_all_nodes().into_iter().map(|node| node.id).collect();
         let mut runtime_observations_retained = 0usize;
         let mut runtime_observations_dropped = 0usize;
-        for (id, metrics) in previous_runtime {
-            if surviving_ids.contains(&id) {
+        for (id, node_path, metrics) in previous_runtime {
+            let source_unchanged = !changed_path_set.contains(&normalize_identity_path(&node_path));
+            if source_unchanged && surviving_ids.contains(&id) {
                 next_graph.record_runtime_metrics(id, metrics);
                 runtime_observations_retained += 1;
             } else {
-                // Runtime evidence remains historical evidence elsewhere; it is
-                // not attached to a new/different symbol by name similarity.
+                // Historical telemetry may remain in time-machine/history
+                // storage, but it is not attached to post-change CURRENT truth.
                 runtime_observations_dropped += 1;
             }
         }
@@ -250,29 +258,34 @@ impl IncrementalArchitectureEngine {
             runtime_observations_dropped,
             exact_relationship_rebuild: true,
             full_source_rescan_required: false,
-            evidence_policy: "unchanged-source-reuses-parsed-evidence; relationships-rebuilt-exactly; runtime-requires-exact-node-identity".into(),
+            evidence_policy: "unchanged-source-reuses-parsed-evidence; relationships-rebuilt-exactly; changed-source-runtime-detached-until-reobserved".into(),
             synthetic: false,
         };
         Ok((next_graph, report))
     }
 }
 
-fn runtime_snapshot(graph: &DependencyGraph) -> Vec<(NodeId, RuntimeMetrics)> {
+fn runtime_snapshot(graph: &DependencyGraph) -> Vec<(NodeId, String, RuntimeMetrics)> {
     graph.get_all_nodes().into_iter()
-        .filter_map(|node| graph.get_runtime_metrics(&node.id).cloned().map(|runtime| (node.id, runtime)))
+        .filter_map(|node| {
+            graph.get_runtime_metrics(&node.id).cloned().map(|runtime| {
+                (node.id, node.path.to_string_lossy().to_string(), runtime)
+            })
+        })
         .collect()
 }
 
 fn normalize_identity_path(path: &str) -> String {
-    let mut parts = Vec::new();
-    for part in path.replace('\\', "/").split('/') {
+    let replaced = path.replace('\\', "/");
+    let mut parts: Vec<String> = Vec::new();
+    for part in replaced.split('/') {
         match part {
             "" | "." => {}
             ".." => { parts.pop(); }
-            value => parts.push(value),
+            value => parts.push(value.to_string()),
         }
     }
-    let prefix = if path.starts_with('/') { "/" } else { "" };
+    let prefix = if replaced.starts_with('/') { "/" } else { "" };
     format!("{}{}", prefix, parts.join("/"))
 }
 
@@ -325,6 +338,21 @@ mod tests {
         assert_eq!(report.reparsed_files, 1);
         assert!(report.exact_relationship_rebuild);
         assert!(next.get_callees(&NodeId("src/a.ts::start".into())).contains(&NodeId("src/b.ts::work".into())));
+    }
+
+    #[test]
+    fn modified_symbol_requires_new_runtime_observation_even_if_id_survives() {
+        let a = analysis("src/a.ts", Some("work"), None, None);
+        let mut state = RepositoryAnalysisState::from_completed_scan(vec![a.clone()]).unwrap();
+        let mut graph = IncrementalArchitectureEngine::graph_from_state(&state).unwrap();
+        graph.record_runtime_metrics(NodeId("src/a.ts::work".into()), RuntimeMetrics { execution_count: 5, avg_latency_ms: 10.0, error_rate: 0.0, is_hotpath: false });
+        let mut replacement = a;
+        replacement.nodes.iter_mut().find(|node| node.name == "work").unwrap().line = 8;
+        let (next, report) = IncrementalArchitectureEngine::apply_verified_delta(&graph, &mut state, vec![VerifiedFileDelta {
+            path: "src/a.ts".into(), kind: FileDeltaKind::Modify, analysis: Some(replacement), source_digest: None, source: "guarded-change".into(),
+        }]).unwrap();
+        assert!(next.get_runtime_metrics(&NodeId("src/a.ts::work".into())).is_none());
+        assert_eq!(report.runtime_observations_dropped, 1);
     }
 
     #[test]
