@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ckb.dev/schemas/ckb-memory-anchor-v1.schema.json",
+  "title": "CKB Architecture Memory Anchor V1",
+  "description": "Snapshot-bound continuity token for model/agent reasoning. It contains architecture identity only, not source text or secrets.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "projectId", "snapshotId", "rootIds", "evidencePolicy", "synthetic"],
+  "properties": {
+    "version": { "const": "ckb-memory-anchor-v1" },
+    "projectId": { "type": "string", "minLength": 1, "maxLength": 300 },
+    "snapshotId": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "rootIds": {
+      "type": "array",
+      "maxItems": 64,
+      "items": { "type": "string", "minLength": 1, "maxLength": 1000 }
+    },
+    "evidencePolicy": { "const": "static-runtime-predicted-separated" },
+    "transport": { "enum": ["browser-cache", "reality-engine", "mcp", "ide"] },
+    "createdAt": { "type": ["string", "null"], "format": "date-time" },
+    "synthetic": { "const": false }
+  }
+}
