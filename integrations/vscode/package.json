@@ -7,7 +7,7 @@
   "icon": "icon.png",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/TechCodinz/CKB" },
-  "keywords": ["architecture","dependency","analysis","mcp","ai","code-quality","architecture-memory","runtime-intelligence","blast-radius","code-graph","data-flow","observability","software-visualization","code-intelligence","opentelemetry","distributed-tracing","semantic-zoom","runtime-tracing","cloud-continuity","guarded-change","raiziom","model-context","architecture-intelligence","frontier-models","model-compatibility"],
+  "keywords": ["architecture","dependency","analysis","mcp","ai","code-quality","architecture-memory","runtime-intelligence","blast-radius","code-graph","data-flow","observability","software-visualization","code-intelligence","opentelemetry","distributed-tracing","semantic-zoom","runtime-tracing","cloud-continuity","guarded-change","raiziom","model-context","architecture-intelligence","frontier-models","model-compatibility","taint-analysis","concurrency","schema-impact","infrastructure-as-code","software-causality"],
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Linters","Other","Programming Languages","Visualization"],
   "activationEvents": ["onStartupFinished","onView:ckb.realityView","onUri"],
@@ -17,6 +17,7 @@
     "views": { "ckb-reality": [{ "type": "webview", "id": "ckb.realityView", "name": "Invisible Reality V13", "contextualTitle": "CKB Semantic Editor + Model Intelligence Fabric + Guarded Change" }] },
     "commands": [
       { "command": "ckb.openReality", "title": "CKB: Open Invisible Reality", "icon": "$(telescope)" },
+      { "command": "ckb.deepCausality", "title": "CKB: Deep Software Causality", "icon": "$(circuit-board)" },
       { "command": "ckb.inspectSemanticReality", "title": "CKB: Inspect Semantic Reality at Cursor", "icon": "$(symbol-namespace)" },
       { "command": "ckb.semanticZoomIn", "title": "CKB: Semantic Zoom In", "icon": "$(zoom-in)" },
       { "command": "ckb.semanticZoomOut", "title": "CKB: Semantic Zoom Out", "icon": "$(zoom-out)" },
@@ -70,6 +71,7 @@
         "ckb.cloudProjectId": { "type": "string", "default": "current", "description": "CKB Cloud project identity used by in-IDE architecture intelligence, Raiziom and guarded-change requests. It must match the Cloud project whose architecture evidence should be authoritative." },
         "ckb.cliBinary": { "type": "string", "default": "ckb", "description": "Executable name/path for the standard CKB CLI." },
         "ckb.intelligenceBinary": { "type": "string", "default": "ckb-intelligence", "description": "Executable name/path for the high-performance CKB IDE intelligence facade." },
+        "ckb.causalityBinary": { "type": "string", "default": "ckb-causality", "description": "Executable name/path for the V13.1 Deep Software Causality CLI used to build local evidence bundles and run data-flow, taint, schema, infrastructure, concurrency, temporal, ownership and change-simulation intelligence." },
         "ckb.analysisTimeoutMs": { "type": "number", "default": 120000, "minimum": 30000, "maximum": 600000, "description": "Maximum duration of a local deep architecture analysis or CKB server request." },
         "ckb.autoScanOnOpen": { "type": "boolean", "default": true, "description": "Hydrate Invisible Reality shortly after a workspace opens." },
         "ckb.rescanOnSave": { "type": "boolean", "default": true, "description": "Coalesce source-file changes and refresh architecture intelligence after editing activity settles." },
@@ -99,6 +101,7 @@
         { "command": "ckb.openCloudContinuity", "when": "view == ckb.realityView", "group": "navigation@3" }
       ],
       "commandPalette": [
+        { "command": "ckb.deepCausality" },
         { "command": "ckb.inspectSemanticReality" },
         { "command": "ckb.semanticZoomIn" },
         { "command": "ckb.semanticZoomOut" },
