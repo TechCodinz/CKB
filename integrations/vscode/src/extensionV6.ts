@@ -5,6 +5,7 @@ import { activateEditorSemanticRealityV10 } from './editorSemanticRealityV10';
 import { activateCloudUriHandlerV11 } from './cloudUriHandlerV11';
 import { activateCursorGuardedChangeReality } from './cursorChangeReality';
 import { activateModelIntelligenceV13 } from './modelIntelligenceV13';
+import { activateDeepCausalityV131 } from './deepCausalityV131';
 import { restoreIntelligence } from './intelligence';
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -25,13 +26,15 @@ export async function activate(context: vscode.ExtensionContext) {
 
     const guardedChangeReality = activateCursorGuardedChangeReality(context, api.transactions);
     const modelIntelligenceV13 = activateModelIntelligenceV13(context);
-    context.subscriptions.push(semanticReality, guardedChangeReality, modelIntelligenceV13);
+    const deepCausalityV131 = activateDeepCausalityV131(context);
+    context.subscriptions.push(semanticReality, guardedChangeReality, modelIntelligenceV13, deepCausalityV131);
     return {
         ...api,
         editorSemanticReality: semanticReality,
         cloudUriHandler,
         guardedChangeReality,
         modelIntelligenceV13,
+        deepCausalityV131,
     };
 }
 
