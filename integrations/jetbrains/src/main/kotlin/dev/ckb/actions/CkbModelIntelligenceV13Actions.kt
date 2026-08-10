@@ -102,13 +102,17 @@ private fun profileLabel(profile: JsonObject): String {
     val model = profile.get("model")?.asString ?: "unknown"
     val availability = profile.get("availability")?.asString ?: "unknown"
     val freshness = profile.get("freshness")?.asString ?: "unknown"
-    return "$provider/$model  [$availability • $freshness]"
+    val selectable = profile.get("selectable")?.asBoolean != false
+    return "$provider/$model  [$availability • $freshness • ${if (selectable) "selectable" else "migration-only"}]"
 }
 
 private fun chooseModel(project: com.intellij.openapi.project.Project, entries: List<JsonObject>, allowNeutral: Boolean): ModelPick {
+    // For architecture context hints, use only fresh/selectable verified
+    // profiles. Migration/request inspection keeps every lifecycle state visible.
+    val candidates = if (allowNeutral) entries.filter { it.get("selectable")?.asBoolean != false } else entries
     val labels = mutableListOf<String>()
     if (allowNeutral) labels += "CKB MODEL-NEUTRAL  [no provider assumptions]"
-    labels += entries.map(::profileLabel)
+    labels += candidates.map(::profileLabel)
     if (labels.isEmpty()) {
         Messages.showWarningDialog(project, "CKB verified frontier model catalog is empty.", "CKB V13")
         return ModelPick(true, null)
@@ -124,7 +128,7 @@ private fun chooseModel(project: com.intellij.openapi.project.Project, entries: 
     if (index !in labels.indices) return ModelPick(true, null)
     if (allowNeutral && index == 0) return ModelPick(false, null)
     val modelIndex = index - if (allowNeutral) 1 else 0
-    return ModelPick(false, entries.getOrNull(modelIndex))
+    return ModelPick(false, candidates.getOrNull(modelIndex))
 }
 
 private fun isSupported(value: String?): Boolean = value in setOf("supported", "preview", "beta")
