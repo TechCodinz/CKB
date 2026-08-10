@@ -1,7 +1,7 @@
 name: Build & Test
 
 # Runs on every push and PR to main. Covers the open-source components only
-# (core, cli, mcp-server, WASM bindings, VS Code extension, SDKs/runtime agents).
+# (core, cli, mcp-server, WASM bindings, VS Code/JetBrains extensions, SDKs/runtime agents).
 # The backend (auth/billing) and web dashboard are in the private
 # TechCodinz/ckb-cloud repo and have their own CI there.
 on:
@@ -15,21 +15,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-
       - name: Cache Cargo/target
         uses: Swatinem/rust-cache@v2
-
       - name: Build workspace (core, cli, mcp-server)
         run: cargo build --locked --release -p ckb-core -p ckb-cli -p ckb-mcp-server
-
       - name: Run tests
         run: cargo test --locked --release -p ckb-core -p ckb-cli -p ckb-mcp-server
-
       - name: Clippy
         run: cargo clippy --locked -p ckb-core -p ckb-cli -p ckb-mcp-server --all-targets -- -D warnings
         continue-on-error: true
@@ -63,6 +58,18 @@ jobs:
       - name: Compile
         working-directory: integrations/vscode
         run: npm run compile
+
+  jetbrains-extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Compile JetBrains plugin
+        working-directory: integrations/jetbrains
+        run: gradle compileKotlin --no-daemon
 
   sdks:
     runs-on: ubuntu-latest
