@@ -38,6 +38,10 @@ pub use contracts::*;
 pub mod human;
 pub use human::*;
 
+#[path = "memory_lane.rs"]
+pub mod memory_lane;
+pub use memory_lane::*;
+
 /// Fuse CKB's authoritative dependency/runtime graph with repository artifact
 /// evidence. The adapter preserves existing graph/runtime identity; baseline
 /// artifact extraction is followed by precision contract/ORM/infra/test
@@ -126,5 +130,12 @@ mod tests {
         let engine = build_deep_causality_bundle(&graph, "acme/api", &artifacts);
         assert_eq!(engine.entities().filter(|entity| entity.id == "event:orders.created").count(), 1);
         assert!(engine.distributed_flow("repo:acme/api::file:src/publisher.ts", "repo:acme/api::file:src/consumer.ts", 4).is_some());
+    }
+
+    #[test]
+    fn memory_lane_is_project_bounded_and_guarded() {
+        let lane = MemoryLaneEngine::new("acme/api");
+        assert_eq!(lane.profile.project_id, "acme/api");
+        assert_eq!(lane.version, MEMORY_LANE_VERSION);
     }
 }
