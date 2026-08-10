@@ -2,7 +2,7 @@
     <id>dev.ckb.jetbrains</id>
     <name>CKB - Invisible Reality Architecture Intelligence</name>
     <vendor email="support@ckb.dev" url="https://ckb.dev">CKB</vendor>
-    <version>1.5.0</version>
+    <version>1.6.0</version>
     <idea-version since-build="233" until-build="243.*"/>
 
     <description><![CDATA[
@@ -11,6 +11,7 @@
         <ul>
             <li>🌌 Living Architecture Reality cockpit inside the IDE</li>
             <li>🔬 Cursor-driven Semantic Editor Reality V10: LINE → CALL → SYMBOL → FILE → SUBSYSTEM → SYSTEM</li>
+            <li>☁️ Cursor Reality continuity into Cloud X-Ray and contextual Raiziom investigation</li>
             <li>🧬 Molecular software microscope with semantic depth and truth-separated lenses</li>
             <li>🟢 Live Transmission Field V8 for exact observed HTTP, DB, cache, queue, event, WebSocket and function transitions</li>
             <li>↯ Exact parent/child runtime retracing when telemetry provides safe trace semantics</li>
@@ -81,6 +82,14 @@
                     icon="AllIcons.Debugger.Watch">
                 <keyboard-shortcut keymap="$default" first-keystroke="shift ctrl I"/>
             </action>
+            <action id="CkbCloudContinuityAction"
+                    class="dev.ckb.actions.ContinueSemanticRealityInCloudAction"
+                    text="Continue Cursor Reality in CKB Cloud"
+                    description="Open the same source location in Cloud X-Ray without uploading source contents"/>
+            <action id="CkbRaiziomCursorAction"
+                    class="dev.ckb.actions.AskRaiziomAboutCursorAction"
+                    text="Ask Raiziom About Cursor Reality"
+                    description="Continue the selected source context in the evidence-grounded Cloud Raiziom console"/>
             <action id="CkbGraphAction"
                     class="dev.ckb.actions.ShowGraphAction"
                     text="Open Architecture Graph"
@@ -95,6 +104,14 @@
                     text="CKB: Analyze Change Ripple Here"
                     description="Predict architectural impact at this source location"
                     icon="AllIcons.Debugger.Watch"/>
+            <action id="CkbCloudContinuityContextAction"
+                    class="dev.ckb.actions.ContinueSemanticRealityInCloudAction"
+                    text="CKB: Continue Cursor Reality in Cloud"
+                    description="Resume this source location in Cloud X-Ray"/>
+            <action id="CkbRaiziomCursorContextAction"
+                    class="dev.ckb.actions.AskRaiziomAboutCursorAction"
+                    text="CKB: Ask Raiziom About This Cursor"
+                    description="Open Raiziom with this source location as navigation context"/>
         </group>
     </actions>
 </idea-plugin>
