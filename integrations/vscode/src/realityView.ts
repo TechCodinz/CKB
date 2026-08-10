@@ -63,7 +63,7 @@ export class CkbRealityViewProvider implements vscode.WebviewViewProvider {
 
     setRuntimeFeed(runtime: RuntimeRealityFeed | undefined) {
         this.runtime = runtime;
-        this.render();
+        if (this.view) void this.view.webview.postMessage({ type: 'ckb-runtime-feed', runtime });
     }
 
     reveal() {
@@ -92,7 +92,7 @@ export class CkbRealityViewProvider implements vscode.WebviewViewProvider {
         try {
             const next = await fetchRuntimeReality(root);
             this.runtime = next;
-            this.render();
+            if (this.view) await this.view.webview.postMessage({ type: 'ckb-runtime-feed', runtime: next });
             if (explicit) {
                 if (next.observed) vscode.window.setStatusBarMessage(`CKB Live Reality • ${Object.keys(next.traces).length} exact traces • ${next.runtimeNodes} runtime nodes`, 3200);
                 else if (next.online) vscode.window.setStatusBarMessage('CKB Live Reality engine is online; waiting for observed application execution.', 3200);
@@ -123,7 +123,7 @@ export class CkbRealityViewProvider implements vscode.WebviewViewProvider {
 <section class="section panel"><div class="title">ARCHITECTURE MEMORY</div><div class="memory"><input id="memoryQuery" placeholder="Ask about flow, risk, ownership or a symbol"/><button data-action="memory">Ask</button></div><div class="note">Queries use bounded architecture memory. CKB does not fabricate runtime evidence when telemetry is absent.</div></section>
 <div id="error"></div></div>
 <script nonce="${token}">
-const vscode=acquireVsCodeApi();const payload=${jsonForScript(payload)};const state=payload.state||{};const runtime=payload.runtime||{};const activity=state.activity||state.bundle?.activity||{};const dna=state.dna||state.bundle?.dna||{};const hotspots=Array.isArray(activity.hotspots)?activity.hotspots:[];const runtimeNodes=hotspots.filter(n=>n&&n.runtimeObserved);const faults=hotspots.filter(n=>Number(n?.errorRate||n?.runtime?.errorRate||0)>0);let lens='semantic',depth='system',intent='auto',flowFilter='all';
+const vscode=acquireVsCodeApi();const payload=${jsonForScript(payload)};const state=payload.state||{};let runtime=payload.runtime||{};const activity=state.activity||state.bundle?.activity||{};const dna=state.dna||state.bundle?.dna||{};const hotspots=Array.isArray(activity.hotspots)?activity.hotspots:[];const runtimeNodes=hotspots.filter(n=>n&&n.runtimeObserved);const faults=hotspots.filter(n=>Number(n?.errorRate||n?.runtime?.errorRate||0)>0);let lens='semantic',depth='system',intent='auto',flowFilter='all';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const num=v=>Number.isFinite(Number(v))?Number(v).toLocaleString():'—';const pct=v=>Number.isFinite(Number(v))?Math.round(Number(v)*100)+'%':'—';
 const metrics=[['SYMBOLS',activity.nodesAnalyzed??state.scan?.nodes],['RELATIONS',activity.edgesAnalyzed??state.scan?.edges],['RUNTIME',Number.isFinite(Number(activity.runtimeCoveragePct))?Number(activity.runtimeCoveragePct).toFixed(1)+'%':'—'],['CODE DNA',Number.isFinite(Number(dna.overallHealth))?Number(dna.overallHealth).toFixed(1)+'%':'—']];document.getElementById('metrics').innerHTML=metrics.map(x=>'<div class="metric"><strong>'+esc(x[1]??'—')+'</strong><span>'+x[0]+'</span></div>').join('');
 const intents=['auto','fused','live','fault','change','memory'];const lenses=['semantic','molecule','nanotrace','state'];const depths=['system','subsystem','file','symbol','call','runtime'];const flowTypes=['http','database','cache','queue','event','websocket','function','other'];
@@ -137,7 +137,7 @@ function renderReality(){const list=selectedItems();document.getElementById('sco
 function bindControls(){document.querySelectorAll('[data-intent]').forEach(el=>el.onclick=()=>{intent=el.dataset.intent;vscode.postMessage({type:'intent',intent:resolvedIntent()});renderControls();renderReality()});document.querySelectorAll('[data-lens]').forEach(el=>el.onclick=()=>{lens=el.dataset.lens;renderControls();renderReality()});document.querySelectorAll('[data-depth]').forEach(el=>el.onclick=()=>{depth=el.dataset.depth;renderControls();renderReality()});}
 function bindNodes(){document.querySelectorAll('[data-node]').forEach(el=>el.onclick=()=>{try{vscode.postMessage({type:'openNode',node:JSON.parse(decodeURIComponent(el.dataset.node))})}catch{}})}
 function bindRuntime(){document.querySelectorAll('[data-flow]').forEach(el=>el.onclick=()=>{flowFilter=el.dataset.flow;renderRuntime()});document.querySelectorAll('[data-runtime-node]').forEach(el=>el.onclick=()=>{try{vscode.postMessage({type:'openNode',node:JSON.parse(decodeURIComponent(el.dataset.runtimeNode))})}catch{}})}
-document.querySelectorAll('[data-action]').forEach(el=>el.onclick=()=>{const action=el.dataset.action;if(action==='memory'){vscode.postMessage({type:'memory',query:document.getElementById('memoryQuery').value||''})}else vscode.postMessage({type:action})});renderRuntime();renderControls();renderReality();if(state.error)document.getElementById('error').innerHTML='<div class="error">'+esc(state.error)+'</div>';
+document.querySelectorAll('[data-action]').forEach(el=>el.onclick=()=>{const action=el.dataset.action;if(action==='memory'){vscode.postMessage({type:'memory',query:document.getElementById('memoryQuery').value||''})}else vscode.postMessage({type:action})});window.addEventListener('message',event=>{const message=event.data||{};if(message.type!=='ckb-runtime-feed')return;runtime=message.runtime||{};renderRuntime();renderControls();renderReality()});renderRuntime();renderControls();renderReality();if(state.error)document.getElementById('error').innerHTML='<div class="error">'+esc(state.error)+'</div>';
 </script></body></html>`;
     }
 }
