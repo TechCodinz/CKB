@@ -39,6 +39,10 @@ impl MemoryLaneStore {
         let path = self.current_path();
         let temp = self.root.join("current.json.tmp");
         fs::write(&temp, serde_json::to_vec_pretty(engine)?)?;
+        // Windows does not reliably replace an existing destination with
+        // std::fs::rename. Remove the previous local state only after the new
+        // temp file has been fully written.
+        if path.exists() { fs::remove_file(&path)?; }
         fs::rename(&temp, &path)?;
         Ok(())
     }
