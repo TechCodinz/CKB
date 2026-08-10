@@ -34,10 +34,12 @@ Thumbs.db
 # RocksDB data
 ckb_data/
 
-# Test artifacts
+# Test/release artifacts
 *.sarif
 *.snap
 *.vsix
+*.vsix.sha256
+*.vsix.release.json
 
 # Python
 *.pyc
