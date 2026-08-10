@@ -6,7 +6,7 @@
 use super::deep_causality::*;
 use crate::graph::DependencyGraph;
 use crate::types::{EdgeKind, Node, NodeKind};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 #[derive(Debug, Clone)]
 pub struct CausalGraphAdapter<'a> {
@@ -26,10 +26,15 @@ impl<'a> CausalGraphAdapter<'a> {
 
     pub fn build(&self) -> DeepCausalityEngine {
         let mut engine = DeepCausalityEngine::new();
+        let mut ids: HashMap<String, String> = HashMap::new();
         for node in self.graph.nodes() {
-            engine.upsert_entity(self.entity_for_node(node));
+            let id = self.causal_id(node);
+            ids.insert(node.id.0.clone(), id.clone());
+            engine.upsert_entity(self.entity_for_node(node, id));
         }
         for edge in self.graph.edges() {
+            let Some(from) = ids.get(&edge.from.0).cloned() else { continue; };
+            let Some(to) = ids.get(&edge.to.0).cloned() else { continue; };
             let relation = match edge.kind {
                 EdgeKind::Import => CausalRelationKind::Imports,
                 EdgeKind::Calls => CausalRelationKind::Calls,
@@ -38,11 +43,13 @@ impl<'a> CausalGraphAdapter<'a> {
                 EdgeKind::Property => CausalRelationKind::DependsOn,
                 EdgeKind::Extends | EdgeKind::Implements | EdgeKind::Instantiates => CausalRelationKind::DependsOn,
             };
-            let mut metadata = edge.metadata.iter().map(|(k, v)| (k.clone(), v.clone())).collect::<BTreeMap<_, _>>();
+            let mut metadata = edge.metadata.iter().map(|(key, value)| (key.clone(), value.clone())).collect::<BTreeMap<_, _>>();
             metadata.insert("ckb.edge_kind".into(), format!("{:?}", edge.kind));
+            metadata.insert("ckb.raw_from".into(), edge.from.0.clone());
+            metadata.insert("ckb.raw_to".into(), edge.to.0.clone());
             let _ = engine.add_fact(CausalFact {
-                from: edge.from.0.clone(),
-                to: edge.to.0.clone(),
+                from,
+                to,
                 relation,
                 evidence: CausalEvidenceClass::Static,
                 confidence: edge.weight.clamp(0.0, 1.0),
@@ -54,13 +61,24 @@ impl<'a> CausalGraphAdapter<'a> {
         engine
     }
 
-    fn entity_for_node(&self, node: &Node) -> CausalEntity {
+    fn causal_id(&self, node: &Node) -> String {
+        let Some(repository) = self.repository.as_deref() else { return node.id.0.clone(); };
+        let path = node.path.to_string_lossy().replace('\\', "/").trim_start_matches("./").to_string();
+        if node.kind == NodeKind::File {
+            format!("repo:{repository}::file:{path}")
+        } else {
+            format!("repo:{repository}::node:{}", node.id.0)
+        }
+    }
+
+    fn entity_for_node(&self, node: &Node, id: String) -> CausalEntity {
         let path = node.path.to_string_lossy().replace('\\', "/");
         let lower_path = path.to_ascii_lowercase();
         let lower_name = node.name.to_ascii_lowercase();
-        let metadata = node.metadata.iter().map(|(k, v)| (k.clone(), v.clone())).collect::<BTreeMap<_, _>>();
+        let metadata = node.metadata.iter().map(|(key, value)| (key.clone(), value.clone())).collect::<BTreeMap<_, _>>();
         let kind = classify_node(node, &lower_path, &lower_name);
         let mut attributes = metadata;
+        attributes.insert("ckb.raw_node_id".into(), node.id.0.clone());
 
         if let Some(runtime) = self.graph.get_runtime_metrics(&node.id) {
             attributes.insert("runtime.execution_count".into(), runtime.execution_count.to_string());
@@ -70,7 +88,7 @@ impl<'a> CausalGraphAdapter<'a> {
         }
 
         CausalEntity {
-            id: node.id.0.clone(),
+            id,
             kind,
             name: node.name.clone(),
             repository: self.repository.clone(),
@@ -81,30 +99,18 @@ impl<'a> CausalGraphAdapter<'a> {
 }
 
 fn classify_node(node: &Node, path: &str, name: &str) -> CausalEntityKind {
-    let meta = |key: &str| node.metadata.get(key).map(|s| s.to_ascii_lowercase());
+    let meta = |key: &str| node.metadata.get(key).map(|value| value.to_ascii_lowercase());
     let declared = meta("ckb.entity_kind").or_else(|| meta("entity_kind")).or_else(|| meta("kind"));
     if let Some(kind) = declared.as_deref() {
         if let Some(mapped) = declared_kind(kind) { return mapped; }
     }
 
-    if path.contains("/migrations/") || path.contains("/migration/") || name.contains("migration") {
-        return CausalEntityKind::Migration;
-    }
-    if path.ends_with("schema.prisma") || path.ends_with(".sql") || path.contains("/schema/") {
-        return CausalEntityKind::Schema;
-    }
-    if path.ends_with("docker-compose.yml") || path.ends_with("docker-compose.yaml") || path.ends_with("dockerfile") || path.ends_with("compose.yml") || path.ends_with("compose.yaml") || path.ends_with(".tf") || path.ends_with(".tf.json") || path.contains("/k8s/") || path.contains("/kubernetes/") || path.contains("/helm/") {
-        return CausalEntityKind::Infrastructure;
-    }
-    if path.contains("/.github/workflows/") || path.contains("/deploy/") || path.contains("/deployment/") {
-        return CausalEntityKind::Deployment;
-    }
-    if path.contains("/test/") || path.contains("/tests/") || path.contains("/__tests__/") || path.ends_with("_test.go") || path.ends_with("_test.rs") || path.ends_with(".test.ts") || path.ends_with(".test.tsx") || path.ends_with(".spec.ts") || path.ends_with(".spec.tsx") {
-        return CausalEntityKind::Test;
-    }
-    if name.starts_with("feature_") || name.contains("featureflag") || name.contains("feature_flag") || node.metadata.contains_key("feature_flag") {
-        return CausalEntityKind::FeatureFlag;
-    }
+    if path.contains("/migrations/") || path.contains("/migration/") || name.contains("migration") { return CausalEntityKind::Migration; }
+    if path.ends_with("schema.prisma") || path.ends_with(".sql") || path.contains("/schema/") { return CausalEntityKind::Schema; }
+    if path.ends_with("docker-compose.yml") || path.ends_with("docker-compose.yaml") || path.ends_with("dockerfile") || path.ends_with("compose.yml") || path.ends_with("compose.yaml") || path.ends_with(".tf") || path.ends_with(".tf.json") || path.contains("/k8s/") || path.contains("/kubernetes/") || path.contains("/helm/") { return CausalEntityKind::Infrastructure; }
+    if path.contains("/.github/workflows/") || path.contains("/deploy/") || path.contains("/deployment/") { return CausalEntityKind::Deployment; }
+    if path.contains("/test/") || path.contains("/tests/") || path.starts_with("tests/") || path.contains("/__tests__/") || path.ends_with("_test.go") || path.ends_with("_test.rs") || path.ends_with("_test.py") || path.ends_with(".test.ts") || path.ends_with(".test.tsx") || path.ends_with(".spec.ts") || path.ends_with(".spec.tsx") { return CausalEntityKind::Test; }
+    if name.starts_with("feature_") || name.contains("featureflag") || name.contains("feature_flag") || node.metadata.contains_key("feature_flag") { return CausalEntityKind::FeatureFlag; }
     if name.contains("queue") { return CausalEntityKind::Queue; }
     if name.contains("topic") { return CausalEntityKind::Topic; }
     if name.ends_with("event") || name.contains("event_") { return CausalEntityKind::Event; }
@@ -180,6 +186,14 @@ mod tests {
         assert_eq!(classify_node(&schema, "prisma/schema.prisma", "schema"), CausalEntityKind::Schema);
         assert_eq!(classify_node(&infra, "docker-compose.yml", "compose"), CausalEntityKind::Infrastructure);
         assert_eq!(classify_node(&test, "tests/auth_test.rs", "auth"), CausalEntityKind::Test);
+    }
+
+    #[test]
+    fn repository_file_ids_match_artifact_namespace() {
+        let graph = DependencyGraph::new();
+        let adapter = CausalGraphAdapter::new(&graph).repository("acme/api");
+        let file = node("src/a.ts::file", "src/a.ts", NodeKind::File);
+        assert_eq!(adapter.causal_id(&file), "repo:acme/api::file:src/a.ts");
     }
 
     #[test]
