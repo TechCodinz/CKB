@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ckb.dev/schemas/deep-causality-v13.1.schema.json",
+  "title": "CKB V13.1 Deep Software Causality Evidence Bundle",
+  "type": "object",
+  "required": ["entities", "facts"],
+  "properties": {
+    "entities": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/entity" }
+    },
+    "facts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/fact" }
+    }
+  },
+  "$defs": {
+    "entityKind": {
+      "type": "string",
+      "enum": ["repository","service","package","file","symbol","parameter","value","api","schema","table","column","migration","data_store","queue","topic","event","job","feature_flag","configuration","secret","infrastructure","deployment","runtime_resource","test","policy","owner","team","commit","trace","lock","transaction","unknown"]
+    },
+    "evidenceClass": {
+      "type": "string",
+      "enum": ["static","runtime","history","validation","human","predicted"]
+    },
+    "relationKind": {
+      "type": "string",
+      "enum": ["calls","reads","writes","returns","assigns","derives","sanitizes","validates","trust_boundary","depends_on","imports","owns","emits","consumes","publishes","subscribes","schedules","guards","enables","disables","acquires","releases","begins_transaction","commits_transaction","rolls_back_transaction","migrates","defines","deploys","routes_to","connects_to","observes","exercises","asserts","violates","changes","supersedes","reviews","authored_by","allocates","waits_for","retries","times_out","circuit_breaks","correlates_with"]
+    },
+    "entity": {
+      "type": "object",
+      "required": ["id","kind","name","attributes"],
+      "properties": {
+        "id": {"type":"string","minLength":1},
+        "kind": {"$ref":"#/$defs/entityKind"},
+        "name": {"type":"string"},
+        "repository": {"type":["string","null"]},
+        "path": {"type":["string","null"]},
+        "attributes": {"type":"object","additionalProperties":{"type":"string"}}
+      },
+      "additionalProperties": false
+    },
+    "fact": {
+      "type": "object",
+      "required": ["from","to","relation","evidence","confidence","metadata"],
+      "properties": {
+        "from": {"type":"string","minLength":1},
+        "to": {"type":"string","minLength":1},
+        "relation": {"$ref":"#/$defs/relationKind"},
+        "evidence": {"$ref":"#/$defs/evidenceClass"},
+        "confidence": {"type":"number","minimum":0,"maximum":1},
+        "condition": {"type":["string","null"]},
+        "timestamp_ms": {"type":["integer","null"]},
+        "metadata": {"type":"object","additionalProperties":{"type":"string"}}
+      },
+      "additionalProperties": false
+    }
+  }
+}
