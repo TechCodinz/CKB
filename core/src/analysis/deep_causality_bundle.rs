@@ -65,9 +65,9 @@ pub fn build_deep_causality_bundle(
 /// entity already present in the target federation.
 pub fn merge_deep_causality_evidence(target: &mut DeepCausalityEngine, source: &DeepCausalityEngine) -> Result<(), String> {
     for entity in source.entities() {
-        if let Some(existing) = target.entities().find(|e| e.id == entity.id).cloned() {
+        if let Some(existing) = target.entities().find(|candidate| candidate.id == entity.id).cloned() {
             let mut merged = existing;
-            if matches!(merged.kind, super::CausalEntityKind::Unknown) && !matches!(entity.kind, super::CausalEntityKind::Unknown) {
+            if matches!(&merged.kind, super::CausalEntityKind::Unknown) && !matches!(&entity.kind, super::CausalEntityKind::Unknown) {
                 merged.kind = entity.kind.clone();
             }
             if merged.name.is_empty() && !entity.name.is_empty() { merged.name = entity.name.clone(); }
@@ -99,7 +99,7 @@ mod tests {
             content: "model User {\n id String @id\n}".into(),
         }];
         let engine = build_deep_causality_bundle(&graph, "acme/api", &artifacts);
-        assert!(engine.entities().any(|e| e.name == "User"));
+        assert!(engine.entities().any(|entity| entity.name == "User"));
     }
 
     #[test]
@@ -111,7 +111,7 @@ mod tests {
             content: "type User {\n id: ID!\n}".into(),
         }];
         let engine = build_deep_causality_bundle(&graph, "acme/api", &artifacts);
-        assert!(engine.entities().any(|e| e.kind == crate::analysis::CausalEntityKind::Schema && e.name == "User"));
+        assert!(engine.entities().any(|entity| entity.kind == crate::analysis::CausalEntityKind::Schema && entity.name == "User"));
         let contracts = derive_contract_snapshots(&engine);
         assert!(contracts.iter().any(|snapshot| snapshot.entity_id == "repo:acme/api::schema:User" && snapshot.contract.fields.iter().any(|field| field.name == "id" && field.required)));
     }
@@ -124,7 +124,7 @@ mod tests {
             RepositoryArtifact { repository:"acme/api".into(), path:"src/consumer.ts".into(), content:"bus.subscribe(\"orders.created\", handler);".into() },
         ];
         let engine = build_deep_causality_bundle(&graph, "acme/api", &artifacts);
-        assert_eq!(engine.entities().filter(|e| e.id == "event:orders.created").count(), 1);
+        assert_eq!(engine.entities().filter(|entity| entity.id == "event:orders.created").count(), 1);
         assert!(engine.distributed_flow("repo:acme/api::file:src/publisher.ts", "repo:acme/api::file:src/consumer.ts", 4).is_some());
     }
 }
