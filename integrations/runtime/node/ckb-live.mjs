@@ -18,7 +18,14 @@ function safeAttributes(input = {}) {
     if (typeof raw === 'object') continue;
     output.push({ key: String(key).slice(0, 120), value: otlpValue(raw) });
   }
-  return output.slice(0, 48);
+  return output.slice(0, 64);
+}
+
+function flowAttributes(metadata = {}, fallback = 'function') {
+  return {
+    'ckb.flow.type': metadata.flowType || metadata?.attributes?.['ckb.flow.type'] || fallback,
+    'ckb.flow.direction': metadata.direction || metadata?.attributes?.['ckb.flow.direction'],
+  };
 }
 
 /**
@@ -29,7 +36,9 @@ function safeAttributes(input = {}) {
  * - preserves parent/child trace identity with AsyncLocalStorage
  * - never records request/response bodies, secrets, headers or arbitrary objects
  * - emits code.file.path + code.function.name so CKB can map observed execution
- *   back onto the static Tree-sitter architecture when those identities match.
+ *   back onto the static Tree-sitter architecture when those identities match
+ * - emits ckb.flow.type so the Semantic Universe can distinguish HTTP, database,
+ *   cache, queue, event, WebSocket and internal function transitions.
  */
 export function createCkbLive(options = {}) {
   const endpoint = String(options.endpoint || process.env.CKB_OTLP_ENDPOINT || '').trim();
@@ -47,13 +56,18 @@ export function createCkbLive(options = {}) {
     return Boolean(endpoint && key);
   }
 
+  function currentContext() {
+    const value = contextStore.getStore();
+    return value ? { traceId: value.traceId, spanId: value.spanId } : null;
+  }
+
   function resourceAttributes() {
     return safeAttributes({
       'service.name': serviceName,
       'deployment.environment': environment,
       'telemetry.sdk.name': 'ckb-live-reality',
       'telemetry.sdk.language': 'nodejs',
-      'ckb.runtime.agent': 'node-zero-dependency-v1',
+      'ckb.runtime.agent': 'node-zero-dependency-v2',
     });
   }
 
@@ -87,13 +101,13 @@ export function createCkbLive(options = {}) {
         headers: {
           'content-type': 'application/json',
           'x-ckb-telemetry-key': key,
-          'user-agent': 'CKB-Live-Reality-Node/1.0',
+          'user-agent': 'CKB-Live-Reality-Node/2.0',
         },
         body: JSON.stringify({
           resourceSpans: [{
             resource: { attributes: resourceAttributes() },
             scopeSpans: [{
-              scope: { name: 'ckb.live.reality', version: '1.0.0' },
+              scope: { name: 'ckb.live.reality', version: '2.0.0' },
               spans: batch,
             }],
           }],
@@ -113,6 +127,28 @@ export function createCkbLive(options = {}) {
     }
   }
 
+  function makeSpanRecord(name, metadata, context, startTimeUnixNano, error) {
+    const attrs = {
+      'code.function.name': metadata?.functionName || name,
+      'code.file.path': metadata?.file || metadata?.path,
+      'code.namespace': metadata?.namespace,
+      'ckb.symbol.kind': metadata?.kind || 'function',
+      'ckb.runtime.observed': true,
+      ...flowAttributes(metadata, metadata?.kind || 'function'),
+      ...metadata?.attributes,
+    };
+    return {
+      traceId: context.traceId,
+      spanId: context.spanId,
+      parentSpanId: context.parentSpanId,
+      name: String(name || metadata?.functionName || 'function'),
+      startTimeUnixNano,
+      endTimeUnixNano: nanoNow(),
+      attributes: safeAttributes(attrs),
+      status: { code: error ? 2 : 1 },
+    };
+  }
+
   async function span(name, metadata, fn) {
     if (typeof metadata === 'function') {
       fn = metadata;
@@ -121,39 +157,47 @@ export function createCkbLive(options = {}) {
     if (typeof fn !== 'function') throw new TypeError('CKB span requires a function to execute.');
 
     const parent = contextStore.getStore();
-    const traceId = parent?.traceId || hex(16);
-    const spanId = hex(8);
-    const parentSpanId = parent?.spanId || '';
+    const context = {
+      traceId: parent?.traceId || hex(16),
+      spanId: hex(8),
+      parentSpanId: parent?.spanId || '',
+    };
     const startTimeUnixNano = nanoNow();
     let error = null;
-    let result;
 
     try {
-      result = await contextStore.run({ traceId, spanId }, () => Promise.resolve(fn()));
-      return result;
+      return await contextStore.run({ traceId: context.traceId, spanId: context.spanId }, () => Promise.resolve(fn()));
     } catch (caught) {
       error = caught;
       throw caught;
     } finally {
-      const endTimeUnixNano = nanoNow();
-      const attrs = {
-        'code.function.name': metadata?.functionName || name,
-        'code.file.path': metadata?.file || metadata?.path,
-        'code.namespace': metadata?.namespace,
-        'ckb.symbol.kind': metadata?.kind || 'function',
-        'ckb.runtime.observed': true,
-        ...metadata?.attributes,
-      };
-      enqueue({
-        traceId,
-        spanId,
-        parentSpanId,
-        name: String(name || metadata?.functionName || 'function'),
-        startTimeUnixNano,
-        endTimeUnixNano,
-        attributes: safeAttributes(attrs),
-        status: { code: error ? 2 : 1 },
-      });
+      enqueue(makeSpanRecord(name, metadata || {}, context, startTimeUnixNano, error));
+    }
+  }
+
+  function spanSync(name, metadata, fn) {
+    if (typeof metadata === 'function') {
+      fn = metadata;
+      metadata = {};
+    }
+    if (typeof fn !== 'function') throw new TypeError('CKB spanSync requires a function to execute.');
+
+    const parent = contextStore.getStore();
+    const context = {
+      traceId: parent?.traceId || hex(16),
+      spanId: hex(8),
+      parentSpanId: parent?.spanId || '',
+    };
+    const startTimeUnixNano = nanoNow();
+    let error = null;
+
+    try {
+      return contextStore.run({ traceId: context.traceId, spanId: context.spanId }, fn);
+    } catch (caught) {
+      error = caught;
+      throw caught;
+    } finally {
+      enqueue(makeSpanRecord(name, metadata || {}, context, startTimeUnixNano, error));
     }
   }
 
@@ -161,6 +205,13 @@ export function createCkbLive(options = {}) {
     if (typeof fn !== 'function') throw new TypeError('CKB wrap requires a function.');
     return function ckbObservedFunction(...args) {
       return span(name, metadata, () => fn.apply(this, args));
+    };
+  }
+
+  function wrapSync(name, fn, metadata = {}) {
+    if (typeof fn !== 'function') throw new TypeError('CKB wrapSync requires a function.');
+    return function ckbObservedSyncFunction(...args) {
+      return spanSync(name, metadata, () => fn.apply(this, args));
     };
   }
 
@@ -187,11 +238,14 @@ export function createCkbLive(options = {}) {
             'http.request.method': req.method || '',
             'http.route': String(route).slice(0, 220),
             'http.response.status_code': Number(res.statusCode || 0),
+            'network.protocol.name': 'http',
             'code.function.name': options.functionName || 'express.request',
             'code.file.path': options.file,
             'code.namespace': options.namespace || serviceName,
             'ckb.symbol.kind': 'route',
             'ckb.runtime.observed': true,
+            'ckb.flow.type': 'http-server',
+            'ckb.flow.direction': 'inbound',
           }),
           status: { code: error || Number(res.statusCode || 0) >= 500 ? 2 : 1 },
         });
@@ -209,9 +263,12 @@ export function createCkbLive(options = {}) {
     return span(name || `fetch ${String(url)}`, {
       ...metadata,
       kind: metadata.kind || 'outbound-http',
+      flowType: metadata.flowType || 'http-client',
+      direction: metadata.direction || 'outbound',
       attributes: {
         'server.address': (() => { try { return new URL(String(url)).hostname; } catch { return ''; } })(),
         'http.request.method': String(init?.method || 'GET').toUpperCase(),
+        'network.protocol.name': 'http',
         ...metadata.attributes,
       },
     }, () => fetch(url, init));
@@ -228,8 +285,11 @@ export function createCkbLive(options = {}) {
   schedule();
   return {
     configured,
+    currentContext,
     span,
+    spanSync,
     wrap,
+    wrapSync,
     expressMiddleware,
     fetch: fetchObserved,
     flush,
