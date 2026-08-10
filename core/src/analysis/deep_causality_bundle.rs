@@ -16,6 +16,12 @@ mod events;
 #[path = "deep_causality_contract_fields.rs"]
 mod contract_fields;
 
+#[path = "deep_causality_manifests.rs"]
+mod manifests;
+
+#[path = "deep_causality_infra_refs.rs"]
+mod infra_refs;
+
 #[path = "deep_causality_federation.rs"]
 pub mod federation;
 pub use federation::*;
@@ -35,9 +41,9 @@ pub use human::*;
 /// Fuse CKB's authoritative dependency/runtime graph with repository artifact
 /// evidence. The adapter preserves existing graph/runtime identity; baseline
 /// artifact extraction is followed by precision contract/ORM/infra/test
-/// extraction, field-level contract typing, and explicit shared
-/// event/topic/queue identity. No evidence class is upgraded merely because
-/// multiple sources agree.
+/// extraction, field-level contract typing, package-manifest federation facts,
+/// explicit Terraform references, and shared event/topic/queue identity. No
+/// evidence class is upgraded merely because multiple sources agree.
 pub fn build_deep_causality_bundle(
     graph: &DependencyGraph,
     repository: impl Into<String>,
@@ -47,7 +53,9 @@ pub fn build_deep_causality_bundle(
     let mut engine = CausalGraphAdapter::new(graph).repository(repository).build();
     CausalArtifactExtractor::enrich(&mut engine, artifacts);
     artifacts_v2_entry::enrich_deep_artifact_semantics(&mut engine, artifacts);
+    manifests::enrich_extra_manifests(&mut engine, artifacts);
     contract_fields::enrich_contract_fields(&mut engine, artifacts);
+    infra_refs::enrich_infrastructure_references(&mut engine, artifacts);
     events::enrich_event_identity(&mut engine, artifacts);
     engine
 }
