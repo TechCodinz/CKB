@@ -1,3 +1,4 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
 
 const CACHE_PREFIX = 'ckb.ide.intelligence.v1:';
@@ -36,6 +37,29 @@ function snapshotId(state: any) {
 function safeNumber(value: unknown, fallback = 0) {
     const number = Number(value);
     return Number.isFinite(number) ? number : fallback;
+}
+
+function slash(value: string) {
+    return value.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '');
+}
+
+function activeSourceContext() {
+    const editor = vscode.window.activeTextEditor;
+    const root = rootPath();
+    if (!editor || editor.document.uri.scheme !== 'file') return undefined;
+    const absolute = editor.document.uri.fsPath;
+    const relative = root ? path.relative(root, absolute) : absolute;
+    const file = slash(relative.startsWith('..') ? absolute : relative);
+    const position = editor.selection.active;
+    const wordRange = editor.document.getWordRangeAtPosition(position);
+    const symbol = wordRange ? editor.document.getText(wordRange).trim() : '';
+    return {
+        file,
+        line: position.line + 1,
+        column: position.character + 1,
+        symbol,
+        selected: !editor.selection.isEmpty,
+    };
 }
 
 function snapshotMarkdown(state: any) {
@@ -97,13 +121,17 @@ async function shareSnapshot(context: vscode.ExtensionContext) {
     if (choice === 'Open Cloud Universe') await openCloudContinuity(context);
 }
 
-async function openCloudContinuity(context: vscode.ExtensionContext) {
+async function openCloudContinuity(
+    context: vscode.ExtensionContext,
+    options: { cursorReality?: boolean; raiziom?: boolean } = {},
+) {
     const configured = vscode.workspace.getConfiguration('ckb').get<string>('cloudExplorerUrl', 'https://ckb-nu.vercel.app/project/current');
     const state = currentState(context);
+    const cursor = options.cursorReality === false ? undefined : activeSourceContext();
     const uri = vscode.Uri.parse(configured);
     const params = new URLSearchParams(uri.query);
     params.set('from', 'vscode');
-    params.set('experience', 'invisible-reality-v6');
+    params.set('experience', cursor ? 'semantic-editor-v10' : 'invisible-reality-v6');
     if (state) {
         const activity = activityOf(state);
         const dna = dnaOf(state);
@@ -113,6 +141,16 @@ async function openCloudContinuity(context: vscode.ExtensionContext) {
         if (Number.isFinite(Number(dna?.overallHealth))) params.set('dna', Number(dna.overallHealth).toFixed(1));
         if (snapshotId(state)) params.set('snapshot', snapshotId(state));
     }
+    if (cursor) {
+        params.set('tab', '0');
+        params.set('file', cursor.file);
+        params.set('line', String(cursor.line));
+        params.set('column', String(cursor.column));
+        params.set('depth', cursor.selected ? 'line' : 'symbol');
+        if (cursor.symbol) params.set('symbol', cursor.symbol.slice(0, 180));
+        params.set('resume', 'xray');
+    }
+    if (options.raiziom) params.set('raiziom', '1');
     await vscode.env.openExternal(uri.with({ query: params.toString() }));
 }
 
@@ -166,6 +204,8 @@ export async function activateGrowthExperience(context: vscode.ExtensionContext)
         vscode.commands.registerCommand('ckb.revealArchitecture', revealArchitecture),
         vscode.commands.registerCommand('ckb.shareRealitySnapshot', () => shareSnapshot(context)),
         vscode.commands.registerCommand('ckb.openCloudContinuity', () => openCloudContinuity(context)),
+        vscode.commands.registerCommand('ckb.continueSemanticRealityInCloud', () => openCloudContinuity(context, { cursorReality: true })),
+        vscode.commands.registerCommand('ckb.askRaiziomAboutCursor', () => openCloudContinuity(context, { cursorReality: true, raiziom: true })),
         vscode.commands.registerCommand('ckb.explainCloudValue', () => showValueBridge(context)),
     );
 
