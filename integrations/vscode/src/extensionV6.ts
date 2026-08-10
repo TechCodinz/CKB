@@ -13,6 +13,14 @@ export async function activate(context: vscode.ExtensionContext) {
         return root ? restoreIntelligence(context, root) : undefined;
     });
     const cloudUriHandler = activateCloudUriHandlerV11(context);
+
+    // Internal, read-only context bridge used by IDE → Cloud continuity. The
+    // returned object contains navigation/evidence metadata only; no source text
+    // is serialized into the handoff URL.
+    context.subscriptions.push(vscode.commands.registerCommand('ckb.getSemanticRealityContext', () => {
+        return (semanticReality as any).current;
+    }));
+
     context.subscriptions.push(semanticReality);
     return {
         ...api,
