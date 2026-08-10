@@ -1,6 +1,9 @@
 //! Workspace builder for V13.1 Deep Software Causality.
 
-use crate::analysis::{build_deep_causality_bundle, DeepCausalityEngine, RepositoryArtifact};
+use crate::analysis::{
+    build_deep_causality_bundle, enrich_with_git_history, DeepCausalityEngine,
+    GitHistoryIngestReport, RepositoryArtifact,
+};
 use crate::{DependencyGraph, FileAnalysis, LanguageParser};
 use anyhow::{Context, Result};
 use ignore::WalkBuilder;
@@ -9,6 +12,7 @@ use std::path::Path;
 
 const MAX_ARTIFACT_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_ARTIFACTS: usize = 25_000;
+const MAX_HISTORY_COMMITS: usize = 500;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkspaceCausalityReport {
@@ -21,6 +25,7 @@ pub struct WorkspaceCausalityReport {
     pub graph_edges: usize,
     pub causal_entities: usize,
     pub causal_facts: usize,
+    pub history: GitHistoryIngestReport,
 }
 
 pub async fn build_workspace_deep_causality(
@@ -72,7 +77,8 @@ pub async fn build_workspace_deep_causality(
     graph.build_call_graph()?;
     graph.build_type_graph()?;
 
-    let engine = build_deep_causality_bundle(&graph, repository.clone(), &artifacts);
+    let mut engine = build_deep_causality_bundle(&graph, repository.clone(), &artifacts);
+    let history = enrich_with_git_history(&mut engine, &root, &repository, MAX_HISTORY_COMMITS);
     let report = WorkspaceCausalityReport {
         root: root.to_string_lossy().replace('\\', "/"),
         repository,
@@ -83,6 +89,7 @@ pub async fn build_workspace_deep_causality(
         graph_edges: graph.edge_count(),
         causal_entities: engine.entities().count(),
         causal_facts: engine.facts().len(),
+        history,
     };
     Ok((engine, report))
 }
@@ -95,9 +102,15 @@ fn supported_source(path: &Path) -> bool {
 fn causal_artifact_candidate(path: &Path, relative: &str) -> bool {
     if supported_source(path) { return true; }
     let lower = relative.to_ascii_lowercase();
-    if lower.ends_with("codeowners") || lower.ends_with("dockerfile") || lower.contains("/.github/workflows/") || lower.starts_with(".github/workflows/") { return true; }
+    if lower.ends_with("codeowners")
+        || lower.ends_with("dockerfile")
+        || lower.contains("/.github/workflows/")
+        || lower.starts_with(".github/workflows/")
+        || lower.contains("openapi")
+        || lower.contains("swagger")
+    { return true; }
     matches!(path.extension().and_then(|v| v.to_str()).map(|v| v.to_ascii_lowercase()).as_deref(),
-        Some("prisma" | "sql" | "tf" | "yaml" | "yml" | "json" | "toml" | "env" | "properties" | "xml"))
+        Some("prisma" | "sql" | "tf" | "yaml" | "yml" | "json" | "toml" | "env" | "properties" | "xml" | "graphql" | "gql" | "proto"))
 }
 
 #[cfg(test)]
@@ -109,6 +122,9 @@ mod tests {
         assert!(causal_artifact_candidate(Path::new("prisma/schema.prisma"), "prisma/schema.prisma"));
         assert!(causal_artifact_candidate(Path::new("docker-compose.yml"), "docker-compose.yml"));
         assert!(causal_artifact_candidate(Path::new(".github/CODEOWNERS"), ".github/CODEOWNERS"));
+        assert!(causal_artifact_candidate(Path::new("api/openapi.yaml"), "api/openapi.yaml"));
+        assert!(causal_artifact_candidate(Path::new("schema.graphql"), "schema.graphql"));
+        assert!(causal_artifact_candidate(Path::new("events.proto"), "events.proto"));
         assert!(!causal_artifact_candidate(Path::new("image.png"), "image.png"));
     }
 }
