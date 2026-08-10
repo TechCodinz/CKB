@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ckb.dev/schemas/model-adapter-request-v1.schema.json",
+  "title": "CKB Model Adapter Request V1",
+  "description": "Provider-neutral request envelope for presenting bounded CKB architecture context to any current or future model/agent.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "task", "context", "anchor", "toolManifest", "truthContract", "synthetic"],
+  "properties": {
+    "version": { "const": "ckb-model-adapter-request-v1" },
+    "requestId": { "type": "string", "minLength": 1, "maxLength": 240 },
+    "task": { "enum": ["understand", "explain", "change", "debug", "review", "migrate", "optimize", "security"] },
+    "modelProfile": { "$ref": "./model-capability-profile.schema.json" },
+    "context": { "$ref": "./ckb-context-v1.schema.json" },
+    "anchor": { "$ref": "./ckb-memory-anchor-v1.schema.json" },
+    "toolManifest": {
+      "type": "object",
+      "required": ["architectureQueryVersion", "allowedOperations"],
+      "properties": {
+        "architectureQueryVersion": { "const": "ckb-aql-v1" },
+        "allowedOperations": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["MEMORY", "PATH", "DEPENDENTS", "IMPACT", "DNA", "HISTORY", "DIFF", "RUNTIME"] }
+        },
+        "mutationAllowed": { "const": false }
+      }
+    },
+    "truthContract": {
+      "type": "object",
+      "required": ["evidencePolicy", "runtimeRequiresObservation", "predictionIsNotActual", "promotionRequiresExplicitGate"],
+      "properties": {
+        "evidencePolicy": { "const": "static-runtime-predicted-separated" },
+        "runtimeRequiresObservation": { "const": true },
+        "predictionIsNotActual": { "const": true },
+        "promotionRequiresExplicitGate": { "const": true }
+      }
+    },
+    "synthetic": { "const": false }
+  }
+}
