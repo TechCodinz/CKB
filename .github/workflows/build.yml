@@ -25,10 +25,6 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build workspace (core, cli, mcp-server)
-        # Scoped to these three packages deliberately — bindings/wasm is a
-        # workspace member but only builds for the wasm32 target (its
-        # wasm-bindgen externs don't resolve on a native target), so a plain
-        # `cargo build --workspace` here would fail on that crate.
         run: cargo build --locked --release -p ckb-core -p ckb-cli -p ckb-mcp-server
 
       - name: Run tests
@@ -36,25 +32,19 @@ jobs:
 
       - name: Clippy
         run: cargo clippy --locked -p ckb-core -p ckb-cli -p ckb-mcp-server --all-targets -- -D warnings
-        continue-on-error: true # informational — not a merge blocker until codebase is clippy-clean
+        continue-on-error: true
 
   wasm:
     runs-on: ubuntu-latest
-    # Marked continue-on-error: the WASM binding uses web-sys/wasm-bindgen-futures
-    # whose exact API has shifted across versions — see BUILD_INSTRUCTIONS.md §1a.
-    # Treated as informational until verified against a pinned web-sys version.
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-
       - name: Cache Cargo/target
         uses: Swatinem/rust-cache@v2
-
       - name: Build WASM bindings
         run: cargo build --locked --release -p ckb-wasm --target wasm32-unknown-unknown
 
@@ -67,11 +57,9 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: integrations/vscode/package-lock.json
-
       - name: Install dependencies
         working-directory: integrations/vscode
         run: npm ci
-
       - name: Compile
         working-directory: integrations/vscode
         run: npm run compile
@@ -89,6 +77,7 @@ jobs:
         run: |
           node --check integrations/runtime/node/ckb-live.mjs
           node --check integrations/runtime/node/ckb-auto.mjs
+          node --check integrations/runtime/node/ckb-detect.mjs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
