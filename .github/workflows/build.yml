@@ -94,4 +94,6 @@ jobs:
       - name: Python SDK syntax check
         run: python3 -m py_compile bindings/python/ckb/core.py bindings/python/ckb/__init__.py bindings/python/setup.py
       - name: Python Live Reality syntax check
-        run: python3 -m py_compile integrations/runtime/python/ckb_live.py
+        run: |
+          python3 -m py_compile integrations/runtime/python/ckb_live.py
+          python3 -m py_compile integrations/runtime/python/ckb_detect.py
