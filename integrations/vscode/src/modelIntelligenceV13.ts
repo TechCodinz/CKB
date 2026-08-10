@@ -8,6 +8,24 @@ function slash(value: string) {
     return value.replace(/\\/g, '/').replace(/^\.\//, '');
 }
 
+function supported(state: unknown) {
+    return ['supported', 'preview', 'beta'].includes(String(state || '').toLowerCase());
+}
+
+function modelContextProfile(profile: any) {
+    const modalities = Array.isArray(profile?.inputModalities) ? profile.inputModalities.map(String) : [];
+    return {
+        provider: profile?.provider,
+        model: profile?.model,
+        contextWindowTokens: profile?.contextWindowTokens,
+        supportsStructuredOutput: supported(profile?.tools?.structuredOutput),
+        supportsToolUse: supported(profile?.tools?.functionCalling),
+        supportsParallelTools: supported(profile?.tools?.parallelFunctionCalling),
+        supportsImages: modalities.includes('image'),
+        supportsCodeExecution: supported(profile?.tools?.codeExecution),
+    };
+}
+
 export class CkbModelIntelligenceV13 implements vscode.Disposable {
     private readonly disposables: vscode.Disposable[] = [];
     private readonly output = vscode.window.createOutputChannel('CKB Architecture Intelligence V13');
@@ -17,6 +35,8 @@ export class CkbModelIntelligenceV13 implements vscode.Disposable {
             this.output,
             vscode.commands.registerCommand('ckb.compileArchitectureContextAtCursor', () => this.compileAtCursor()),
             vscode.commands.registerCommand('ckb.showObservedModelRegistry', () => this.showObservedRegistry()),
+            vscode.commands.registerCommand('ckb.showVerifiedFrontierModelCatalog', () => this.showVerifiedCatalog()),
+            vscode.commands.registerCommand('ckb.checkFrontierModelRequest', () => this.checkFrontierModelRequest()),
             vscode.commands.registerCommand('ckb.showArchitectureConstitution', () => this.showConstitution()),
         );
     }
@@ -110,11 +130,44 @@ export class CkbModelIntelligenceV13 implements vscode.Disposable {
         return picked?.task;
     }
 
+    private async verifiedCatalog() {
+        const result = await this.request('GET', '/architecture/models/catalog');
+        return Array.isArray(result?.entries) ? result.entries : [];
+    }
+
+    private async pickVerifiedModel(allowNeutral = true): Promise<any | undefined | null> {
+        const entries = await this.verifiedCatalog();
+        const options: Array<{ label: string; description?: string; detail?: string; profile: any | null }> = entries.map((profile: any) => ({
+            label: `${profile.provider}/${profile.model}`,
+            description: `${String(profile.availability || 'unknown').toUpperCase()} • ${String(profile.freshness || 'unknown')}`,
+            detail: `${profile.contextWindowTokens ? `${Number(profile.contextWindowTokens).toLocaleString()} ctx` : 'context unknown'} • ${profile.maxOutputTokens ? `${Number(profile.maxOutputTokens).toLocaleString()} max output` : 'output unknown'} • ${profile.preferredApiSurface || 'API surface unknown'}`,
+            profile,
+        }));
+        if (allowNeutral) {
+            options.unshift({
+                label: 'CKB MODEL-NEUTRAL',
+                description: 'No provider assumptions',
+                detail: 'Compile evidence without attaching a provider/model capability hint.',
+                profile: null,
+            });
+        }
+        if (!options.length) throw new Error('CKB verified frontier model catalog is empty');
+        const picked = await vscode.window.showQuickPick(options, {
+            title: 'CKB V13 • Verified Frontier Model Profile',
+            placeHolder: 'Capability metadata affects transport/context hints only — never architecture evidence truth',
+            matchOnDescription: true,
+            matchOnDetail: true,
+        });
+        return picked ? picked.profile : undefined;
+    }
+
     private async compileAtCursor() {
         try {
             const identity = this.cursorIdentity();
             const task = await this.task();
             if (!task) return;
+            const model = await this.pickVerifiedModel(true);
+            if (model === undefined) return;
             const query = await vscode.window.showInputBox({
                 title: `CKB V13 • Compile ${task.toUpperCase()} Context`,
                 prompt: 'Describe the task. CKB will retrieve a bounded evidence package, not dump the repository.',
@@ -132,12 +185,14 @@ export class CkbModelIntelligenceV13 implements vscode.Disposable {
                 depth: task === 'change' || task === 'debug' || task === 'security' ? 3 : 2,
                 limit: 120,
                 budget: { maxChars: 48_000, maxNodes: 80, maxEdges: 160 },
+                ...(model ? { modelProfile: modelContextProfile(model) } : {}),
             }));
             const context = result?.context || {};
             this.output.clear();
             this.output.appendLine('CKB ARCHITECTURE INTELLIGENCE FABRIC V13');
             this.output.appendLine(`Project: ${this.projectId()}`);
             this.output.appendLine(`Task: ${context.task || task}`);
+            this.output.appendLine(`Model profile: ${model ? `${model.provider}/${model.model} • ${model.freshness || 'freshness unknown'} • metadata only` : 'MODEL-NEUTRAL'}`);
             this.output.appendLine(`Memory version: ${context.sourceMemoryVersion || 'unknown'}`);
             this.output.appendLine(`Roots: ${(context.sourceRootIds || []).join(', ') || 'none resolved'}`);
             this.output.appendLine(`Evidence: ${context.evidenceLedger?.length || 0} provenance records`);
@@ -158,6 +213,46 @@ export class CkbModelIntelligenceV13 implements vscode.Disposable {
         }
     }
 
+    private async showVerifiedCatalog() {
+        try {
+            const profile = await this.pickVerifiedModel(false);
+            if (!profile) return;
+            const doc = await vscode.workspace.openTextDocument({ language: 'json', content: JSON.stringify(profile, null, 2) });
+            await vscode.window.showTextDocument(doc, { preview: true, viewColumn: vscode.ViewColumn.Beside });
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`CKB verified frontier catalog unavailable: ${error?.message || error}`);
+        }
+    }
+
+    private async checkFrontierModelRequest() {
+        try {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) throw new Error('Open a JSON request document first');
+            let requestBody: any;
+            try {
+                requestBody = JSON.parse(editor.document.getText());
+            } catch {
+                throw new Error('The active editor must contain valid JSON for request compatibility inspection');
+            }
+            const profile = await this.pickVerifiedModel(false);
+            if (!profile) return;
+            const result = await this.request('POST', '/architecture/models/request-adapt', {
+                provider: profile.provider,
+                model: profile.model,
+                request: requestBody,
+            });
+            const doc = await vscode.workspace.openTextDocument({ language: 'json', content: JSON.stringify(result, null, 2) });
+            await vscode.window.showTextDocument(doc, { preview: true, viewColumn: vscode.ViewColumn.Beside });
+            if (result?.compatible === false) {
+                vscode.window.showWarningMessage(`CKB found ${Array.isArray(result.errors) ? result.errors.length : 1} verified request incompatibility finding(s). No model request was executed.`);
+            } else {
+                vscode.window.showInformationMessage(`CKB request compatibility pass completed for ${profile.provider}/${profile.model}. No model request was executed.`);
+            }
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`CKB frontier request check failed: ${error?.message || error}`);
+        }
+    }
+
     private async showObservedRegistry() {
         try {
             const task = await this.task();
@@ -172,11 +267,11 @@ export class CkbModelIntelligenceV13 implements vscode.Disposable {
             const pick = await vscode.window.showQuickPick(registry.map((item: any) => ({
                 label: `${item.provider}/${item.model}`,
                 description: item.observedScore == null ? 'unranked — no observed validation evidence' : `${(item.observedScore * 100).toFixed(1)}% observed score • ${item.observations} checks`,
-                detail: `rollback ${item.rollbackRate == null ? 'unobserved' : `${(item.rollbackRate * 100).toFixed(1)}%`} • task ${task}`,
+                detail: `${item.recommendationEligible ? 'evidence threshold met' : 'insufficient evidence for recommendation'} • rollback ${item.rollbackRate == null ? 'unobserved' : `${(item.rollbackRate * 100).toFixed(1)}%`} • ${item.sourceKind || 'source unknown'} • task ${task}`,
                 item,
             })), {
                 title: `CKB V13 • Observed Model Registry • ${task.toUpperCase()}`,
-                placeHolder: 'Scores summarize this project’s recorded validation outcomes only',
+                placeHolder: 'Scores summarize this project’s recorded validation outcomes only; CKB does not auto-select models',
             });
             if (pick) {
                 const doc = await vscode.workspace.openTextDocument({ language: 'json', content: JSON.stringify(pick.item, null, 2) });
