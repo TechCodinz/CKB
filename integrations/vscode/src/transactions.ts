@@ -5,10 +5,19 @@ import * as vscode from 'vscode';
 
 const execFileAsync = promisify(execFile);
 
+export interface AgentTarget {
+    id?: string;
+    name?: string;
+    kind?: string;
+    path?: string;
+    line?: number;
+    column?: number;
+}
+
 export interface AgentChangeRequest {
     instruction: string;
     projectId: string;
-    target: { id?: string; name?: string; kind?: string; path?: string; line?: number; column?: number };
+    target: AgentTarget;
     patchFile: string;
     validationFile: string;
     stateFile: string;
@@ -54,6 +63,19 @@ export class CkbTransactionAgent {
         return secret || vscode.workspace.getConfiguration('ckb').get<string>('apiKey', '').trim();
     }
 
+    async hasCloudApiKey() {
+        const key = await this.apiKey();
+        return Boolean(key && key.startsWith('ckb_live_'));
+    }
+
+    async setCloudApiKey(value: string) {
+        const key = value.trim();
+        if (!key.startsWith('ckb_live_')) {
+            throw new Error('CKB Cloud API keys must begin with ckb_live_');
+        }
+        await this.context.secrets.store('ckb.cloudApiKey', key);
+    }
+
     private async cloud(path: string, body: Record<string, unknown>): Promise<any> {
         const config = vscode.workspace.getConfiguration('ckb');
         const baseUrl = config.get<string>('cloudApiUrl', 'https://ckb-backend-api.onrender.com').replace(/\/$/, '');
@@ -71,7 +93,7 @@ export class CkbTransactionAgent {
                     'Authorization': `Bearer ${apiKey}`,
                     'Content-Type': 'application/json',
                     'Content-Length': String(Buffer.byteLength(payload)),
-                    'User-Agent': 'CKB-VSCode-Transaction-Agent/1.0',
+                    'User-Agent': 'CKB-VSCode-Transaction-Agent/1.1',
                 },
             }, (response: any) => {
                 let raw = '';
@@ -93,15 +115,36 @@ export class CkbTransactionAgent {
         });
     }
 
-    /** Prepare locally, validate in an isolated worktree, then persist that exact evidence in Cloud. */
-    async prepare(request: AgentChangeRequest) {
+    /** Evidence-grounded architecture conversation. This endpoint never mutates source. */
+    async converse(message: string, projectId: string, target: AgentTarget, context: Record<string, unknown> = {}) {
+        return this.cloud('/architecture/converse', {
+            message,
+            project_id: projectId,
+            context: {
+                ...context,
+                selectedNode: target,
+                line: target.line,
+                column: target.column,
+            },
+        });
+    }
+
+    /** Prepare CURRENT -> PROPOSED architecture evidence without creating or applying a source patch. */
+    async prepareCapsule(instruction: string, projectId: string, target: AgentTarget) {
+        return this.cloud('/architecture/prepare-change', {
+            instruction,
+            project_id: projectId,
+            context: { selectedNode: target },
+        });
+    }
+
+    /** Validate a concrete local diff against an already prepared Cloud capsule. */
+    async validatePreparedCapsule(capsule: any, request: AgentChangeRequest) {
         const root = this.workspaceRoot();
         if (!root) throw new Error('Open a workspace folder before preparing a transaction');
-        const capsule = await this.cloud('/architecture/prepare-change', {
-            instruction: request.instruction,
-            project_id: request.projectId,
-            context: { selectedNode: request.target },
-        });
+        if (!capsule?.capsuleId || !capsule?.snapshotId) {
+            throw new Error('The prepared Cloud capsule is missing exact capsule/snapshot identity');
+        }
         const local = await this.runLocal([
             'prepare-patch', root, request.patchFile, request.validationFile, request.stateFile,
             '--baseline', request.baseline || 'HEAD',
@@ -117,6 +160,16 @@ export class CkbTransactionAgent {
             validation: transaction.validations,
         });
         return { capsule, local, recorded, mutationApplied: false, activeCheckoutModified: false, synthetic: false };
+    }
+
+    /** Prepare Cloud prediction, validate a caller-supplied local patch, and persist exact evidence. */
+    async prepare(request: AgentChangeRequest) {
+        const capsule = await this.prepareCapsule(request.instruction, request.projectId, request.target);
+        return this.validatePreparedCapsule(capsule, request);
+    }
+
+    async transactionState(stateFile: string) {
+        return readState(stateFile);
     }
 
     /** Commit only after the caller supplies the exact Cloud snapshot and locally staged tree. */
@@ -189,5 +242,12 @@ export class CkbTransactionAgent {
             validations: transaction.rollback_validations || local.rollbackValidations,
         });
         return { local, recorded, merged: false, pushed: false, activeCheckoutModified: false, synthetic: false };
+    }
+
+    async cleanup(stateFile: string, deleteBranch = true) {
+        return this.runLocal([
+            'cleanup-patch', stateFile,
+            ...(deleteBranch ? ['--delete-branch'] : []),
+        ]);
     }
 }

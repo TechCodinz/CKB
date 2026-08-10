@@ -3,6 +3,7 @@ import * as core from './extension';
 import { activateGrowthExperience } from './growthExperience';
 import { activateEditorSemanticRealityV10 } from './editorSemanticRealityV10';
 import { activateCloudUriHandlerV11 } from './cloudUriHandlerV11';
+import { activateCursorGuardedChangeReality } from './cursorChangeReality';
 import { restoreIntelligence } from './intelligence';
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -21,11 +22,13 @@ export async function activate(context: vscode.ExtensionContext) {
         return (semanticReality as any).current;
     }));
 
-    context.subscriptions.push(semanticReality);
+    const guardedChangeReality = activateCursorGuardedChangeReality(context, api.transactions);
+    context.subscriptions.push(semanticReality, guardedChangeReality);
     return {
         ...api,
         editorSemanticReality: semanticReality,
         cloudUriHandler,
+        guardedChangeReality,
     };
 }
 
