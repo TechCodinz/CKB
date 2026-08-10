@@ -1,42 +1,97 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ckb.dev/schemas/model-capability-profile.schema.json",
-  "title": "CKB Model Capability Profile",
-  "description": "Vendor-neutral declared capabilities used for context/transport decisions. These fields do not alter CKB evidence truth or constitute model quality claims.",
+  "title": "CKB Model Capability Profile V2",
+  "description": "Vendor-neutral capability, lifecycle and request-compatibility metadata. Unknown support remains explicit; model identity cannot change CKB evidence truth or constitute a quality claim.",
   "type": "object",
   "additionalProperties": false,
-  "properties": {
-    "provider": { "type": "string", "maxLength": 160 },
-    "model": { "type": "string", "maxLength": 200 },
-    "releasedAt": { "type": ["string", "null"], "format": "date-time" },
-    "contextWindowTokens": { "type": ["integer", "null"], "minimum": 1, "maximum": 20000000 },
-    "maxOutputTokens": { "type": ["integer", "null"], "minimum": 1, "maximum": 2000000 },
-    "supportsStructuredOutput": { "type": "boolean", "default": true },
-    "supportsToolUse": { "type": "boolean", "default": true },
-    "supportsParallelTools": { "type": "boolean", "default": false },
-    "supportsImages": { "type": "boolean", "default": false },
-    "supportsCodeExecution": { "type": "boolean", "default": false },
-    "supportsLongRunningAgents": { "type": "boolean", "default": false },
-    "declaredSources": {
-      "type": "array",
-      "maxItems": 40,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["kind", "reference"],
-        "properties": {
-          "kind": { "enum": ["official-doc", "official-release", "provider-api", "user-declared"] },
-          "reference": { "type": "string", "maxLength": 1000 },
-          "observedAt": { "type": ["string", "null"], "format": "date-time" }
-        }
+  "$defs": {
+    "supportState": { "enum": ["supported", "unsupported", "preview", "beta", "limited", "unknown"] },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "reference"],
+      "properties": {
+        "kind": { "enum": ["official-doc", "official-release", "provider-api", "user-declared"] },
+        "reference": { "type": "string", "maxLength": 1000 },
+        "observedAt": { "type": ["string", "null"], "format": "date-time" }
       }
     }
   },
-  "required": [
-    "supportsStructuredOutput",
-    "supportsToolUse",
-    "supportsParallelTools",
-    "supportsImages",
-    "supportsCodeExecution"
-  ]
+  "properties": {
+    "provider": { "type": "string", "maxLength": 160 },
+    "model": { "type": "string", "maxLength": 200 },
+    "aliases": { "type": "array", "maxItems": 40, "items": { "type": "string", "maxLength": 200 } },
+    "availability": { "enum": ["ga", "preview", "limited", "deprecated", "retired", null] },
+    "releasedAt": { "type": ["string", "null"], "format": "date-time" },
+    "verifiedAt": { "type": ["string", "null"], "format": "date-time" },
+    "staleAfterDays": { "type": ["integer", "null"], "minimum": 1, "maximum": 365 },
+    "knowledgeCutoff": { "type": ["string", "null"], "maxLength": 80 },
+    "contextWindowTokens": { "type": ["integer", "null"], "minimum": 1, "maximum": 20000000 },
+    "maxOutputTokens": { "type": ["integer", "null"], "minimum": 1, "maximum": 2000000 },
+    "inputModalities": { "type": "array", "maxItems": 20, "items": { "type": "string", "maxLength": 40 } },
+    "outputModalities": { "type": "array", "maxItems": 20, "items": { "type": "string", "maxLength": 40 } },
+    "apiSurfaces": { "type": "array", "maxItems": 30, "items": { "type": "string", "maxLength": 100 } },
+    "preferredApiSurface": { "type": ["string", "null"], "maxLength": 100 },
+    "reasoning": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "support": { "$ref": "#/$defs/supportState" },
+        "modes": { "type": "array", "maxItems": 30, "items": { "type": "string", "maxLength": 80 } },
+        "defaultMode": { "type": ["string", "null"], "maxLength": 80 },
+        "adaptive": { "$ref": "#/$defs/supportState" },
+        "alwaysOn": { "type": ["boolean", "null"] },
+        "manualBudgetSupported": { "type": ["boolean", "null"] }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "functionCalling": { "$ref": "#/$defs/supportState" },
+        "structuredOutput": { "$ref": "#/$defs/supportState" },
+        "parallelFunctionCalling": { "$ref": "#/$defs/supportState" },
+        "codeExecution": { "$ref": "#/$defs/supportState" },
+        "computerUse": { "$ref": "#/$defs/supportState" },
+        "mcp": { "$ref": "#/$defs/supportState" },
+        "namedTools": { "type": "array", "maxItems": 80, "items": { "type": "string", "maxLength": 100 } }
+      }
+    },
+    "requestConstraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deprecatedParameters": { "type": "array", "maxItems": 80, "items": { "type": "string", "maxLength": 160 } },
+        "rejectedParameters": { "type": "array", "maxItems": 80, "items": { "type": "string", "maxLength": 160 } },
+        "ignoredParameters": { "type": "array", "maxItems": 80, "items": { "type": "string", "maxLength": 160 } },
+        "unsupportedParameters": { "type": "array", "maxItems": 80, "items": { "type": "string", "maxLength": 160 } },
+        "unsupportedTurnPatterns": { "type": "array", "maxItems": 40, "items": { "type": "string", "maxLength": 160 } },
+        "parameterMigrations": {
+          "type": "array",
+          "maxItems": 40,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["from", "action", "note"],
+            "properties": {
+              "from": { "type": "string", "maxLength": 160 },
+              "to": { "type": ["string", "null"], "maxLength": 160 },
+              "action": { "enum": ["remove", "rename", "review"] },
+              "note": { "type": "string", "maxLength": 1000 }
+            }
+          }
+        },
+        "notes": { "type": "array", "maxItems": 80, "items": { "type": "string", "maxLength": 1000 } }
+      }
+    },
+    "tokenizerNotes": { "type": "array", "maxItems": 40, "items": { "type": "string", "maxLength": 1000 } },
+    "supportsStructuredOutput": { "type": "boolean", "description": "Legacy compatibility flag; prefer tools.structuredOutput support state." },
+    "supportsToolUse": { "type": "boolean", "description": "Legacy compatibility flag." },
+    "supportsParallelTools": { "type": "boolean", "description": "Legacy compatibility flag; prefer tools.parallelFunctionCalling support state." },
+    "supportsImages": { "type": "boolean", "description": "Legacy compatibility flag; prefer inputModalities." },
+    "supportsCodeExecution": { "type": "boolean", "description": "Legacy compatibility flag; prefer tools.codeExecution support state." },
+    "supportsLongRunningAgents": { "type": "boolean", "default": false },
+    "declaredSources": { "type": "array", "maxItems": 40, "items": { "$ref": "#/$defs/source" } }
+  }
 }
