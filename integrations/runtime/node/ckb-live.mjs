@@ -31,14 +31,11 @@ function flowAttributes(metadata = {}, fallback = 'function') {
 /**
  * CKB Live Reality agent for Node.js 18+.
  *
- * - zero runtime dependencies
- * - batches OTLP/HTTP JSON every ~12s by default
- * - preserves parent/child trace identity with AsyncLocalStorage
- * - never records request/response bodies, secrets, headers or arbitrary objects
- * - emits code.file.path + code.function.name so CKB can map observed execution
- *   back onto the static Tree-sitter architecture when those identities match
- * - emits ckb.flow.type so the Semantic Universe can distinguish HTTP, database,
- *   cache, queue, event, WebSocket and internal function transitions.
+ * Runtime truth contract:
+ * - application spans are emitted only when code actually executes
+ * - the optional heartbeat is explicitly tagged as deployment liveness, never
+ *   as an application call or dependency transition
+ * - bodies, secrets, headers and arbitrary objects are never copied
  */
 export function createCkbLive(options = {}) {
   const endpoint = String(options.endpoint || process.env.CKB_OTLP_ENDPOINT || '').trim();
@@ -47,8 +44,12 @@ export function createCkbLive(options = {}) {
   const environment = String(options.environment || process.env.NODE_ENV || 'unknown');
   const flushIntervalMs = Math.max(10_000, Number(options.flushIntervalMs || 12_000));
   const maxBatch = Math.max(8, Math.min(256, Number(options.maxBatch || 96)));
+  const heartbeatIntervalMs = options.heartbeat === false
+    ? 0
+    : Math.max(30_000, Number(options.heartbeatIntervalMs || process.env.CKB_HEARTBEAT_INTERVAL_MS || 60_000));
   const queue = [];
   let timer = null;
+  let heartbeatTimer = null;
   let flushing = false;
   let stopped = false;
 
@@ -67,7 +68,7 @@ export function createCkbLive(options = {}) {
       'deployment.environment': environment,
       'telemetry.sdk.name': 'ckb-live-reality',
       'telemetry.sdk.language': 'nodejs',
-      'ckb.runtime.agent': 'node-zero-dependency-v2',
+      'ckb.runtime.agent': 'node-zero-dependency-v3',
     });
   }
 
@@ -87,6 +88,40 @@ export function createCkbLive(options = {}) {
     else schedule();
   }
 
+  function heartbeat() {
+    if (!configured() || stopped) return false;
+    const now = nanoNow();
+    enqueue({
+      traceId: hex(16),
+      spanId: hex(8),
+      parentSpanId: '',
+      name: 'ckb.runtime.heartbeat',
+      startTimeUnixNano: now,
+      endTimeUnixNano: now,
+      attributes: safeAttributes({
+        'code.function.name': 'ckb.runtime.heartbeat',
+        'code.namespace': serviceName,
+        'ckb.symbol.kind': 'deployment-heartbeat',
+        'ckb.runtime.observed': true,
+        'ckb.runtime.heartbeat': true,
+        'ckb.flow.type': 'heartbeat',
+        'ckb.flow.direction': 'internal',
+      }),
+      status: { code: 1 },
+    });
+    return true;
+  }
+
+  function scheduleHeartbeat() {
+    if (!configured() || stopped || heartbeatIntervalMs <= 0 || heartbeatTimer) return;
+    heartbeatTimer = setTimeout(() => {
+      heartbeatTimer = null;
+      heartbeat();
+      scheduleHeartbeat();
+    }, heartbeatIntervalMs);
+    heartbeatTimer.unref?.();
+  }
+
   async function flush() {
     if (!configured() || stopped || flushing || queue.length === 0) return { sent: 0 };
     flushing = true;
@@ -101,13 +136,13 @@ export function createCkbLive(options = {}) {
         headers: {
           'content-type': 'application/json',
           'x-ckb-telemetry-key': key,
-          'user-agent': 'CKB-Live-Reality-Node/2.0',
+          'user-agent': 'CKB-Live-Reality-Node/3.0',
         },
         body: JSON.stringify({
           resourceSpans: [{
             resource: { attributes: resourceAttributes() },
             scopeSpans: [{
-              scope: { name: 'ckb.live.reality', version: '2.0.0' },
+              scope: { name: 'ckb.live.reality', version: '3.0.0' },
               spans: batch,
             }],
           }],
@@ -276,16 +311,20 @@ export function createCkbLive(options = {}) {
 
   async function shutdown() {
     if (timer) clearTimeout(timer);
+    if (heartbeatTimer) clearTimeout(heartbeatTimer);
     timer = null;
+    heartbeatTimer = null;
     const result = await flush();
     stopped = true;
     return result;
   }
 
   schedule();
+  scheduleHeartbeat();
   return {
     configured,
     currentContext,
+    heartbeat,
     span,
     spanSync,
     wrap,
