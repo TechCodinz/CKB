@@ -8,6 +8,7 @@ pub mod test_coverage;
 pub mod memory;
 pub mod causal;
 pub mod activity;
+pub mod intelligence_fabric;
 
 pub use boundaries::*;
 pub use patterns::*;
@@ -17,6 +18,7 @@ pub use test_coverage::*;
 pub use memory::*;
 pub use causal::*;
 pub use activity::*;
+pub use intelligence_fabric::*;
 
 use crate::graph::DependencyGraph;
 use crate::types::*;
@@ -122,7 +124,7 @@ impl ArchitectureAnalyzer {
         Ok(violations)
     }
 
-    pub fn infer_boundaries(&self, graph: &DependencyGraph) -> Result<Vec<ArchitectureBoundary>> {
+    pub fn infer_boundaries(&self, graph: &DependencyGraph) -> Result<Vec<ArchitecturalBoundary>> {
         let mut boundaries = Vec::new();
         for inferencer in &self.boundary_inferencers {
             boundaries.extend(inferencer.infer(graph)?);
@@ -130,194 +132,31 @@ impl ArchitectureAnalyzer {
         Ok(boundaries)
     }
 
-    pub fn slice_context_for_prompt(&self, graph: &DependencyGraph, file: &str, _depth: usize) -> Result<String> {
-        let node_id = NodeId(format!("{}::file", file));
-        let callers = graph.get_callers(&node_id);
-        let deps = graph.get_dependencies(&node_id)?;
-
-        let mut out = String::new();
-        out.push_str(&format!("<architectural_context target_file=\"{}\">\n", file));
-        out.push_str("  <incoming_dependents>\n");
-        for caller in callers {
-            out.push_str(&format!("    <dependent id=\"{}\"/>\n", caller.0));
-        }
-        out.push_str("  </incoming_dependents>\n");
-        out.push_str("  <outgoing_dependencies>\n");
-        for dep in deps {
-            out.push_str(&format!("    <dependency id=\"{}\"/>\n", dep.0));
-        }
-        out.push_str("  </outgoing_dependencies>\n");
-        out.push_str("</architectural_context>");
-        Ok(out)
-    }
-
-    pub fn generate_ai_guidelines(&self, graph: &DependencyGraph) -> Result<String> {
-        let boundaries = self.infer_boundaries(graph)?;
-        let mut doc = String::new();
-        doc.push_str("# Auto-Generated CKB Architectural Guidelines\n\n");
-        doc.push_str("> Generated from the current dependency graph and inferred boundaries. Verify inferred policy before enforcing it as an organizational rule.\n\n");
-        doc.push_str("## Inferred Architectural Boundaries\n\n");
-
-        for b in boundaries {
-            doc.push_str(&format!("### Boundary: {}\n", b.name));
-            doc.push_str(&format!("- **Kind**: {:?}\n", b.kind));
-            if !b.allowed_dependencies.is_empty() {
-                doc.push_str(&format!("- **Allowed dependency tokens**: {}\n", b.allowed_dependencies.join(", ")));
-            }
-            if !b.forbidden_dependencies.is_empty() {
-                doc.push_str(&format!("- **Forbidden dependency tokens**: {}\n", b.forbidden_dependencies.join(", ")));
-            }
-            doc.push_str("\n");
-        }
-
-        doc.push_str("## Guardrails\n");
-        doc.push_str("1. Maintain separation of concerns between core logic, backend API, and presentation layers.\n");
-        doc.push_str("2. Do not introduce circular dependencies across modules.\n");
-        doc.push_str("3. Query CKB blast-radius analysis before deleting or changing public interfaces.\n");
-        Ok(doc)
-    }
-
-    pub fn suggest_decoupling_refactor(&self, graph: &DependencyGraph, cycle_nodes: &[NodeId]) -> Result<String> {
-        let mut refactor_plan = String::new();
-        refactor_plan.push_str("CKB Decoupling Recommendation\n\n");
-        refactor_plan.push_str("Evidence: cycle nodes discovered in the current dependency graph.\n\n");
-
-        for (idx, node) in cycle_nodes.iter().enumerate() {
-            let incoming = graph.incoming_degree(node)?;
-            let outgoing = graph.outgoing_degree(node)?;
-            refactor_plan.push_str(&format!(
-                "{}. `{}` — fan-in {}, fan-out {}. Consider extracting the smallest stable contract that allows one cycle edge to be inverted or removed.\n",
-                idx + 1, node.0, incoming, outgoing
-            ));
-        }
-        refactor_plan.push_str("\nCKB does not claim the cycle is removed until the proposed patch is applied and the graph is rescanned.");
-        Ok(refactor_plan)
-    }
-
-    pub fn predict_failure_probability(&self, graph: &DependencyGraph, file: &str) -> Result<f32> {
-        let file_node = NodeId(format!("{}::file", file));
-        let inc = graph.incoming_degree(&file_node)? as f32;
-        let out = graph.outgoing_degree(&file_node)? as f32;
-        let structural = ((inc * 2.0 + out) / 30.0).min(0.65);
-
-        let runtime = graph.get_runtime_metrics(&file_node).map(|m| {
-            let error_component = (m.error_rate * 2.5).min(0.20);
-            let hotpath_component = if m.is_hotpath { 0.10 } else { 0.0 };
-            let latency_component = (m.avg_latency_ms / 5000.0).min(0.05);
-            error_component + hotpath_component + latency_component
-        }).unwrap_or(0.0);
-
-        Ok((structural + runtime).min(0.99))
-    }
-
-    fn check_boundary(&self, graph: &DependencyGraph, boundary: &ArchitectureBoundary) -> Result<Vec<DriftViolation>> {
-        if boundary.forbidden_dependencies.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let nodes_by_id: std::collections::HashMap<NodeId, &Node> = graph.nodes()
-            .into_iter()
-            .map(|n| (n.id.clone(), n))
-            .collect();
+    fn check_boundary(&self, graph: &DependencyGraph, boundary: &ArchitecturalBoundary) -> Result<Vec<DriftViolation>> {
         let mut violations = Vec::new();
-
         for edge in graph.edges() {
-            if !boundary.nodes.contains(&edge.from) { continue; }
-            let Some(target) = nodes_by_id.get(&edge.to) else { continue; };
-            if boundary.nodes.contains(&edge.to) { continue; }
-
-            let target_text = format!("{} {}", target.name, target.path.to_string_lossy()).to_ascii_lowercase();
-            let forbidden = boundary.forbidden_dependencies.iter()
-                .find(|token| target_text.contains(&token.to_ascii_lowercase()));
-
-            if let Some(token) = forbidden {
-                violations.push(DriftViolation {
-                    id: uuid::Uuid::new_v4(),
-                    kind: ViolationKind::ForbiddenDependency,
-                    from: edge.from.clone(),
-                    to: edge.to.clone(),
-                    boundary: boundary.name.clone(),
-                    message: format!(
-                        "{} crosses inferred boundary `{}` into forbidden dependency class `{}` via {:?} edge.",
-                        edge.from.0, boundary.name, token, edge.kind
-                    ),
-                    severity: Severity::Warning,
-                    suggested_fix: Some(format!(
-                        "Introduce or depend on an allowed contract instead of directly coupling `{}` to `{}`.",
-                        edge.from.0, edge.to.0
-                    )),
-                });
+            let from = graph.get_node(&edge.from);
+            let to = graph.get_node(&edge.to);
+            let (Some(from), Some(to)) = (from, to) else { continue };
+            for rule in &boundary.rules {
+                if rule.matches(from, to) && !rule.allowed {
+                    violations.push(DriftViolation {
+                        id: uuid::Uuid::new_v4(),
+                        kind: ViolationKind::BoundaryViolation,
+                        from: edge.from.clone(),
+                        to: edge.to.clone(),
+                        boundary: boundary.name.clone(),
+                        message: format!("Dependency violates architecture boundary: {}", boundary.name),
+                        severity: Severity::Warning,
+                        suggested_fix: Some("Move the dependency behind an allowed boundary or introduce an interface/adapter.".to_string()),
+                    });
+                }
             }
         }
         Ok(violations)
     }
 }
 
-pub trait PatternDetector: Send + Sync {
-    fn detect(&self, graph: &DependencyGraph) -> Result<Option<ArchitecturalPattern>>;
-}
-
-pub trait BoundaryInferencer: Send + Sync {
-    fn infer(&self, graph: &DependencyGraph) -> Result<Vec<ArchitectureBoundary>>;
-}
-
-// Stable server bridge API. These methods intentionally return owned snapshots
-// so web/MCP handlers never hold CkbEngine's internal locks while serializing
-// or performing higher-level intelligence work. GraphStorage remains the sole
-// source of persisted architecture snapshot truth.
-impl crate::CkbEngine {
-    /// Create an engine whose sled snapshots live under a caller-selected
-    /// path. The normal constructor remains unchanged for compatibility.
-    pub fn new_with_storage_path(path: &str) -> Result<Self> {
-        let parser = std::sync::Arc::new(crate::LanguageParser::new());
-        let storage = std::sync::Arc::new(crate::GraphStorage::new(path)?);
-        let graph = std::sync::Arc::new(tokio::sync::RwLock::new(DependencyGraph::new()));
-        let analyzer = std::sync::Arc::new(ArchitectureAnalyzer::new());
-        Ok(Self { parser, graph, analyzer, storage })
-    }
-
-    /// Start a full scan from an empty live graph while retaining persisted
-    /// historical snapshots. This prevents unrelated/repeated scans from
-    /// accumulating stale nodes and edges in the active architecture model.
-    pub async fn reset_architecture_graph(&self) {
-        *self.graph.write().await = DependencyGraph::new();
-    }
-
-    /// Restore the latest real persisted architecture snapshot into the live
-    /// graph after a process restart. This restores graph evidence only; it
-    /// deliberately does not reconstruct or fabricate a ScanReport, repo URL,
-    /// runtime trace stream, or history metadata that was not persisted.
-    pub async fn restore_latest_architecture_snapshot(&self) -> Result<bool> {
-        if let Some(graph) = self.storage.get_latest_snapshot().await? {
-            *self.graph.write().await = graph;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
-    /// Lossless OTLP ingestion for Reality consumers. Unlike the older
-    /// compatibility helper, this preserves execution count, latency,
-    /// error-rate and hotpath evidence when merging observations.
-    pub async fn ingest_otlp_spans_exact(&self, raw_payload: &str) -> Result<crate::OtlpIngestReport> {
-        let metrics = crate::OtlpReceiver::ingest_spans(raw_payload)?;
-        let summary = crate::OtlpReceiver::summarize(&metrics);
-        let mut graph = self.graph.write().await;
-        for (node_id, runtime) in metrics {
-            graph.record_runtime_metrics(node_id, runtime);
-        }
-        Ok(summary)
-    }
-
-    pub async fn architecture_graph_snapshot(&self) -> DependencyGraph {
-        self.graph.read().await.clone()
-    }
-
-    pub async fn architecture_snapshot_metadata(&self) -> Result<Vec<crate::SnapshotMetadata>> {
-        self.storage.list_snapshots().await
-    }
-
-    pub async fn architecture_snapshot_graph(&self, snapshot_id: &str) -> Result<Option<DependencyGraph>> {
-        self.storage.load_snapshot(snapshot_id).await
-    }
+impl Default for ArchitectureAnalyzer {
+    fn default() -> Self { Self::new() }
 }
