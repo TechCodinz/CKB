@@ -14,6 +14,7 @@ pub mod query_language;
 pub mod frontier_model_profile;
 pub mod deep_causality;
 pub mod deep_causality_adapter;
+pub mod deep_causality_extractors;
 
 pub use boundaries::*;
 pub use patterns::*;
@@ -29,6 +30,7 @@ pub use query_language::*;
 pub use frontier_model_profile::*;
 pub use deep_causality::*;
 pub use deep_causality_adapter::*;
+pub use deep_causality_extractors::*;
 
 use crate::graph::DependencyGraph;
 use crate::types::*;
