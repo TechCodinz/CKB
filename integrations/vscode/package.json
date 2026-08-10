@@ -33,6 +33,10 @@
       { "command": "ckb.shareRealitySnapshot", "title": "CKB: Share Reality Snapshot", "icon": "$(share)" },
       { "command": "ckb.openCloudContinuity", "title": "CKB: Continue in Cloud Living Universe", "icon": "$(globe)" },
       { "command": "ckb.explainCloudValue", "title": "CKB: Explore Cloud Reality Capabilities", "icon": "$(layers)" },
+      { "command": "ckb.visitCloudSite", "title": "CKB: Visit CKB Cloud", "icon": "$(globe)" },
+      { "command": "ckb.upgradePlan", "title": "CKB: Explore Plans & Upgrade", "icon": "$(rocket)" },
+      { "command": "ckb.manageSubscription", "title": "CKB: Manage Cloud Subscription", "icon": "$(credit-card)" },
+      { "command": "ckb.signInCloud", "title": "CKB: Sign In to Cloud", "icon": "$(account)" },
       { "command": "ckb.deepActivity", "title": "CKB: Deep Activity Analysis", "icon": "$(pulse)" },
       { "command": "ckb.queryMemory", "title": "CKB: Query Architecture Memory", "icon": "$(database)" },
       { "command": "ckb.scan", "title": "CKB: Scan Project", "icon": "$(search)" },
@@ -62,6 +66,7 @@
         "ckb.editorSemanticReality": { "type": "boolean", "default": true, "description": "Enable cursor-driven semantic editor reality. CKB derives LINE/CALL/SYMBOL/FILE/SUBSYSTEM/SYSTEM depth from selection and visible editor scale, and only highlights runtime when exact observed trace evidence maps to the current source." },
         "ckb.cloudApiUrl": { "type": "string", "default": "https://ckb-backend-api.onrender.com", "description": "Authenticated CKB Cloud API used for Raiziom evidence and guarded transactions. Source contents and absolute local filesystem paths are not uploaded by this client; selected relative architecture identifiers/coordinates may be sent as context." },
         "ckb.cloudProjectId": { "type": "string", "default": "current", "description": "CKB Cloud project identity used by in-IDE Raiziom and guarded-change requests. It must match the Cloud project whose architecture evidence should be authoritative." },
+        "ckb.cloudSiteUrl": { "type": "string", "default": "https://ckb-nu.vercel.app", "description": "Public CKB Cloud site used for plans, sign-in and subscription management. Credentials are never placed in these browser URLs." },
         "ckb.cliBinary": { "type": "string", "default": "ckb", "description": "Executable name/path for the standard CKB CLI." },
         "ckb.intelligenceBinary": { "type": "string", "default": "ckb-intelligence", "description": "Executable name/path for the high-performance CKB IDE intelligence facade." },
         "ckb.analysisTimeoutMs": { "type": "number", "default": 120000, "minimum": 30000, "maximum": 600000, "description": "Maximum duration of a local deep architecture analysis or CKB server request." },
@@ -89,7 +94,8 @@
       "view/title": [
         { "command": "ckb.revealArchitecture", "when": "view == ckb.realityView", "group": "navigation@1" },
         { "command": "ckb.shareRealitySnapshot", "when": "view == ckb.realityView", "group": "navigation@2" },
-        { "command": "ckb.openCloudContinuity", "when": "view == ckb.realityView", "group": "navigation@3" }
+        { "command": "ckb.openCloudContinuity", "when": "view == ckb.realityView", "group": "navigation@3" },
+        { "command": "ckb.upgradePlan", "when": "view == ckb.realityView", "group": "navigation@4" }
       ],
       "commandPalette": [
         { "command": "ckb.inspectSemanticReality" },
@@ -106,7 +112,11 @@
         { "command": "ckb.askRaiziomAboutCursor" },
         { "command": "ckb.revealArchitecture" },
         { "command": "ckb.shareRealitySnapshot" },
-        { "command": "ckb.openCloudContinuity" }
+        { "command": "ckb.openCloudContinuity" },
+        { "command": "ckb.visitCloudSite" },
+        { "command": "ckb.upgradePlan" },
+        { "command": "ckb.manageSubscription" },
+        { "command": "ckb.signInCloud" }
       ]
     }
   },
