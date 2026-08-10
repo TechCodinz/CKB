@@ -90,13 +90,26 @@ export class CkbCursorGuardedReality implements vscode.Disposable {
         return String(stdout || '').trimEnd();
     }
 
+    private async gitRaw(args: string[]) {
+        const root = this.root();
+        if (!root) throw new Error('Open a Git workspace first');
+        const { stdout } = await execFileAsync('git', args, {
+            cwd: root,
+            timeout: this.timeoutMs(),
+            maxBuffer: 32 * 1024 * 1024,
+            windowsHide: true,
+        });
+        return String(stdout || '');
+    }
+
     private async target(): Promise<CursorTarget> {
         const editor = vscode.window.activeTextEditor;
         const root = this.root();
         if (!editor || !root || editor.document.uri.scheme !== 'file') throw new Error('Open a source file inside the workspace first');
         const absolute = editor.document.uri.fsPath;
         const relative = path.relative(root, absolute);
-        const file = slash(relative.startsWith('..') ? absolute : relative);
+        if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('The active source file must be inside the open workspace');
+        const file = slash(relative);
         const position = editor.selection.active;
         const wordRange = editor.document.getWordRangeAtPosition(position);
         const word = wordRange ? editor.document.getText(wordRange).trim() : '';
@@ -230,7 +243,7 @@ export class CkbCursorGuardedReality implements vscode.Disposable {
             );
             if (choice !== 'Continue Tracked Only') return undefined;
         }
-        const patchText = await this.git(['diff', '--binary', '--no-ext-diff', session.baseline, '--']);
+        const patchText = await this.gitRaw(['diff', '--binary', '--no-ext-diff', session.baseline, '--']);
         if (!patchText.trim()) {
             vscode.window.showInformationMessage('CKB found no tracked workspace change against the PROPOSED baseline.');
             return undefined;
