@@ -72,6 +72,8 @@ Implementation: `core/src/analysis/intelligence_fabric.rs`.
 
 Provider/model names do not change the evidence sections. They exist so an orchestrator can choose transport and budget behavior without teaching CKB a vendor-specific truth model.
 
+Legacy boolean model metadata now fails closed: an omitted capability flag is not treated as support. Rich V2 support-state metadata remains the authoritative representation for provider compatibility.
+
 ## Frontier Model Capability Profile V2
 
 The earlier boolean-only model profile remains accepted for compatibility, but the V13 contract now represents fast-changing provider behavior without pretending `false` means `unknown`.
@@ -98,11 +100,29 @@ Support is a six-state value: `supported | unsupported | preview | beta | limite
 
 Rust implementation: `core/src/analysis/frontier_model_profile.rs`.
 
+## Provider lifecycle truth is separate from capability truth
+
+Deprecation and retirement evidence has its own contract: `schemas/model-lifecycle-profile.schema.json` and the lifecycle structs in `core/src/analysis/frontier_model_profile.rs`.
+
+A lifecycle record can describe:
+
+- provider-documented state: active / legacy / preview / deprecated / retired / shutdown-scheduled / shutdown / unknown,
+- deprecation date,
+- retirement/shutdown date,
+- whether that date is exact, tentative, or an earliest-possible date,
+- recommended replacement,
+- verification timestamp,
+- exact primary-source reference.
+
+CKB deliberately does **not** infer a provider state from the calendar. If a provider still labels a model `deprecated` after a tentative retirement date passes, CKB records `deprecated` until fresh provider evidence says otherwise. This avoids manufacturing lifecycle truth from a date.
+
+Lifecycle-only evidence also does not invent capabilities. CKB can know “this model is retired; migrate to X” while leaving its historical context/tool support unknown.
+
 ## Primary-source verified catalog
 
 CKB Cloud V13 ships a small bundled verified catalog as a safe bootstrap and also supports a trusted dynamic store. This prevents the intelligence architecture from requiring a code rewrite every time a provider introduces a new model or changes request semantics.
 
-The effective catalog is:
+The effective capability catalog is:
 
 ```text
 bundled verified bootstrap
@@ -114,7 +134,9 @@ exact provider/model overlay
 IDE / MCP / agent capability consumers
 ```
 
-The dynamic store can only be updated through the dual-auth trusted sync path:
+Provider lifecycle evidence is returned beside capability profiles rather than being fabricated into them.
+
+The dynamic capability store can only be updated through the dual-auth trusted sync path:
 
 ```text
 POST /api/v1/mcp/architecture/internal/frontier-models/sync
@@ -133,18 +155,46 @@ POST /api/v1/mcp/architecture/models/request-adapt
 
 `request-adapt` performs only data-driven compatibility transformations explicitly allowed by the verified profile. It can remove parameters documented as ignored/deprecated and report incompatible fields or turn patterns. It **does not execute the provider request**.
 
+If CKB has lifecycle evidence but no capability profile, it returns migration/lifecycle truth and refuses to invent a compatibility transformation. Retired/shutdown lifecycle-only models return an unavailable response with the provider-documented replacement when one exists.
+
+Freshness and lifecycle gate selection: stale, deprecated and retired verified profiles remain visible for history/migration inspection but cannot be attached as automated execution hints or become recommendation-eligible.
+
 ## IDE parity
 
 VS Code and JetBrains V13 consume the same Cloud catalog. Both can:
 
 - compile architecture context at the cursor,
-- stay model-neutral or attach a verified model capability hint,
+- stay model-neutral or attach a fresh/selectable verified model capability hint,
 - inspect the verified frontier catalog,
 - inspect observed model/task validation history,
 - inspect the Architecture Constitution,
 - check a JSON provider request against verified compatibility metadata without executing it.
 
+Deprecated, retired and stale records remain inspectable for migration work but are kept out of model-context selection paths.
+
 No IDE uploads arbitrary source contents merely to choose a model profile.
+
+## Snapshot-stable Raiziom reasoning
+
+A grounded Raiziom turn is pinned to an exact CKB architecture snapshot **before** evidence retrieval. After optional model reasoning completes, CKB re-reads the graph snapshot. If the architecture advanced while the turn was in progress, the response is rejected with a stale-snapshot conflict instead of presenting an old answer as CURRENT reality.
+
+The same turn therefore has:
+
+```text
+start snapshot
+  ↓
+retrieve bounded evidence
+  ↓
+compile CKB context + constitution
+  ↓
+optional Raiziom/model reasoning
+  ↓
+re-read snapshot
+  ↓
+return only if start == end
+```
+
+Provider sampling parameters are not imposed generically. A provider-owned adapter/configuration must explicitly opt in to parameters such as temperature after compatibility is known.
 
 ## Observed evaluation engine
 
@@ -162,7 +212,26 @@ Supported outcome dimensions include:
 
 `ModelScorecard` aggregates recorded outcomes by task/provider/model. It is historical evidence, not a universal benchmark or a prediction of future performance.
 
-The observed model registry does **not** rank an unobserved new frontier model merely because its context window or tool list looks stronger. A model becomes recommendation-eligible only after enough CKB validation observations exist for that exact project/task profile, with rollback-rate gating. Automatic model selection and automatic execution remain disabled in V13 until those policies are separately validated.
+The observed model registry does **not** rank an unobserved new frontier model merely because its context window or tool list looks stronger. A model becomes recommendation-eligible only after enough CKB validation observations exist for that exact project/task profile, with rollback-rate gating. Verified profiles must also be fresh and lifecycle-eligible. Automatic model selection and automatic execution remain disabled in V13 until those policies are separately validated.
+
+Evaluation writes are idempotent when a caller supplies an evaluation ID and require at least one actually observed outcome. An empty/unobserved evaluation cannot be written merely to create a score row.
+
+## Automatic learning from Guarded Change
+
+CKB Cloud V13 includes an observed-only transaction learning worker. It consumes persisted Guarded Change transactions after post-change rescan/rollback states and extracts only validations that were actually recorded.
+
+It can learn:
+
+- compile/build/typecheck outcomes,
+- test outcomes,
+- contract/OpenAPI/schema compatibility outcomes,
+- security/SAST/audit outcomes,
+- explicit runtime-regression booleans,
+- whether rollback was actually required.
+
+The worker uses deterministic evaluation IDs per transaction, so repeated passes update the same observation instead of inflating sample size. Unattributed transactions are not assigned to a model. Missing checks remain `null`.
+
+The worker does **not** run a model, change source, select a model, merge, push or deploy code.
 
 ## Guarded self-evolution
 
@@ -218,9 +287,9 @@ CKB architecture memory is allowed to self-update from verified inputs:
 - observed OTLP telemetry,
 - executed validation results,
 - explicit user decisions/feedback,
-- trusted primary-source model capability metadata.
+- trusted primary-source model capability/lifecycle metadata.
 
-No unverified model statement is written into the canonical architecture graph as a fact. No provider capability record changes source/runtime evidence classification.
+No unverified model statement is written into the canonical architecture graph as a fact. No provider capability or lifecycle record changes source/runtime evidence classification.
 
 ## Current V13 branch status
 
