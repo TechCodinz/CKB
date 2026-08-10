@@ -121,6 +121,14 @@ async function shareSnapshot(context: vscode.ExtensionContext) {
     if (choice === 'Open Cloud Universe') await openCloudContinuity(context);
 }
 
+async function semanticContext() {
+    try {
+        return await vscode.commands.executeCommand<any>('ckb.getSemanticRealityContext');
+    } catch {
+        return undefined;
+    }
+}
+
 async function openCloudContinuity(
     context: vscode.ExtensionContext,
     options: { cursorReality?: boolean; raiziom?: boolean } = {},
@@ -128,10 +136,11 @@ async function openCloudContinuity(
     const configured = vscode.workspace.getConfiguration('ckb').get<string>('cloudExplorerUrl', 'https://ckb-nu.vercel.app/project/current');
     const state = currentState(context);
     const cursor = options.cursorReality === false ? undefined : activeSourceContext();
+    const semantic = cursor ? await semanticContext() : undefined;
     const uri = vscode.Uri.parse(configured);
     const params = new URLSearchParams(uri.query);
     params.set('from', 'vscode');
-    params.set('experience', cursor ? 'semantic-editor-v10' : 'invisible-reality-v6');
+    params.set('experience', cursor ? 'semantic-editor-v11' : 'invisible-reality-v11');
     if (state) {
         const activity = activityOf(state);
         const dna = dnaOf(state);
@@ -142,13 +151,26 @@ async function openCloudContinuity(
         if (snapshotId(state)) params.set('snapshot', snapshotId(state));
     }
     if (cursor) {
+        const file = String(semantic?.file || cursor.file);
+        const line = Math.max(1, safeNumber(semantic?.line, cursor.line));
+        const column = Math.max(1, safeNumber(semantic?.column, cursor.column));
+        const symbol = String(semantic?.symbol?.name || semantic?.word || cursor.symbol || '').trim();
+        const depth = String(semantic?.depth || (cursor.selected ? 'line' : 'symbol')).toLowerCase();
         params.set('tab', '0');
-        params.set('file', cursor.file);
-        params.set('line', String(cursor.line));
-        params.set('column', String(cursor.column));
-        params.set('depth', cursor.selected ? 'line' : 'symbol');
-        if (cursor.symbol) params.set('symbol', cursor.symbol.slice(0, 180));
+        params.set('file', slash(file));
+        params.set('line', String(Math.round(line)));
+        params.set('column', String(Math.round(column)));
+        params.set('depth', depth.slice(0, 40));
+        if (symbol) params.set('symbol', symbol.slice(0, 180));
         params.set('resume', 'xray');
+
+        const hop = semantic?.exactHop;
+        if (hop?.traceId) {
+            params.set('trace', String(hop.traceId).slice(0, 180));
+            params.set('step', String(Math.max(0, safeNumber(hop.index, 0))));
+            if (hop.flowType) params.set('flow', String(hop.flowType).slice(0, 80));
+            params.set('runtimeRole', String(hop.role || '').slice(0, 24));
+        }
     }
     if (options.raiziom) params.set('raiziom', '1');
     await vscode.env.openExternal(uri.with({ query: params.toString() }));
