@@ -10,6 +10,10 @@ pub use workspace::*;
 #[path = "deep_causality_artifacts_v2_entry.rs"]
 mod artifacts_v2_entry;
 
+#[path = "deep_causality_federation.rs"]
+pub mod federation;
+pub use federation::*;
+
 /// Fuse CKB's authoritative dependency/runtime graph with repository artifact
 /// evidence. The adapter preserves existing graph/runtime identity; baseline
 /// artifact extraction is followed by a higher-fidelity pass for explicit
