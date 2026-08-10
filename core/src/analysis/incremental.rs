@@ -55,13 +55,23 @@ pub struct ParsedFileEvidence {
 #[serde(rename_all = "camelCase")]
 pub struct RepositoryAnalysisState {
     pub version: String,
+    /// Snapshot this parsed-evidence set is known to describe. Standalone CLI
+    /// states may leave this unset; server-side incremental promotion requires
+    /// a matching anchor and falls back to a full scan otherwise.
+    #[serde(default)]
+    pub snapshot_id: Option<String>,
     pub files: BTreeMap<String, ParsedFileEvidence>,
     pub synthetic: bool,
 }
 
 impl Default for RepositoryAnalysisState {
     fn default() -> Self {
-        Self { version: INCREMENTAL_STATE_VERSION.into(), files: BTreeMap::new(), synthetic: false }
+        Self {
+            version: INCREMENTAL_STATE_VERSION.into(),
+            snapshot_id: None,
+            files: BTreeMap::new(),
+            synthetic: false,
+        }
     }
 }
 
@@ -81,6 +91,20 @@ impl RepositoryAnalysisState {
             });
         }
         Ok(state)
+    }
+
+    pub fn anchor_snapshot(&mut self, snapshot_id: impl Into<String>) {
+        self.snapshot_id = Some(snapshot_id.into());
+    }
+
+    pub fn require_snapshot(&self, expected: &str) -> Result<()> {
+        match self.snapshot_id.as_deref() {
+            Some(actual) if actual == expected => Ok(()),
+            Some(actual) => Err(anyhow!(
+                "parsed evidence describes snapshot {actual}, current architecture snapshot is {expected}; full scan required"
+            )),
+            None => Err(anyhow!("parsed evidence has no snapshot anchor; full scan required")),
+        }
     }
 
     pub fn file_count(&self) -> usize { self.files.len() }
@@ -128,8 +152,6 @@ impl IncrementalArchitectureEngine {
         for evidence in state.files.values() {
             graph.add_file(&evidence.analysis)?;
         }
-        // `add_file` accumulates unresolved imports/calls; resolving only after
-        // every file is present is what lets cross-file edges remain exact.
         graph.build_call_graph()?;
         graph.build_type_graph()?;
         Ok(graph)
@@ -162,9 +184,6 @@ impl IncrementalArchitectureEngine {
         let mut deleted_files = Vec::new();
         let mut reparsed_files = 0usize;
 
-        // Validate the complete batch before mutating the state. A malformed
-        // batch therefore cannot leave the caller with a partially applied
-        // architecture truth state.
         for delta in &deltas {
             let path = normalize_identity_path(&delta.path);
             if path.is_empty() { return Err(anyhow!("incremental delta contains an empty path")); }
@@ -231,8 +250,6 @@ impl IncrementalArchitectureEngine {
                 next_graph.record_runtime_metrics(id, metrics);
                 runtime_observations_retained += 1;
             } else {
-                // Historical telemetry may remain in time-machine/history
-                // storage, but it is not attached to post-change CURRENT truth.
                 runtime_observations_dropped += 1;
             }
         }
@@ -320,6 +337,14 @@ mod tests {
             calls: call.map(|(caller, callee)| vec![FunctionCall { caller_name: caller.into(), callee_name: callee.into(), line: 2, column: 1 }]).unwrap_or_default(),
             type_relations: vec![],
         }
+    }
+
+    #[test]
+    fn snapshot_anchor_detects_incompatible_incremental_state() {
+        let mut state = RepositoryAnalysisState::from_completed_scan(vec![analysis("src/a.ts", Some("a"), None, None)]).unwrap();
+        state.anchor_snapshot("snap-a");
+        assert!(state.require_snapshot("snap-a").is_ok());
+        assert!(state.require_snapshot("snap-b").is_err());
     }
 
     #[test]
