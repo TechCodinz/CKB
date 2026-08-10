@@ -1,0 +1,71 @@
+{
+  "version": "ckb-model-tool-manifest-v13",
+  "evidencePolicy": "static-runtime-predicted-separated",
+  "mutationPolicy": "read-and-predict-by-default; mutation-only-through-explicit-guarded-change",
+  "tools": [
+    {
+      "name": "architecture.memory",
+      "aql": "MEMORY <query> [DEPTH n] [LIMIT n]",
+      "evidenceClass": "static+optional-runtime-provenance",
+      "mutates": false
+    },
+    {
+      "name": "architecture.path",
+      "aql": "PATH <source-symbol-id> -> <target-symbol-id> [DEPTH n]",
+      "evidenceClass": "static+relationship-provenance",
+      "mutates": false
+    },
+    {
+      "name": "architecture.dependents",
+      "aql": "DEPENDENTS <symbol-id> [DEPTH n]",
+      "evidenceClass": "static-potential-propagation",
+      "mutates": false
+    },
+    {
+      "name": "architecture.impact",
+      "aql": "IMPACT <source-path>[:line]",
+      "evidenceClass": "predicted",
+      "mutates": false
+    },
+    {
+      "name": "architecture.dna",
+      "aql": "DNA [symbol-id]",
+      "evidenceClass": "static+observed-runtime-derived-when-present",
+      "mutates": false
+    },
+    {
+      "name": "architecture.history",
+      "aql": "HISTORY [snapshot-id]",
+      "evidenceClass": "history",
+      "mutates": false
+    },
+    {
+      "name": "architecture.diff",
+      "aql": "DIFF <from-snapshot> -> <to-snapshot>",
+      "evidenceClass": "history",
+      "mutates": false
+    },
+    {
+      "name": "architecture.runtime",
+      "aql": "RUNTIME [symbol-id|trace-id]",
+      "evidenceClass": "runtime",
+      "mutates": false,
+      "truthRequirement": "observed telemetry only"
+    },
+    {
+      "name": "architecture.prepareChange",
+      "protocol": "CKB Guarded Change",
+      "evidenceClass": "predicted+validation",
+      "mutates": false,
+      "truthRequirement": "creates a proposal/capsule only; source remains unchanged"
+    },
+    {
+      "name": "architecture.promoteValidatedChange",
+      "protocol": "CKB Guarded Change",
+      "evidenceClass": "validation+actual-rescan",
+      "mutates": true,
+      "truthRequirement": "explicit exact-tree confirmation + validation + isolated commit + post-change rescan; merge/push remain separate"
+    }
+  ],
+  "synthetic": false
+}
