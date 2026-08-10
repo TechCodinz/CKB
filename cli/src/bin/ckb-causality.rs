@@ -52,9 +52,9 @@ fn main() -> Result<()> {
     let engine: DeepCausalityEngine = read_json(&cli.bundle)?;
     let result = match cli.command {
         Command::DataFlow { source, sink, depth } => serde_json::to_value(engine.data_flow_path(&source, &sink, depth))?,
-        Command::Taint { sources, sinks, depth } => serde_json::to_value(engine.taint_paths(&sources, &sinks, depth))?,
+        Command::Taint { sources, sinks, depth } => serde_json::to_value(engine.taint_paths_v2(&sources, &sinks, depth))?,
         Command::Reachable { source, sink, conditions, depth } => serde_json::to_value(engine.reachable_under(&source, &sink, &conditions, depth))?,
-        Command::Constraints { constraints } => json!({ "satisfiable": engine.constraints_satisfiable(&constraints), "constraints": constraints }),
+        Command::Constraints { constraints } => json!({ "satisfiable": engine.constraints_satisfiable_v2(&constraints), "constraints": constraints }),
         Command::Concurrency => serde_json::to_value(engine.concurrency_hazards())?,
         Command::SchemaImpact { entity, depth } => serde_json::to_value(engine.schema_impact(&entity, depth))?,
         Command::InfraImpact { entity, depth } => serde_json::to_value(engine.infrastructure_impact(&entity, depth))?,
@@ -76,7 +76,7 @@ fn main() -> Result<()> {
             serde_json::to_value(engine.simulate_change(&operations, depth))?
         }
         Command::Hotspots => serde_json::to_value(engine.runtime_hotspots())?,
-        Command::FailurePropagation { source, depth } => serde_json::to_value(engine.failure_propagation(&source, depth))?,
+        Command::FailurePropagation { source, depth } => serde_json::to_value(engine.failure_propagation_v2(&source, depth))?,
         Command::TemporalDiff { older } => {
             let older: DeepCausalityEngine = read_json(&older)?;
             let (added, removed) = engine.temporal_diff(&older);
