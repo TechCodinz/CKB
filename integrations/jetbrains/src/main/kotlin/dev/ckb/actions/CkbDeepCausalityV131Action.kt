@@ -46,58 +46,60 @@ private fun prompt(project: com.intellij.openapi.project.Project, title: String,
 private fun resolveFile(root: File, value: String): String =
     File(value).let { if (it.isAbsolute) it else File(root, value) }.absolutePath
 
-private fun queryArgs(project: com.intellij.openapi.project.Project, root: File, op: CausalityOp): List<String>? = when (op.id) {
-    "data-flow", "distributed-flow", "cross-repo" -> {
-        val source = prompt(project, "CKB ${op.label}", "Source causal entity id") ?: return null
-        val sink = prompt(project, "CKB ${op.label}", "Target/sink causal entity id") ?: return null
-        listOf(source, sink)
+private fun queryArgs(project: com.intellij.openapi.project.Project, root: File, op: CausalityOp): List<String>? {
+    return when (op.id) {
+        "data-flow", "distributed-flow", "cross-repo" -> {
+            val source = prompt(project, "CKB ${op.label}", "Source causal entity id") ?: return null
+            val sink = prompt(project, "CKB ${op.label}", "Target/sink causal entity id") ?: return null
+            listOf(source, sink)
+        }
+        "taint" -> {
+            val sources = prompt(project, "CKB Taint", "Comma-separated source entity ids") ?: return null
+            val sinks = prompt(project, "CKB Taint", "Comma-separated sink entity ids") ?: return null
+            listOf("--sources=$sources", "--sinks=$sinks")
+        }
+        "reachable" -> {
+            val source = prompt(project, "CKB Reachability", "Source causal entity id") ?: return null
+            val sink = prompt(project, "CKB Reachability", "Target causal entity id") ?: return null
+            val conditions = prompt(project, "CKB Reachability", "Optional comma-separated exact conditions", "authenticated,role==admin")
+            buildList { add(source); add(sink); if (!conditions.isNullOrBlank()) add("--conditions=$conditions") }
+        }
+        "constraints" -> {
+            val constraints = prompt(project, "CKB Symbolic Constraints", "Comma-separated constraints", "age>=18,age<65,active==true") ?: return null
+            listOf("--constraints=$constraints")
+        }
+        "schema-impact", "infra-impact", "config-impact", "failure-propagation" -> {
+            val entity = prompt(project, "CKB ${op.label}", "Causal entity id") ?: return null
+            listOf(entity)
+        }
+        "contract-diff" -> {
+            val before = prompt(project, "CKB Contract Diff", "Before ApiContract JSON file") ?: return null
+            val after = prompt(project, "CKB Contract Diff", "After ApiContract JSON file") ?: return null
+            listOf(resolveFile(root, before), resolveFile(root, after))
+        }
+        "tests" -> {
+            val changed = prompt(project, "CKB Tests for Change", "Comma-separated changed entity ids") ?: return null
+            listOf("--changed=$changed")
+        }
+        "policy" -> {
+            val rules = prompt(project, "CKB Architecture Policy", "ArchitectureRule[] JSON file") ?: return null
+            listOf(resolveFile(root, rules))
+        }
+        "drift-forecast" -> {
+            val counts = prompt(project, "CKB Drift Forecast", "Historical relation counts, comma-separated", "120,128,137,149") ?: return null
+            listOf("--edge-counts=$counts")
+        }
+        "simulate" -> {
+            val operations = prompt(project, "CKB Change Simulation", "ChangeOperation[] JSON file") ?: return null
+            listOf(resolveFile(root, operations))
+        }
+        "temporal-diff" -> {
+            val older = prompt(project, "CKB Temporal Architecture", "Older DeepCausalityEngine bundle") ?: return null
+            listOf(resolveFile(root, older))
+        }
+        "concurrency", "hotspots", "ownership", "quality" -> emptyList()
+        else -> emptyList()
     }
-    "taint" -> {
-        val sources = prompt(project, "CKB Taint", "Comma-separated source entity ids") ?: return null
-        val sinks = prompt(project, "CKB Taint", "Comma-separated sink entity ids") ?: return null
-        listOf("--sources=$sources", "--sinks=$sinks")
-    }
-    "reachable" -> {
-        val source = prompt(project, "CKB Reachability", "Source causal entity id") ?: return null
-        val sink = prompt(project, "CKB Reachability", "Target causal entity id") ?: return null
-        val conditions = prompt(project, "CKB Reachability", "Optional comma-separated exact conditions", "authenticated,role==admin")
-        buildList { add(source); add(sink); if (!conditions.isNullOrBlank()) add("--conditions=$conditions") }
-    }
-    "constraints" -> {
-        val constraints = prompt(project, "CKB Symbolic Constraints", "Comma-separated constraints", "age>=18,age<65,active==true") ?: return null
-        listOf("--constraints=$constraints")
-    }
-    "schema-impact", "infra-impact", "config-impact", "failure-propagation" -> {
-        val entity = prompt(project, "CKB ${op.label}", "Causal entity id") ?: return null
-        listOf(entity)
-    }
-    "contract-diff" -> {
-        val before = prompt(project, "CKB Contract Diff", "Before ApiContract JSON file") ?: return null
-        val after = prompt(project, "CKB Contract Diff", "After ApiContract JSON file") ?: return null
-        listOf(resolveFile(root, before), resolveFile(root, after))
-    }
-    "tests" -> {
-        val changed = prompt(project, "CKB Tests for Change", "Comma-separated changed entity ids") ?: return null
-        listOf("--changed=$changed")
-    }
-    "policy" -> {
-        val rules = prompt(project, "CKB Architecture Policy", "ArchitectureRule[] JSON file") ?: return null
-        listOf(resolveFile(root, rules))
-    }
-    "drift-forecast" -> {
-        val counts = prompt(project, "CKB Drift Forecast", "Historical relation counts, comma-separated", "120,128,137,149") ?: return null
-        listOf("--edge-counts=$counts")
-    }
-    "simulate" -> {
-        val operations = prompt(project, "CKB Change Simulation", "ChangeOperation[] JSON file") ?: return null
-        listOf(resolveFile(root, operations))
-    }
-    "temporal-diff" -> {
-        val older = prompt(project, "CKB Temporal Architecture", "Older DeepCausalityEngine bundle") ?: return null
-        listOf(resolveFile(root, older))
-    }
-    "concurrency", "hotspots", "ownership", "quality" -> emptyList()
-    else -> emptyList()
 }
 
 private fun execute(root: File, args: List<String>, timeoutSeconds: Long = 180): String {
