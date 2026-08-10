@@ -47,14 +47,19 @@ pub async fn build_workspace_deep_causality(
         .follow_links(false)
         .build()
     {
-        let entry = match result { Ok(v) => v, Err(_) => continue };
-        if !entry.file_type().map(|t| t.is_file()).unwrap_or(false) { continue; }
+        let entry = match result { Ok(value) => value, Err(_) => continue };
+        if !entry.file_type().map(|file_type| file_type.is_file()).unwrap_or(false) { continue; }
         let path = entry.path();
         let relative = path.strip_prefix(&root).unwrap_or(path).to_string_lossy().replace('\\', "/");
 
         if supported_source(path) {
-            let absolute = path.to_string_lossy().to_string();
-            if let Ok(analysis) = parser.parse_file(&absolute).await { analyses.push(analysis); }
+            // Parse the bytes from disk, but give the parser the stable
+            // repository-relative identity. This makes graph nodes converge
+            // with artifact/history/event IDs instead of encoding machine-local
+            // absolute filesystem paths into the causal universe.
+            if let Ok(content) = std::fs::read_to_string(path) {
+                if let Ok(analysis) = parser.parse_content(&relative, &content) { analyses.push(analysis); }
+            }
         }
 
         if artifacts.len() < MAX_ARTIFACTS && causal_artifact_candidate(path, &relative) {
@@ -87,7 +92,7 @@ pub async fn build_workspace_deep_causality(
 }
 
 fn supported_source(path: &Path) -> bool {
-    matches!(path.extension().and_then(|v| v.to_str()).map(|v| v.to_ascii_lowercase()).as_deref(),
+    matches!(path.extension().and_then(|value| value.to_str()).map(|value| value.to_ascii_lowercase()).as_deref(),
         Some("ts" | "tsx" | "js" | "jsx" | "mjs" | "py" | "go" | "rs" | "java"))
 }
 
@@ -97,7 +102,7 @@ fn causal_artifact_candidate(path: &Path, relative: &str) -> bool {
     if lower.ends_with("codeowners") || lower.ends_with("dockerfile")
         || lower.contains("/.github/workflows/") || lower.starts_with(".github/workflows/")
         || lower.contains("openapi") || lower.contains("swagger") { return true; }
-    matches!(path.extension().and_then(|v| v.to_str()).map(|v| v.to_ascii_lowercase()).as_deref(),
+    matches!(path.extension().and_then(|value| value.to_str()).map(|value| value.to_ascii_lowercase()).as_deref(),
         Some("prisma" | "sql" | "tf" | "yaml" | "yml" | "json" | "toml" | "env" | "properties" | "xml" | "graphql" | "gql" | "proto"))
 }
 
