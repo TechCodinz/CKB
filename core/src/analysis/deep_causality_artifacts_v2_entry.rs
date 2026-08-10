@@ -7,7 +7,7 @@ pub mod deep_causality_extractors {
     pub use crate::analysis::deep_causality_extractors::*;
 }
 
-#[path = "deep_causality_artifacts_v2.rs"]
+#[path = "deep_causality_precision.rs"]
 mod implementation;
 
 pub use implementation::enrich_deep_artifact_semantics;
