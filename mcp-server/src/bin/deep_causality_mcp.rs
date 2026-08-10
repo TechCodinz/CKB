@@ -36,9 +36,9 @@ fn tool(name: &str, description: &str, properties: Value, required: &[&str]) -> 
 fn tools() -> Vec<Value> {
     vec![
         tool("ckb_data_flow", "Find an evidence-backed interprocedural data-flow path.", json!({"source":{"type":"string"},"sink":{"type":"string"},"depth":{"type":"integer"}}), &["source","sink"]),
-        tool("ckb_taint", "Find unsanitized flows from untrusted sources to sinks.", json!({"sources":{"type":"array","items":{"type":"string"}},"sinks":{"type":"array","items":{"type":"string"}},"depth":{"type":"integer"}}), &["sources","sinks"]),
+        tool("ckb_taint", "Find unsanitized flows from untrusted sources to sinks. Sanitizer/validator evidence suppresses only the path it actually protects.", json!({"sources":{"type":"array","items":{"type":"string"}},"sinks":{"type":"array","items":{"type":"string"}},"depth":{"type":"integer"}}), &["sources","sinks"]),
         tool("ckb_reachable_under", "Evaluate path-sensitive reachability under recorded conditions.", json!({"source":{"type":"string"},"sink":{"type":"string"},"conditions":{"type":"array","items":{"type":"string"}},"depth":{"type":"integer"}}), &["source","sink"]),
-        tool("ckb_constraints", "Check bounded equality/inequality constraint satisfiability.", json!({"constraints":{"type":"array","items":{"type":"string"}}}), &["constraints"]),
+        tool("ckb_constraints", "Check bounded equality/inequality and numeric range constraint satisfiability.", json!({"constraints":{"type":"array","items":{"type":"string"}}}), &["constraints"]),
         tool("ckb_concurrency_hazards", "Detect unprotected multi-writers and lock/wait cycles.", json!({}), &[]),
         tool("ckb_schema_impact", "Find code/API/test/migration impact of a schema entity.", json!({"entity":{"type":"string"},"depth":{"type":"integer"}}), &["entity"]),
         tool("ckb_infra_impact", "Find service/deployment/repository impact of infrastructure changes.", json!({"entity":{"type":"string"},"depth":{"type":"integer"}}), &["entity"]),
@@ -47,10 +47,10 @@ fn tools() -> Vec<Value> {
         tool("ckb_contract_diff", "Classify API/schema contract evolution.", json!({"before":{"type":"object"},"after":{"type":"object"}}), &["before","after"]),
         tool("ckb_tests_for_change", "Select evidence-connected behavioral tests for changed entities.", json!({"changed":{"type":"array","items":{"type":"string"}},"depth":{"type":"integer"}}), &["changed"]),
         tool("ckb_policy", "Enforce executable architecture invariants.", json!({"rules":{"type":"array"}}), &["rules"]),
-        tool("ckb_drift_forecast", "Forecast structural relation-count drift from history.", json!({"edgeCounts":{"type":"array","items":{"type":"integer"}},"horizon":{"type":"integer"}}), &["edgeCounts"]),
+        tool("ckb_drift_forecast", "Forecast structural relation-count drift from history. This is PREDICTIVE trend output, not observed future truth.", json!({"edgeCounts":{"type":"array","items":{"type":"integer"}},"horizon":{"type":"integer"}}), &["edgeCounts"]),
         tool("ckb_simulate_change", "Simulate proposed changes; results are always labeled PREDICTED.", json!({"operations":{"type":"array"},"depth":{"type":"integer"}}), &["operations"]),
         tool("ckb_runtime_hotspots", "Rank observed runtime CPU/memory/latency/error hotspots.", json!({}), &[]),
-        tool("ckb_failure_propagation", "Model failure propagation through calls/routes/retries/dependencies.", json!({"source":{"type":"string"},"depth":{"type":"integer"}}), &["source"]),
+        tool("ckb_failure_propagation", "Propagate a dependency/resource failure back through callers/dependents and forward through observed delivery semantics.", json!({"source":{"type":"string"},"depth":{"type":"integer"}}), &["source"]),
         tool("ckb_temporal_diff", "Compare current causal architecture against an older evidence bundle.", json!({"olderBundle":{"type":"string"}}), &["olderBundle"]),
         tool("ckb_cross_repo_path", "Find a causal path only when it crosses repository boundaries.", json!({"source":{"type":"string"},"sink":{"type":"string"},"depth":{"type":"integer"}}), &["source","sink"]),
         tool("ckb_ownership_risk", "Measure bus-factor/ownership risk from ownership/authorship/review facts.", json!({}), &[]),
@@ -61,9 +61,9 @@ fn tools() -> Vec<Value> {
 fn call(engine: &DeepCausalityEngine, name: &str, args: &Value) -> anyhow::Result<Value> {
     Ok(match name {
         "ckb_data_flow" => serde_json::to_value(engine.data_flow_path(arg_str(args,"source")?, arg_str(args,"sink")?, arg_usize(args,"depth",24)))?,
-        "ckb_taint" => serde_json::to_value(engine.taint_paths(&arg_strings(args,"sources"), &arg_strings(args,"sinks"), arg_usize(args,"depth",24)))?,
+        "ckb_taint" => serde_json::to_value(engine.taint_paths_v2(&arg_strings(args,"sources"), &arg_strings(args,"sinks"), arg_usize(args,"depth",24)))?,
         "ckb_reachable_under" => serde_json::to_value(engine.reachable_under(arg_str(args,"source")?, arg_str(args,"sink")?, &arg_strings(args,"conditions"), arg_usize(args,"depth",24)))?,
-        "ckb_constraints" => json!({"satisfiable": engine.constraints_satisfiable(&arg_strings(args,"constraints"))}),
+        "ckb_constraints" => json!({"satisfiable": engine.constraints_satisfiable_v2(&arg_strings(args,"constraints"))}),
         "ckb_concurrency_hazards" => serde_json::to_value(engine.concurrency_hazards())?,
         "ckb_schema_impact" => serde_json::to_value(engine.schema_impact(arg_str(args,"entity")?, arg_usize(args,"depth",12)))?,
         "ckb_infra_impact" => serde_json::to_value(engine.infrastructure_impact(arg_str(args,"entity")?, arg_usize(args,"depth",12)))?,
@@ -81,14 +81,14 @@ fn call(engine: &DeepCausalityEngine, name: &str, args: &Value) -> anyhow::Resul
         },
         "ckb_drift_forecast" => {
             let counts = args.get("edgeCounts").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).map(|v| v as usize).collect::<Vec<_>>()).unwrap_or_default();
-            serde_json::to_value(engine.forecast_drift(&counts, arg_usize(args,"horizon",5)))?
+            json!({"evidence":"predicted","values":engine.forecast_drift(&counts, arg_usize(args,"horizon",5))})
         },
         "ckb_simulate_change" => {
             let ops: Vec<ChangeOperation> = serde_json::from_value(args.get("operations").cloned().unwrap_or_else(|| json!([])))?;
             serde_json::to_value(engine.simulate_change(&ops, arg_usize(args,"depth",12)))?
         },
         "ckb_runtime_hotspots" => serde_json::to_value(engine.runtime_hotspots())?,
-        "ckb_failure_propagation" => serde_json::to_value(engine.failure_propagation(arg_str(args,"source")?, arg_usize(args,"depth",12)))?,
+        "ckb_failure_propagation" => serde_json::to_value(engine.failure_propagation_v2(arg_str(args,"source")?, arg_usize(args,"depth",12)))?,
         "ckb_temporal_diff" => {
             let older: DeepCausalityEngine = serde_json::from_str(&std::fs::read_to_string(arg_str(args,"olderBundle")?)?)?;
             let (added, removed) = engine.temporal_diff(&older);
