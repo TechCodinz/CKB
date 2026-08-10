@@ -10,6 +10,7 @@ pub mod causal;
 pub mod activity;
 pub mod intelligence_fabric;
 pub mod incremental;
+pub mod query_language;
 
 pub use boundaries::*;
 pub use patterns::*;
@@ -21,6 +22,7 @@ pub use causal::*;
 pub use activity::*;
 pub use intelligence_fabric::*;
 pub use incremental::*;
+pub use query_language::*;
 
 use crate::graph::DependencyGraph;
 use crate::types::*;
