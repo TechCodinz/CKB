@@ -12,6 +12,7 @@ pub mod intelligence_fabric;
 pub mod incremental;
 pub mod query_language;
 pub mod frontier_model_profile;
+pub mod deep_causality;
 
 pub use boundaries::*;
 pub use patterns::*;
@@ -25,6 +26,7 @@ pub use intelligence_fabric::*;
 pub use incremental::*;
 pub use query_language::*;
 pub use frontier_model_profile::*;
+pub use deep_causality::*;
 
 use crate::graph::DependencyGraph;
 use crate::types::*;
