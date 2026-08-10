@@ -11,6 +11,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
         return root ? restoreIntelligence(context, root) : undefined;
     });
+    context.subscriptions.push(semanticReality);
     return {
         ...api,
         editorSemanticReality: semanticReality,
