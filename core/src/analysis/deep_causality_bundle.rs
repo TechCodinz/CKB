@@ -7,10 +7,15 @@ use crate::graph::DependencyGraph;
 pub mod workspace;
 pub use workspace::*;
 
+#[path = "deep_causality_artifacts_v2_entry.rs"]
+mod artifacts_v2_entry;
+
 /// Fuse CKB's authoritative dependency/runtime graph with repository artifact
-/// evidence. The adapter preserves existing graph/runtime identity; artifact
-/// extraction enriches it with schema/infra/config/security/event/ownership
-/// facts. No evidence class is upgraded merely because two sources agree.
+/// evidence. The adapter preserves existing graph/runtime identity; baseline
+/// artifact extraction is followed by a higher-fidelity pass for explicit
+/// contracts, package dependencies, ORM/SQL access, Compose dependencies,
+/// config guards and test imports. No evidence class is upgraded merely because
+/// multiple sources agree.
 pub fn build_deep_causality_bundle(
     graph: &DependencyGraph,
     repository: impl Into<String>,
@@ -19,6 +24,7 @@ pub fn build_deep_causality_bundle(
     let repository = repository.into();
     let mut engine = CausalGraphAdapter::new(graph).repository(repository).build();
     CausalArtifactExtractor::enrich(&mut engine, artifacts);
+    artifacts_v2_entry::enrich_deep_artifact_semantics(&mut engine, artifacts);
     engine
 }
 
@@ -49,5 +55,17 @@ mod tests {
         }];
         let engine = build_deep_causality_bundle(&graph, "acme/api", &artifacts);
         assert!(engine.entities().any(|e| e.name == "User"));
+    }
+
+    #[test]
+    fn high_fidelity_pass_extracts_graphql_contracts() {
+        let graph = DependencyGraph::new();
+        let artifacts = vec![RepositoryArtifact {
+            repository: "acme/api".into(),
+            path: "schema.graphql".into(),
+            content: "type User {\n id: ID!\n}".into(),
+        }];
+        let engine = build_deep_causality_bundle(&graph, "acme/api", &artifacts);
+        assert!(engine.entities().any(|e| e.kind == crate::analysis::CausalEntityKind::Schema && e.name == "User"));
     }
 }
