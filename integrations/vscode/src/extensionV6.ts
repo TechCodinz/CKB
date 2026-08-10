@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as core from './extension';
 import { activateGrowthExperience } from './growthExperience';
+import { activateCloudCommerce } from './cloudCommerce';
 import { activateEditorSemanticRealityV10 } from './editorSemanticRealityV10';
 import { activateCloudUriHandlerV11 } from './cloudUriHandlerV11';
 import { activateCursorGuardedChangeReality } from './cursorChangeReality';
@@ -9,6 +10,7 @@ import { restoreIntelligence } from './intelligence';
 export async function activate(context: vscode.ExtensionContext) {
     const api = await core.activate(context);
     await activateGrowthExperience(context);
+    const cloudCommerce = activateCloudCommerce(context);
     const semanticReality = activateEditorSemanticRealityV10(context, () => {
         const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
         return root ? restoreIntelligence(context, root) : undefined;
@@ -28,6 +30,7 @@ export async function activate(context: vscode.ExtensionContext) {
         ...api,
         editorSemanticReality: semanticReality,
         cloudUriHandler,
+        cloudCommerce,
         guardedChangeReality,
     };
 }
