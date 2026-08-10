@@ -1,6 +1,6 @@
 # CKB for VS Code
 
-> Cursor-driven software reality, exact runtime evidence and architecture intelligence inside Visual Studio Code.
+> Cursor-driven software reality, exact runtime evidence and bidirectional Cloud continuity inside Visual Studio Code.
 
 ## What makes the extension different
 
@@ -12,7 +12,7 @@ CKB does not treat a repository as a flat list of files. The extension continuou
 
 Static dependencies are never animated or highlighted as if they executed.
 
-## Invisible Reality V10
+## Invisible Reality V11
 
 ### Cursor-Driven Semantic Editor Reality
 
@@ -27,50 +27,35 @@ In **AUTO** mode the depth responds to source selection and the visible editor s
 - `CKB: Semantic Zoom Auto`
 - `CKB: Inspect Semantic Reality at Cursor`
 
-The editor status item exposes the current semantic target. Hovering the highlighted source shows system/subsystem/file/symbol context plus fan-in/fan-out and change-sensitivity evidence when the local deep architecture bundle resolves the cursor.
+The editor status item exposes the current semantic target. Hovering highlighted source shows system/subsystem/file/symbol context plus fan-in/fan-out and change-sensitivity evidence when the local deep architecture bundle resolves the cursor.
 
 ### Exact Runtime Source Fusion
 
 When the configured Reality server provides `exact-observed-span-instances`, CKB maps matching trace identities back to the active file/symbol and highlights the observed source/target context directly in the editor.
 
-Runtime context can include:
-
-- HTTP
-- database
-- cache
-- queue
-- event
-- WebSocket
-- function/internal calls
-- observed duration and error state
-
-If telemetry is unavailable, the runtime layer stays off. CKB does not create decorative fake execution.
+Runtime context can include HTTP, database, cache, queue, event, WebSocket and internal function transitions together with observed duration and error state. If telemetry is unavailable, the runtime layer stays off rather than creating decorative execution.
 
 ### Molecular + Live Reality Sidebar
 
-The **CKB Invisible Reality** activity-bar view includes:
+The **CKB Invisible Reality** activity-bar view includes deep architecture activity and hotspots, semantic/molecular/state/nanotrace lenses, exact runtime transmission filtering, bounded architecture memory, cursor change-ripple access and Cloud Living Universe continuity.
 
-- deep architecture activity and hotspots
-- semantic/molecular/state/nanotrace lenses
-- exact runtime transmission filtering
-- bounded architecture memory
-- cursor change-ripple access
-- Cloud Living Universe continuity
+### IDE ↔ Cloud Semantic Reality Continuity
 
-### IDE → Cloud Cursor Reality Continuity
-
-The editor context menu can now carry the current navigation target into CKB Cloud without embedding source contents in the URL:
+The editor context menu can carry the current navigation target into CKB Cloud without embedding source contents in the URL:
 
 - `CKB: Continue Cursor Reality in Cloud` opens the same file/line in Cloud X-Ray.
-- `CKB: Ask Raiziom About Cursor Reality` opens the same navigation context and requests the global evidence-grounded Raiziom console.
+- `CKB: Ask Raiziom About Cursor Reality` opens the same source target with the global evidence-grounded Raiziom console.
+- When an exact observed trace maps to the cursor, CKB also carries its trace id, step and flow classification as navigation context.
 
-The continuity link can include the relative file path, line/column, current identifier and semantic depth hint. Those values are treated as navigation/advisory context; Cloud architecture and runtime evidence remain authoritative.
+Cloud then resolves the IDE hint against its authoritative scanned graph. If a matching architecture node exists, X-Ray, Universe, Biology and Raiziom can converge on that same node. URL metadata never becomes Cloud evidence by itself.
+
+For VS Code handoffs, the Cloud continuity surface can also **return the current Cloud-selected source/runtime target back into the IDE**. CKB uses the registered `vscode://TechCodinz.ckb-vscode/open` URI handler, but the extension only opens files that resolve inside an already-open workspace. The handoff accepts navigation metadata only—never source text, patches, credentials or executable commands.
 
 ## Core features
 
 - **🔬 Semantic Editor Reality** — Cursor-aware LINE/CALL/SYMBOL/FILE/SUBSYSTEM/SYSTEM navigation
 - **🟢 Exact Runtime Evidence** — Runtime source context only when observed traces actually exist
-- **☁️ Cursor Cloud Continuity** — Resume the same source target in Cloud X-Ray or Raiziom
+- **↔ Bidirectional Cloud Continuity** — IDE → Cloud → current Cloud target → VS Code
 - **🔍 Scan** — Full codebase architecture scan
 - **⚠️ Inline Diagnostics** — Architecture findings in source files
 - **⚡ Impact Analysis** — Predict direct/transitive change ripple at the cursor
@@ -91,7 +76,7 @@ For deep local architecture intelligence, install the current CKB CLI/intelligen
 | `CKB: Semantic Zoom In` | Descend toward call/line detail |
 | `CKB: Semantic Zoom Out` | Ascend toward file/subsystem/system context |
 | `CKB: Semantic Zoom Auto` | Let selection + visible editor scale resolve depth |
-| `CKB: Continue Cursor Reality in Cloud` | Resume the current file/line in Cloud X-Ray |
+| `CKB: Continue Cursor Reality in Cloud` | Resume the current file/line/exact trace context in Cloud X-Ray |
 | `CKB: Ask Raiziom About Cursor Reality` | Continue the cursor target in contextual Cloud Raiziom |
 | `CKB: Open Invisible Reality` | Open the molecular/runtime architecture cockpit |
 | `CKB: Deep Activity Analysis` | Rebuild activity, hotspots and architecture memory |
