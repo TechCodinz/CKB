@@ -37,13 +37,26 @@ pub fn build_deep_causality_bundle(
 }
 
 /// Merge an externally prepared evidence engine into an existing engine while
-/// preserving the original fact evidence class/confidence. Unknown references
-/// are rejected by `add_fact` rather than silently creating entities.
+/// preserving evidence classes/confidence and without downgrading a richer
+/// entity already present in the target federation.
 pub fn merge_deep_causality_evidence(target: &mut DeepCausalityEngine, source: &DeepCausalityEngine) -> Result<(), String> {
     for entity in source.entities() {
-        target.upsert_entity(entity.clone());
+        if let Some(existing) = target.entities().find(|e| e.id == entity.id).cloned() {
+            let mut merged = existing;
+            if matches!(merged.kind, super::CausalEntityKind::Unknown) && !matches!(entity.kind, super::CausalEntityKind::Unknown) {
+                merged.kind = entity.kind.clone();
+            }
+            if merged.name.is_empty() && !entity.name.is_empty() { merged.name = entity.name.clone(); }
+            if merged.repository.is_none() { merged.repository = entity.repository.clone(); }
+            if merged.path.is_none() { merged.path = entity.path.clone(); }
+            for (key, value) in &entity.attributes { merged.attributes.entry(key.clone()).or_insert_with(|| value.clone()); }
+            target.upsert_entity(merged);
+        } else {
+            target.upsert_entity(entity.clone());
+        }
     }
     for fact in source.facts() {
+        if target.facts().iter().any(|existing| existing == fact) { continue; }
         target.add_fact(fact.clone())?;
     }
     Ok(())
