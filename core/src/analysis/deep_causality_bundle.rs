@@ -14,6 +14,10 @@ mod artifacts_v2_entry;
 pub mod federation;
 pub use federation::*;
 
+#[path = "deep_causality_runtime.rs"]
+pub mod runtime;
+pub use runtime::*;
+
 /// Fuse CKB's authoritative dependency/runtime graph with repository artifact
 /// evidence. The adapter preserves existing graph/runtime identity; baseline
 /// artifact extraction is followed by a higher-fidelity pass for explicit
