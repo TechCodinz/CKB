@@ -9,6 +9,7 @@ pub mod memory;
 pub mod causal;
 pub mod activity;
 pub mod intelligence_fabric;
+pub mod incremental;
 
 pub use boundaries::*;
 pub use patterns::*;
@@ -19,6 +20,7 @@ pub use memory::*;
 pub use causal::*;
 pub use activity::*;
 pub use intelligence_fabric::*;
+pub use incremental::*;
 
 use crate::graph::DependencyGraph;
 use crate::types::*;
