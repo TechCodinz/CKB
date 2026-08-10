@@ -42,6 +42,10 @@ pub use human::*;
 pub mod memory_lane;
 pub use memory_lane::*;
 
+#[path = "memory_lane_store.rs"]
+pub mod memory_lane_store;
+pub use memory_lane_store::*;
+
 /// Fuse CKB's authoritative dependency/runtime graph with repository artifact
 /// evidence. The adapter preserves existing graph/runtime identity; baseline
 /// artifact extraction is followed by precision contract/ORM/infra/test
