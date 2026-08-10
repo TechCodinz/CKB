@@ -4,7 +4,6 @@ use crate::analysis::deep_causality::{CausalEvidenceClass, CausalEntity, DeepCau
 use crate::analysis::deep_causality_bundle::memory_lane::{MemoryLaneEngine, MemoryLaneEpisode, MemoryLaneEvidence, MemoryLaneKind};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -46,8 +45,7 @@ impl MemoryLaneStore {
 
     pub fn checkpoint(&self, engine: &MemoryLaneEngine, now_ms: i64) -> Result<MemoryLaneCheckpoint> {
         let bytes = serde_json::to_vec_pretty(engine)?;
-        let digest = hex::encode(Sha256::digest(&bytes));
-        let id = format!("ml-{}", &digest[..20]);
+        let id = format!("ml-{}", stable_fingerprint(&bytes));
         let dir = self.checkpoints_dir();
         fs::create_dir_all(&dir)?;
         let path = dir.join(format!("{id}.json"));
@@ -64,6 +62,18 @@ impl MemoryLaneStore {
         self.save(&engine)?;
         Ok(engine)
     }
+}
+
+// Dependency-free FNV-1a style content fingerprint. This is for deterministic
+// snapshot naming/deduplication, not for cryptographic authentication.
+fn stable_fingerprint(bytes:&[u8])->String {
+    let mut a:u64=0xcbf29ce484222325;
+    let mut b:u64=0x84222325cbf29ce4;
+    for (index,byte) in bytes.iter().enumerate() {
+        a^=*byte as u64; a=a.wrapping_mul(0x100000001b3);
+        b^=((*byte as u64)<<((index%8) as u32)) ^ index as u64; b=b.wrapping_mul(0x100000001b3);
+    }
+    format!("{a:016x}{b:016x}")
 }
 
 pub fn observe_causal_snapshot(lane:&mut MemoryLaneEngine, causality:&DeepCausalityEngine, snapshot_id:&str, now_ms:i64) -> Result<usize> {
@@ -85,7 +95,8 @@ fn kind_name(entity:&CausalEntity)->String{format!("{:?}",entity.kind).to_ascii_
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analysis::deep_causality::{CausalEntityKind};
+    use crate::analysis::deep_causality::CausalEntityKind;
     use std::collections::BTreeMap;
     #[test] fn causal_snapshot_without_relations_does_not_invent_memory(){let mut lane=MemoryLaneEngine::new("p");let engine=DeepCausalityEngine::from_facts(vec![CausalEntity{id:"file".into(),kind:CausalEntityKind::File,name:"a.rs".into(),repository:Some("p".into()),path:Some("a.rs".into()),attributes:BTreeMap::new()}],vec![]);assert_eq!(observe_causal_snapshot(&mut lane,&engine,"s1",1).unwrap(),0);}
+    #[test] fn fingerprint_is_stable(){assert_eq!(stable_fingerprint(b"ckb"),stable_fingerprint(b"ckb"));assert_ne!(stable_fingerprint(b"ckb"),stable_fingerprint(b"CKB"));}
 }
