@@ -1,11 +1,11 @@
 //! Workspace builder for V13.1 Deep Software Causality.
 
-use super::{build_deep_causality_bundle, DeepCausalityEngine, RepositoryArtifact};
+use crate::analysis::{build_deep_causality_bundle, DeepCausalityEngine, RepositoryArtifact};
 use crate::{DependencyGraph, FileAnalysis, LanguageParser};
 use anyhow::{Context, Result};
 use ignore::WalkBuilder;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 const MAX_ARTIFACT_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_ARTIFACTS: usize = 25_000;
