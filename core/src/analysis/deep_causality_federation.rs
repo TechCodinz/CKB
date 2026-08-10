@@ -5,10 +5,10 @@
 //! are materialized only when an observed manifest dependency name exactly
 //! matches a package identity declared by another scanned repository.
 
-use crate::analysis::{
-    build_workspace_deep_causality, merge_deep_causality_evidence, CausalEntityKind,
-    CausalEvidenceClass, CausalFact, CausalRelationKind, DeepCausalityEngine,
-    WorkspaceCausalityReport,
+use super::{merge_deep_causality_evidence, workspace::{build_workspace_deep_causality, WorkspaceCausalityReport}};
+use crate::analysis::deep_causality::{
+    CausalEntityKind, CausalEvidenceClass, CausalFact, CausalRelationKind,
+    DeepCausalityEngine,
 };
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
@@ -40,7 +40,7 @@ pub async fn build_federated_deep_causality(
     for member in members {
         let root = PathBuf::from(&member.root);
         let (workspace, report) = build_workspace_deep_causality(&root, member.repository.clone()).await?;
-        merge_deep_causality_evidence(&mut engine, &workspace).map_err(|e| anyhow!(e))?;
+        merge_deep_causality_evidence(&mut engine, &workspace).map_err(|e| anyhow!("{e}"))?;
         reports.push(report);
     }
 
@@ -89,14 +89,9 @@ fn resolve_manifest_cross_repo_dependencies(engine: &mut DeepCausalityEngine) ->
             metadata.insert("package.name".into(), name.clone());
             if let Some(section) = observed.metadata.get("manifest.section") { metadata.insert("manifest.section".into(), section.clone()); }
             additions.push(CausalFact {
-                from: observed.from.clone(),
-                to: target.clone(),
-                relation: CausalRelationKind::DependsOn,
-                evidence: CausalEvidenceClass::Static,
-                confidence: observed.confidence,
-                condition: observed.condition.clone(),
-                timestamp_ms: observed.timestamp_ms,
-                metadata,
+                from: observed.from.clone(), to: target.clone(), relation: CausalRelationKind::DependsOn,
+                evidence: CausalEvidenceClass::Static, confidence: observed.confidence,
+                condition: observed.condition.clone(), timestamp_ms: observed.timestamp_ms, metadata,
             });
         }
     }
@@ -108,7 +103,7 @@ fn resolve_manifest_cross_repo_dependencies(engine: &mut DeepCausalityEngine) ->
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analysis::CausalEntity;
+    use crate::analysis::deep_causality::CausalEntity;
 
     #[test]
     fn exact_manifest_name_resolves_cross_repo_dependency() {
