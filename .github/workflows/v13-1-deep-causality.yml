@@ -1,0 +1,47 @@
+name: V13.1 Deep Software Causality
+
+on:
+  pull_request:
+    paths:
+      - 'core/src/analysis/deep_causality*.rs'
+      - 'core/src/analysis/mod.rs'
+      - 'cli/src/bin/ckb-causality.rs'
+      - 'mcp-server/src/bin/deep_causality_mcp.rs'
+      - 'mcp-server/Cargo.toml'
+      - 'schemas/deep-causality-v13.1.schema.json'
+      - '.github/workflows/v13-1-deep-causality.yml'
+  workflow_dispatch:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Core check
+        run: cargo check -p ckb-core --all-targets
+      - name: Core deep causality tests
+        run: cargo test -p ckb-core deep_causality -- --nocapture
+      - name: CLI check
+        run: cargo check -p ckb-cli --bin ckb-causality
+      - name: MCP check
+        run: cargo check -p ckb-mcp-server --bin deep_causality_mcp
+      - name: Full workspace regression
+        run: cargo test --workspace --all-targets
+
+  protocol:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse deep causality schema
+        run: python -m json.tool schemas/deep-causality-v13.1.schema.json >/dev/null
+      - name: Enforce evidence truth classes
+        run: |
+          python - <<'PY'
+          import json
+          s=json.load(open('schemas/deep-causality-v13.1.schema.json'))
+          values=set(s['$defs']['evidenceClass']['enum'])
+          required={'static','runtime','history','validation','human','predicted'}
+          assert values == required, (values, required)
+          PY
