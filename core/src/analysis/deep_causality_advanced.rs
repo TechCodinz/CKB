@@ -7,6 +7,14 @@
 use super::deep_causality::*;
 use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 
+#[derive(Default, Clone)]
+struct SymbolicState {
+    exact_text: Option<String>,
+    not_text: HashSet<String>,
+    min: Option<(f64, bool)>,
+    max: Option<(f64, bool)>,
+}
+
 impl DeepCausalityEngine {
     /// Sanitizer-aware interprocedural taint traversal. A path may cross a
     /// sanitizer/validator, but it is reported as a finding only if the sink is
@@ -27,24 +35,24 @@ impl DeepCausalityEngine {
 
             while let Some((id, entities, facts, sanitized, crossed_boundary)) = queue.pop_front() {
                 if facts.len() >= max_depth { continue; }
-                for fact in self.facts().iter().filter(|f| f.from == id && is_taint_flow_relation(&f.relation)) {
-                    let next_sanitized = sanitized || matches!(fact.relation, CausalRelationKind::Sanitizes | CausalRelationKind::Validates);
-                    let next_boundary = crossed_boundary || fact.relation == CausalRelationKind::TrustBoundary;
+                for causal_fact in self.facts().iter().filter(|f| f.from == id && is_taint_flow_relation(&f.relation)) {
+                    let next_sanitized = sanitized || matches!(causal_fact.relation, CausalRelationKind::Sanitizes | CausalRelationKind::Validates);
+                    let next_boundary = crossed_boundary || causal_fact.relation == CausalRelationKind::TrustBoundary;
                     let next_depth = facts.len() + 1;
-                    let state_key = (fact.to.clone(), next_sanitized);
+                    let state_key = (causal_fact.to.clone(), next_sanitized);
                     if seen.get(&state_key).map(|d| *d <= next_depth).unwrap_or(false) { continue; }
                     seen.insert(state_key, next_depth);
 
                     let mut next_entities = entities.clone();
-                    next_entities.push(fact.to.clone());
+                    next_entities.push(causal_fact.to.clone());
                     let mut next_facts = facts.clone();
-                    next_facts.push(fact.clone());
+                    next_facts.push(causal_fact.clone());
 
-                    if sink_set.contains(fact.to.as_str()) {
+                    if sink_set.contains(causal_fact.to.as_str()) {
                         if !next_sanitized {
                             findings.push(TaintFinding {
                                 source: source.clone(),
-                                sink: fact.to.clone(),
+                                sink: causal_fact.to.clone(),
                                 path: make_path(next_entities, next_facts),
                                 crossed_trust_boundary: next_boundary,
                                 sanitizer_observed: false,
@@ -52,7 +60,7 @@ impl DeepCausalityEngine {
                         }
                         continue;
                     }
-                    queue.push_back((fact.to.clone(), next_entities, next_facts, next_sanitized, next_boundary));
+                    queue.push_back((causal_fact.to.clone(), next_entities, next_facts, next_sanitized, next_boundary));
                 }
             }
         }
@@ -62,18 +70,10 @@ impl DeepCausalityEngine {
     }
 
     /// Bounded symbolic constraints supporting equality, inequality, numeric
-    /// ranges, and boolean literals. Unsupported expressions are not guessed;
-    /// they are retained as opaque constraints and therefore cannot create a
-    /// false contradiction.
+    /// ranges, and boolean/string literals. Unsupported expressions are not
+    /// guessed; they remain opaque and cannot manufacture a contradiction.
     pub fn constraints_satisfiable_v2(&self, constraints: &[String]) -> bool {
-        #[derive(Default, Clone)]
-        struct Bounds {
-            exact_text: Option<String>,
-            not_text: HashSet<String>,
-            min: Option<(f64, bool)>, // value, inclusive
-            max: Option<(f64, bool)>,
-        }
-        let mut vars: HashMap<String, Bounds> = HashMap::new();
+        let mut vars: HashMap<String, SymbolicState> = HashMap::new();
 
         for raw in constraints {
             let Some((name, op, value)) = parse_constraint(raw) else { continue; };
@@ -94,10 +94,10 @@ impl DeepCausalityEngine {
                 ">" | ">=" | "<" | "<=" => {
                     let Ok(n) = value.parse::<f64>() else { continue; };
                     match op.as_str() {
-                        ">" => update_min(state, n, false),
-                        ">=" => update_min(state, n, true),
-                        "<" => update_max(state, n, false),
-                        "<=" => update_max(state, n, true),
+                        ">" => state.set_min(n, false),
+                        ">=" => state.set_min(n, true),
+                        "<" => state.set_max(n, false),
+                        "<=" => state.set_max(n, true),
                         _ => unreachable!(),
                     }
                     if bounds_contradict(state) { return false; }
@@ -122,11 +122,11 @@ impl DeepCausalityEngine {
 
         while let Some((id, depth)) = queue.pop_front() {
             if depth >= max_depth { continue; }
-            for fact in self.facts() {
-                let next = if fact.to == id && reverse_failure_relation(&fact.relation) {
-                    Some(fact.from.clone())
-                } else if fact.from == id && forward_failure_relation(&fact.relation) {
-                    Some(fact.to.clone())
+            for causal_fact in self.facts() {
+                let next = if causal_fact.to == id && reverse_failure_relation(&causal_fact.relation) {
+                    Some(causal_fact.from.clone())
+                } else if causal_fact.from == id && forward_failure_relation(&causal_fact.relation) {
+                    Some(causal_fact.to.clone())
                 } else {
                     None
                 };
@@ -205,9 +205,6 @@ fn parse_constraint(raw: &str) -> Option<(String, String, String)> {
     None
 }
 
-fn update_min(state: &mut impl BoundState, value: f64, inclusive: bool) { state.set_min(value, inclusive); }
-fn update_max(state: &mut impl BoundState, value: f64, inclusive: bool) { state.set_max(value, inclusive); }
-
 trait BoundState {
     fn min_bound(&self) -> Option<(f64, bool)>;
     fn max_bound(&self) -> Option<(f64, bool)>;
@@ -215,23 +212,21 @@ trait BoundState {
     fn set_max(&mut self, value: f64, inclusive: bool);
 }
 
-// Keep numeric helper state local and explicit instead of adding solver
-// dependencies to the core engine.
-#[derive(Default, Clone)]
-struct NumericBounds { min: Option<(f64,bool)>, max: Option<(f64,bool)> }
-impl BoundState for NumericBounds {
-    fn min_bound(&self)->Option<(f64,bool)>{self.min}
-    fn max_bound(&self)->Option<(f64,bool)>{self.max}
-    fn set_min(&mut self,value:f64,inclusive:bool){
-        if self.min.map(|(v,i)| value>v || (value==v && !inclusive && i)).unwrap_or(true){self.min=Some((value,inclusive));}
+impl BoundState for SymbolicState {
+    fn min_bound(&self) -> Option<(f64, bool)> { self.min }
+    fn max_bound(&self) -> Option<(f64, bool)> { self.max }
+    fn set_min(&mut self, value: f64, inclusive: bool) {
+        if self.min.map(|(v, i)| value > v || (value == v && !inclusive && i)).unwrap_or(true) {
+            self.min = Some((value, inclusive));
+        }
     }
-    fn set_max(&mut self,value:f64,inclusive:bool){
-        if self.max.map(|(v,i)| value<v || (value==v && !inclusive && i)).unwrap_or(true){self.max=Some((value,inclusive));}
+    fn set_max(&mut self, value: f64, inclusive: bool) {
+        if self.max.map(|(v, i)| value < v || (value == v && !inclusive && i)).unwrap_or(true) {
+            self.max = Some((value, inclusive));
+        }
     }
 }
 
-// Generic helpers below are implemented against a small view so the symbolic
-// solver remains deterministic and dependency-free.
 fn bounds_contradict<T: BoundState>(state: &T) -> bool {
     match (state.min_bound(), state.max_bound()) {
         (Some((min, min_inc)), Some((max, max_inc))) => min > max || (min == max && (!min_inc || !max_inc)),
@@ -272,10 +267,20 @@ mod tests {
     }
 
     #[test]
+    fn sanitized_only_path_is_not_a_finding() {
+        let engine=DeepCausalityEngine::from_facts(
+            vec![entity("input",CausalEntityKind::Parameter),entity("san",CausalEntityKind::Symbol),entity("sink",CausalEntityKind::RuntimeResource)],
+            vec![fact("input","san",CausalRelationKind::Sanitizes),fact("san","sink",CausalRelationKind::Writes)]
+        );
+        assert!(engine.taint_paths_v2(&["input".into()], &["sink".into()], 8).is_empty());
+    }
+
+    #[test]
     fn numeric_constraints_detect_empty_ranges() {
         let engine=DeepCausalityEngine::new();
         assert!(!engine.constraints_satisfiable_v2(&["age>=18".into(),"age<18".into()]));
         assert!(engine.constraints_satisfiable_v2(&["age>=18".into(),"age<65".into(),"active==true".into()]));
+        assert!(!engine.constraints_satisfiable_v2(&["age>=18".into(),"age==17".into()]));
     }
 
     #[test]
