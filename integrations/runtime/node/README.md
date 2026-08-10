@@ -1,129 +1,99 @@
-# CKB Live Reality — Node.js Runtime Agent
+# CKB Live Reality — Node.js Runtime Agents
 
-This integration makes the CKB Semantic Universe respond to **observed application execution** rather than decorative graph animation.
+CKB Live Reality makes the Semantic Universe and IDE extensions respond to **observed application execution** rather than decorative graph animation.
 
-The runtime kit has two layers:
+The dependency-free Node runtime kit now has three layers:
 
-- `ckb-live.mjs` — the small evidence emitter and explicit span API.
-- `ckb-auto.mjs` — framework/data-flow adapters that automatically create typed runtime transitions for common Node systems.
+- `ckb-live.mjs` — tracing core, batching, exact parent/child context and deployment heartbeat.
+- `ckb-auto.mjs` — adapters for common server, database, cache, queue, event and WebSocket boundaries.
+- `ckb-detect.mjs` — package-metadata-only runtime stack detection and setup suggestions.
 
-Both are dependency-free and use OTLP/HTTP JSON. They are designed to make CKB's STATIC / RUNTIME / PREDICTED truth separation stronger, not to manufacture animation.
+## Truth and privacy contract
 
-## What it records
+Application spans are emitted only when code actually executes. The optional heartbeat is explicitly tagged `ckb.runtime.heartbeat=true` and is not an application call/dependency edge.
 
-The agent emits structural/runtime metadata needed by CKB:
+CKB records structural/runtime metadata such as service name, route/method, status, source file/function identity, parent/child trace ids, timing, error state and typed transmission metadata (`ckb.flow.type`, direction, protocol, DB/messaging system).
 
-- `service.name`
-- request method + route
-- response status
-- `code.file.path`
-- `code.function.name`
-- parent/child trace identity
-- start/end timestamps
-- error status
-- `ckb.flow.type` such as `http-server`, `http-client`, `database`, `cache`, `queue`, `event`, `websocket`, or `function`
-- explicitly supplied primitive attributes
-
-It **does not record request bodies, response bodies, SQL text, Redis values, queue payloads, WebSocket messages, cookies, authorization headers, secrets, or arbitrary objects**.
+It **does not record request/response bodies, cookies, authorization headers, secrets, SQL text, Redis values, queue payloads, WebSocket messages, or arbitrary objects**.
 
 ## Environment
 
-Create a project-scoped key from **Living Graph Universe → LIVE LINK** in CKB Cloud, then configure the deployment secrets:
+Create a project-scoped key from **Living Graph Universe → LIVE LINK** in CKB Cloud, then configure deployment secrets:
 
 ```bash
 CKB_OTLP_ENDPOINT=https://ckb-private.onrender.com/api/v1/reality/intelligence/telemetry/otlp
 CKB_OTLP_KEY=<project-scoped-live-key>
 CKB_SERVICE_NAME=my-api
+CKB_HEARTBEAT_INTERVAL_MS=60000
 ```
 
-The key can only be used on the runtime ingestion route and only for the project encoded in its permissions. The deployment does not receive the user's CKB browser JWT or the internal Reality Engine secret.
+The key can ingest telemetry only for its project. The deployment never receives the user's browser JWT or CKB's internal Reality Engine secret.
 
 ## Fast path — automatic instrumentation
-
-Copy both files into the server project:
-
-```text
-ckb-live.mjs
-ckb-auto.mjs
-```
-
-Then:
 
 ```js
 import { createCkbAuto } from './ckb-auto.mjs';
 
-export const ckb = createCkbAuto({
-  serviceName: 'checkout-api',
-});
-
-// Observe outbound global fetch calls. CKB's own telemetry endpoint is excluded
-// automatically so the agent never traces its own flush requests.
+export const ckb = createCkbAuto({ serviceName: 'checkout-api' });
 ckb.installGlobalFetch();
+ckb.express(app, { file: 'src/server.js', namespace: 'checkout-api' });
 ```
 
-### Express
+Supported adapters include Express, NestJS, Next route handlers, global `fetch`, Prisma, generic DB clients, Redis, queue producers/consumers, application events, WebSockets and arbitrary function boundaries. Adapters are explicit and reversible; CKB does not install invasive module-loader hooks.
+
+## Detect the runtime stack first
 
 ```js
-ckb.express(app, {
-  file: 'src/server.js',
-  namespace: 'checkout-api',
-});
+import { detectRuntimeStack } from './ckb-detect.mjs';
+
+console.log(detectRuntimeStack(process.cwd()));
 ```
 
-### NestJS
+Detection reads `package.json` metadata only. It does not import application modules, execute user code, inspect environment secrets, or inspect traffic. It recognizes common frameworks, databases, caches, messaging systems, WebSocket libraries and HTTP clients and returns suggested CKB adapters.
 
-Nest applications expose `use()`, so the same root request evidence can be attached before `listen()`:
+## Explicit spans for exact source identity
 
 ```js
-ckb.nest(app, {
-  file: 'src/main.ts',
-  namespace: 'orders-api',
-});
+import { createCkbLive } from './ckb-live.mjs';
+
+const live = createCkbLive({ serviceName: 'checkout-api' });
+
+await live.span('authorizePayment', {
+  file: 'src/services/payment.js',
+  functionName: 'authorizePayment',
+  namespace: 'payment',
+  flowType: 'function',
+}, async () => paymentGateway.authorize(order));
 ```
 
-### Next.js route handlers
+Synchronous code can use `spanSync` / `wrapSync`; async code can use `span` / `wrap`.
+
+### Outbound HTTP
 
 ```js
-export const POST = ckb.wrapNextHandler(
-  'checkout.POST',
-  async function POST(request) {
-    return handleCheckout(request);
-  },
-  {
-    file: 'app/api/checkout/route.ts',
-    functionName: 'POST',
-    namespace: 'checkout-route',
-  },
+await live.fetch(
+  'paymentGateway.authorize',
+  'https://gateway.example.com/authorize',
+  { method: 'POST', body: payload },
+  { file: 'src/clients/paymentGateway.js', functionName: 'authorize' },
 );
 ```
 
-## Automatic data-flow adapters
+The body still goes to the real destination but is **not copied into CKB telemetry**.
+
+## Automatic data-flow examples
 
 ### Prisma
-
-The Prisma proxy recognizes model CRUD operations and raw-query entrypoints. It records model/operation identity, **not query arguments or SQL**.
 
 ```js
 const db = ckb.prisma(prisma, {
   file: 'src/db/prisma.ts',
   namespace: 'persistence',
 });
-
 await db.order.findMany();
-await db.payment.create({ data: payment });
 ```
 
-### pg / mysql / generic database clients
-
-```js
-const db = ckb.instrumentDataClient(pool, {
-  system: 'postgresql',
-  methods: ['query'],
-  file: 'src/db/pool.ts',
-});
-
-await db.query('SELECT ...'); // query text is not copied into CKB telemetry
-```
+CKB records model/operation identity, not query arguments or SQL.
 
 ### Redis
 
@@ -132,118 +102,47 @@ const cache = ckb.redis(redisClient, {
   file: 'src/cache/redis.ts',
   namespace: 'cache',
 });
-
 await cache.get('session-key');
-await cache.set('session-key', value);
 ```
 
-CKB records only the Redis operation name. Keys and values remain outside CKB telemetry.
+Only the Redis operation is recorded; keys/values stay outside telemetry.
 
-### Queues / brokers
-
-Wrap producer clients:
+### Queues / events / WebSockets
 
 ```js
-const jobs = ckb.producer(queue, {
-  system: 'bullmq',
-  methods: ['add'],
-  file: 'src/queues/jobs.ts',
-});
-
-await jobs.add('invoice', payload);
+const jobs = ckb.producer(queue, { system: 'bullmq', methods: ['add'] });
+const consume = ckb.consumer('invoice.process', processInvoice, { system: 'bullmq' });
+emitter.on('order.created', ckb.eventHandler('order.created', handleOrderCreated));
+ckb.websocket(socket);
+socket.on('message', ckb.websocketHandler('socket.message', handleMessage));
 ```
 
-Wrap consumer handlers:
+Payloads/messages are not copied into CKB telemetry.
+
+## Deployment heartbeat
+
+A root heartbeat span is emitted every 60 seconds by default when the agent is configured. It proves the deployment-side agent can reach CKB, but because it is parentless and explicitly typed as `heartbeat`, it is not displayed as a fake request/function transmission.
+
+Disable or tune it:
 
 ```js
-const processInvoice = ckb.consumer(
-  'invoice.process',
-  async job => runInvoice(job),
-  {
-    system: 'bullmq',
-    file: 'src/workers/invoice.ts',
-    functionName: 'processInvoice',
-  },
-);
+createCkbLive({ heartbeat: false });
+createCkbLive({ heartbeatIntervalMs: 120000 });
 ```
 
-Message bodies are not copied into telemetry.
+## Why file/function identity matters
 
-### Events
-
-```js
-emitter.on('order.created', ckb.eventHandler(
-  'order.created',
-  handleOrderCreated,
-  { file: 'src/events/orders.ts', functionName: 'handleOrderCreated' },
-));
-```
-
-### WebSockets
-
-```js
-ckb.websocket(socket, {
-  file: 'src/realtime/socket.ts',
-  namespace: 'realtime',
-});
-
-socket.on('message', ckb.websocketHandler(
-  'socket.message',
-  handleMessage,
-  { file: 'src/realtime/socket.ts', functionName: 'handleMessage' },
-));
-```
-
-The agent records that a WebSocket send/message transition occurred; it does not record the message body.
-
-## Explicit spans when you want exact source identity
-
-```js
-import { createCkbLive } from './ckb-live.mjs';
-
-export const live = createCkbLive({ serviceName: 'checkout-api' });
-
-async function authorizePayment(order) {
-  return live.span('authorizePayment', {
-    file: 'src/services/payment.js',
-    functionName: 'authorizePayment',
-    namespace: 'payment',
-    flowType: 'function',
-  }, async () => paymentGateway.authorize(order));
-}
-```
-
-Or wrap an existing async function:
-
-```js
-const observedAuthorize = live.wrap(
-  'authorizePayment',
-  authorizePayment,
-  {
-    file: 'src/services/payment.js',
-    functionName: 'authorizePayment',
-    namespace: 'payment',
-  },
-);
-```
-
-For synchronous code, use `spanSync` / `wrapSync` so the return type is not changed.
-
-## Why file/function metadata matters
-
-CKB already knows the static repository through Tree-sitter. Runtime spans become most powerful when their identity can be resolved back to the same static node.
-
-For example:
+An identity such as:
 
 ```text
 src/services/payment.js::authorizePayment
 ```
 
-lets CKB fuse:
+lets CKB fuse static Tree-sitter architecture with actual runtime evidence:
 
 ```text
 STATIC
-  function definition
+  definition
   callers / callees
   dependencies
 
@@ -251,35 +150,23 @@ RUNTIME
   observed invocation count
   latency
   errors
+  typed HTTP / DB / cache / queue / event / WebSocket transitions
   exact parent/child trace sequence
-  typed flow: HTTP / DB / cache / queue / event / WebSocket
 ```
 
-That evidence drives directional execution pulses, Live/Fused mode, runtime semantic depth, molecule filtering, fault investigation and exact trace retracing.
+That drives directional execution pulses, V8 transmission filtering, Live/Fused mode, runtime semantic depth and exact trace retracing in Cloud and supported IDE extensions.
 
-## Batching
+## Batching and shutdown
 
-The default flush interval is 12 seconds to stay efficient on small deployments. CKB deliberately does not encourage one telemetry HTTP request per application span.
-
-```js
-const ckb = createCkbAuto({
-  serviceName: 'checkout-api',
-  flushIntervalMs: 15000,
-  maxBatch: 96,
-});
-```
-
-## Shutdown
+The default flush interval is 12 seconds; CKB deliberately avoids one telemetry request per span.
 
 ```js
+const ckb = createCkbAuto({ flushIntervalMs: 15000, maxBatch: 96 });
+
 process.on('SIGTERM', async () => {
   await ckb.shutdown();
   process.exit(0);
 });
 ```
 
-## Truth contract
-
-A moving edge in CKB must correspond to runtime evidence.
-
-The Node runtime kit emits real observed spans only. Static graph relationships that were not observed remain static. Predictions remain a separate CKB evidence class.
+A moving CKB edge must correspond to runtime evidence. Static relationships remain static; predictions remain explicitly PREDICTED.
