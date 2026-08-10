@@ -21,6 +21,14 @@ pub use federation::*;
 pub mod runtime;
 pub use runtime::*;
 
+#[path = "deep_causality_contracts.rs"]
+pub mod contracts;
+pub use contracts::*;
+
+#[path = "deep_causality_human.rs"]
+pub mod human;
+pub use human::*;
+
 /// Fuse CKB's authoritative dependency/runtime graph with repository artifact
 /// evidence. The adapter preserves existing graph/runtime identity; baseline
 /// artifact extraction is followed by precision contract/ORM/infra/test
@@ -102,5 +110,6 @@ mod tests {
         ];
         let engine = build_deep_causality_bundle(&graph, "acme/api", &artifacts);
         assert_eq!(engine.entities().filter(|e| e.id == "event:orders.created").count(), 1);
+        assert!(engine.distributed_flow("repo:acme/api::file:src/publisher.ts", "repo:acme/api::file:src/consumer.ts", 4).is_some());
     }
 }
