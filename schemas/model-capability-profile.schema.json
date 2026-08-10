@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ckb.dev/schemas/model-capability-profile.schema.json",
+  "title": "CKB Model Capability Profile",
+  "description": "Vendor-neutral declared capabilities used for context/transport decisions. These fields do not alter CKB evidence truth or constitute model quality claims.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "provider": { "type": "string", "maxLength": 160 },
+    "model": { "type": "string", "maxLength": 200 },
+    "releasedAt": { "type": ["string", "null"], "format": "date-time" },
+    "contextWindowTokens": { "type": ["integer", "null"], "minimum": 1, "maximum": 20000000 },
+    "maxOutputTokens": { "type": ["integer", "null"], "minimum": 1, "maximum": 2000000 },
+    "supportsStructuredOutput": { "type": "boolean", "default": true },
+    "supportsToolUse": { "type": "boolean", "default": true },
+    "supportsParallelTools": { "type": "boolean", "default": false },
+    "supportsImages": { "type": "boolean", "default": false },
+    "supportsCodeExecution": { "type": "boolean", "default": false },
+    "supportsLongRunningAgents": { "type": "boolean", "default": false },
+    "declaredSources": {
+      "type": "array",
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "reference"],
+        "properties": {
+          "kind": { "enum": ["official-doc", "official-release", "provider-api", "user-declared"] },
+          "reference": { "type": "string", "maxLength": 1000 },
+          "observedAt": { "type": ["string", "null"], "format": "date-time" }
+        }
+      }
+    }
+  },
+  "required": [
+    "supportsStructuredOutput",
+    "supportsToolUse",
+    "supportsParallelTools",
+    "supportsImages",
+    "supportsCodeExecution"
+  ]
+}
