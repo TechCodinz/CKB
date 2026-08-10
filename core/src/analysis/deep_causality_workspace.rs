@@ -53,10 +53,6 @@ pub async fn build_workspace_deep_causality(
         let relative = path.strip_prefix(&root).unwrap_or(path).to_string_lossy().replace('\\', "/");
 
         if supported_source(path) {
-            // Parse the bytes from disk, but give the parser the stable
-            // repository-relative identity. This makes graph nodes converge
-            // with artifact/history/event IDs instead of encoding machine-local
-            // absolute filesystem paths into the causal universe.
             if let Ok(content) = std::fs::read_to_string(path) {
                 if let Ok(analysis) = parser.parse_content(&relative, &content) { analyses.push(analysis); }
             }
@@ -99,7 +95,7 @@ fn supported_source(path: &Path) -> bool {
 fn causal_artifact_candidate(path: &Path, relative: &str) -> bool {
     if supported_source(path) { return true; }
     let lower = relative.to_ascii_lowercase();
-    if lower.ends_with("codeowners") || lower.ends_with("dockerfile")
+    if lower.ends_with("codeowners") || lower.ends_with("dockerfile") || lower.ends_with("go.mod")
         || lower.contains("/.github/workflows/") || lower.starts_with(".github/workflows/")
         || lower.contains("openapi") || lower.contains("swagger") { return true; }
     matches!(path.extension().and_then(|value| value.to_str()).map(|value| value.to_ascii_lowercase()).as_deref(),
@@ -116,6 +112,7 @@ mod tests {
         assert!(causal_artifact_candidate(Path::new("api/openapi.yaml"), "api/openapi.yaml"));
         assert!(causal_artifact_candidate(Path::new("schema.graphql"), "schema.graphql"));
         assert!(causal_artifact_candidate(Path::new("events.proto"), "events.proto"));
+        assert!(causal_artifact_candidate(Path::new("go.mod"), "go.mod"));
         assert!(!causal_artifact_candidate(Path::new("image.png"), "image.png"));
     }
 }
