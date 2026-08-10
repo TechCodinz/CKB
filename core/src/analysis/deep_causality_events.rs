@@ -1,7 +1,8 @@
 //! Explicit distributed-event identity extraction for V13.1.
 //!
-//! Only literal names present in event/queue/topic APIs are unified. This
-//! deliberately avoids inferring dynamically-computed topic names.
+//! Only literal names present in event/queue/topic APIs are unified. Producer
+//! edges point into the shared event/topic/queue; consumer edges point outward
+//! from it so causal paths can traverse producer -> event -> consumer.
 
 use crate::analysis::deep_causality::*;
 use crate::analysis::deep_causality_extractors::RepositoryArtifact;
@@ -33,9 +34,14 @@ pub fn enrich_event_identity(engine: &mut DeepCausalityEngine, artifacts: &[Repo
                         ("distributed.kind".to_string(), observation.kind_name.to_string()),
                     ]),
                 });
+                let (from, to) = if observation.consumer {
+                    (id, file_id.clone())
+                } else {
+                    (file_id.clone(), id)
+                };
                 let fact = CausalFact {
-                    from: file_id.clone(),
-                    to: id,
+                    from,
+                    to,
                     relation: observation.relation,
                     evidence: CausalEvidenceClass::Static,
                     confidence: 1.0,
@@ -60,20 +66,21 @@ struct EventObservation {
     kind: CausalEntityKind,
     kind_name: &'static str,
     relation: CausalRelationKind,
+    consumer: bool,
 }
 
 fn event_literals(line: &str) -> Vec<EventObservation> {
     let candidates = [
-        (".emit(", "emit", CausalEntityKind::Event, "event", CausalRelationKind::Emits),
-        (".publish(", "publish", CausalEntityKind::Topic, "topic", CausalRelationKind::Publishes),
-        (".produce(", "produce", CausalEntityKind::Topic, "topic", CausalRelationKind::Publishes),
-        (".send(", "send", CausalEntityKind::Queue, "queue", CausalRelationKind::Publishes),
-        (".subscribe(", "subscribe", CausalEntityKind::Topic, "topic", CausalRelationKind::Subscribes),
-        (".consume(", "consume", CausalEntityKind::Queue, "queue", CausalRelationKind::Consumes),
-        (".on(", "on", CausalEntityKind::Event, "event", CausalRelationKind::Consumes),
+        (".emit(", "emit", CausalEntityKind::Event, "event", CausalRelationKind::Emits, false),
+        (".publish(", "publish", CausalEntityKind::Topic, "topic", CausalRelationKind::Publishes, false),
+        (".produce(", "produce", CausalEntityKind::Topic, "topic", CausalRelationKind::Publishes, false),
+        (".send(", "send", CausalEntityKind::Queue, "queue", CausalRelationKind::Publishes, false),
+        (".subscribe(", "subscribe", CausalEntityKind::Topic, "topic", CausalRelationKind::Subscribes, true),
+        (".consume(", "consume", CausalEntityKind::Queue, "queue", CausalRelationKind::Consumes, true),
+        (".on(", "on", CausalEntityKind::Event, "event", CausalRelationKind::Consumes, true),
     ];
     let mut out = Vec::new();
-    for (needle, method, kind, kind_name, relation) in candidates {
+    for (needle, method, kind, kind_name, relation, consumer) in candidates {
         let mut cursor = 0usize;
         while cursor < line.len() {
             let Some(relative) = line[cursor..].find(needle) else { break; };
@@ -84,7 +91,7 @@ fn event_literals(line: &str) -> Vec<EventObservation> {
                 continue;
             };
             if !name.is_empty() {
-                out.push(EventObservation { name, method, kind: kind.clone(), kind_name, relation: relation.clone() });
+                out.push(EventObservation { name, method, kind: kind.clone(), kind_name, relation: relation.clone(), consumer });
             }
             cursor = start.saturating_add(consumed).max(start + 1);
         }
@@ -125,6 +132,14 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].name, "orders.created");
         assert_eq!(rows[0].relation, CausalRelationKind::Publishes);
+        assert!(!rows[0].consumer);
+    }
+
+    #[test]
+    fn consumer_edges_are_marked_reverse_direction() {
+        let rows = event_literals("bus.subscribe(\"orders.created\", handler)");
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].consumer);
     }
 
     #[test]
