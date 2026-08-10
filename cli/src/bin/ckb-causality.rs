@@ -1,24 +1,31 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use ckb_core::analysis::{
-    ApiContract, ArchitectureRule, ChangeOperation, DeepCausalityEngine,
+    build_workspace_deep_causality, ApiContract, ArchitectureRule, ChangeOperation,
+    DeepCausalityEngine,
 };
 use serde::de::DeserializeOwned;
 use serde_json::json;
-use std::fs;
+use std::{fs, path::Path};
 
 #[derive(Parser)]
 #[command(name = "ckb-causality", version, about = "CKB V13.1 Deep Software Causality")]
 struct Cli {
-    /// Evidence bundle serialized as DeepCausalityEngine JSON.
-    #[arg(long)]
-    bundle: String,
+    /// Existing DeepCausalityEngine JSON bundle. Required for query commands,
+    /// but not for `build`.
+    #[arg(long, global = true)]
+    bundle: Option<String>,
     #[command(subcommand)]
     command: Command,
 }
 
 #[derive(Subcommand)]
 enum Command {
+    Build {
+        workspace: String,
+        #[arg(long)] repository: Option<String>,
+        #[arg(long, default_value = ".ckb/deep-causality.json")] output: String,
+    },
     DataFlow { source: String, sink: String, #[arg(long, default_value_t = 24)] depth: usize },
     Taint { #[arg(long, value_delimiter = ',')] sources: Vec<String>, #[arg(long, value_delimiter = ',')] sinks: Vec<String>, #[arg(long, default_value_t = 24)] depth: usize },
     Reachable { source: String, sink: String, #[arg(long, value_delimiter = ',')] conditions: Vec<String>, #[arg(long, default_value_t = 24)] depth: usize },
@@ -47,10 +54,33 @@ fn read_json<T: DeserializeOwned>(path: &str) -> Result<T> {
     serde_json::from_str(&text).with_context(|| format!("parse JSON {path}"))
 }
 
-fn main() -> Result<()> {
+fn required_bundle(path: Option<&str>) -> Result<DeepCausalityEngine> {
+    let path = path.context("--bundle is required for this causality query; run `ckb-causality build <workspace>` first")?;
+    read_json(path)
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
     let cli = Cli::parse();
-    let engine: DeepCausalityEngine = read_json(&cli.bundle)?;
+
+    if let Command::Build { workspace, repository, output } = &cli.command {
+        let repo = repository.clone().unwrap_or_else(|| {
+            Path::new(workspace).file_name().and_then(|v| v.to_str()).unwrap_or("workspace").to_string()
+        });
+        let (engine, report) = build_workspace_deep_causality(workspace, repo).await?;
+        let output_path = Path::new(workspace).join(output);
+        if let Some(parent) = output_path.parent() { fs::create_dir_all(parent)?; }
+        fs::write(&output_path, serde_json::to_vec_pretty(&engine)?)?;
+        println!("{}", serde_json::to_string_pretty(&json!({
+            "bundle": output_path.to_string_lossy(),
+            "report": report,
+        }))?);
+        return Ok(());
+    }
+
+    let engine = required_bundle(cli.bundle.as_deref())?;
     let result = match cli.command {
+        Command::Build { .. } => unreachable!(),
         Command::DataFlow { source, sink, depth } => serde_json::to_value(engine.data_flow_path(&source, &sink, depth))?,
         Command::Taint { sources, sinks, depth } => serde_json::to_value(engine.taint_paths_v2(&sources, &sinks, depth))?,
         Command::Reachable { source, sink, conditions, depth } => serde_json::to_value(engine.reachable_under(&source, &sink, &conditions, depth))?,
@@ -70,7 +100,10 @@ fn main() -> Result<()> {
             let rules: Vec<ArchitectureRule> = read_json(&rules)?;
             serde_json::to_value(engine.enforce_rules(&rules))?
         }
-        Command::DriftForecast { edge_counts, horizon } => serde_json::to_value(engine.forecast_drift(&edge_counts, horizon))?,
+        Command::DriftForecast { edge_counts, horizon } => json!({
+            "evidence":"predicted",
+            "values":engine.forecast_drift(&edge_counts, horizon),
+        }),
         Command::Simulate { operations, depth } => {
             let operations: Vec<ChangeOperation> = read_json(&operations)?;
             serde_json::to_value(engine.simulate_change(&operations, depth))?
