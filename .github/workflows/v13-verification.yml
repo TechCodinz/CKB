@@ -89,6 +89,7 @@ jobs:
           const fs = require('fs');
           const files = [
             'schemas/model-capability-profile.schema.json',
+            'schemas/model-lifecycle-profile.schema.json',
             'schemas/ckb-context-v1.schema.json',
             'schemas/architecture-constitution-v1.json',
             'schemas/architecture-query-v1.schema.json',
