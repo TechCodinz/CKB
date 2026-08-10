@@ -1,7 +1,7 @@
 name: Build & Test
 
 # Runs on every push and PR to main. Covers the open-source components only
-# (core, cli, mcp-server, WASM bindings, VS Code extension, SDKs).
+# (core, cli, mcp-server, WASM bindings, VS Code extension, SDKs/runtime agents).
 # The backend (auth/billing) and web dashboard are in the private
 # TechCodinz/ckb-cloud repo and have their own CI there.
 on:
@@ -85,8 +85,14 @@ jobs:
           node-version: '20'
       - name: Node SDK syntax check
         run: node --check bindings/node/index.js
+      - name: Node Live Reality syntax check
+        run: |
+          node --check integrations/runtime/node/ckb-live.mjs
+          node --check integrations/runtime/node/ckb-auto.mjs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Python SDK syntax check
         run: python3 -m py_compile bindings/python/ckb/core.py bindings/python/ckb/__init__.py bindings/python/setup.py
+      - name: Python Live Reality syntax check
+        run: python3 -m py_compile integrations/runtime/python/ckb_live.py
