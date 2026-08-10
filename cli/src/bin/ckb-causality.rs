@@ -2,13 +2,14 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use ckb_core::analysis::{
     build_federated_deep_causality, build_workspace_deep_causality,
-    ingest_runtime_resource_observations, ApiContract, ArchitectureRule,
-    ChangeOperation, DeepCausalityEngine, FederatedWorkspaceMember,
+    derive_contract_snapshots, ingest_human_evidence, ingest_runtime_resource_observations,
+    ApiContract, ArchitectureRule, ChangeOperation, DeepCausalityEngine,
+    FederatedWorkspaceMember, HumanOwnershipObservation, HumanReviewObservation,
     RuntimeResourceObservation,
 };
 use serde::de::DeserializeOwned;
 use serde_json::json;
-use std::{fs, path::Path};
+use std::{fs, path::{Path, PathBuf}};
 
 #[derive(Parser)]
 #[command(name = "ckb-causality", version, about = "CKB V13.1 Deep Software Causality")]
@@ -27,12 +28,14 @@ enum Command {
         workspace: String,
         #[arg(long)] repository: Option<String>,
         #[arg(long, default_value = ".ckb/deep-causality.json")] output: String,
+        #[arg(long, default_value = ".ckb/causality-history")] snapshot_dir: String,
     },
     /// Build one organization-wide evidence bundle from a JSON array of
     /// FederatedWorkspaceMember { root, repository } objects.
     Federate {
         members: String,
         #[arg(long, default_value = ".ckb/deep-causality-federated.json")] output: String,
+        #[arg(long, default_value = ".ckb/causality-history")] snapshot_dir: String,
     },
     /// Merge observed profiler/APM resource samples into an existing bundle.
     EnrichRuntime {
@@ -40,6 +43,14 @@ enum Command {
         /// Output bundle. Defaults to overwriting --bundle.
         #[arg(long)] output: Option<String>,
     },
+    /// Merge explicit SCM/review HUMAN evidence into an existing bundle.
+    EnrichHuman {
+        #[arg(long)] reviews: Option<String>,
+        #[arg(long)] ownerships: Option<String>,
+        #[arg(long)] output: Option<String>,
+    },
+    /// Export contract shapes derived only from observed causal schema evidence.
+    Contracts,
     DataFlow { source: String, sink: String, #[arg(long, default_value_t = 24)] depth: usize },
     Taint { #[arg(long, value_delimiter = ',')] sources: Vec<String>, #[arg(long, value_delimiter = ',')] sinks: Vec<String>, #[arg(long, default_value_t = 24)] depth: usize },
     Reachable { source: String, sink: String, #[arg(long, value_delimiter = ',')] conditions: Vec<String>, #[arg(long, default_value_t = 24)] depth: usize },
@@ -79,31 +90,44 @@ fn write_bundle(path: &Path, engine: &DeepCausalityEngine) -> Result<()> {
     Ok(())
 }
 
+fn write_content_snapshot(snapshot_dir: &Path, engine: &DeepCausalityEngine) -> Result<PathBuf> {
+    let bytes = serde_json::to_vec_pretty(engine)?;
+    let digest = format!("{:x}", md5::compute(&bytes));
+    fs::create_dir_all(snapshot_dir)?;
+    let path = snapshot_dir.join(format!("{digest}.json"));
+    if !path.exists() { fs::write(&path, bytes)?; }
+    Ok(path)
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Command::Build { workspace, repository, output } => {
+        Command::Build { workspace, repository, output, snapshot_dir } => {
             let repo = repository.clone().unwrap_or_else(|| {
-                Path::new(workspace).file_name().and_then(|v| v.to_str()).unwrap_or("workspace").to_string()
+                Path::new(workspace).file_name().and_then(|value| value.to_str()).unwrap_or("workspace").to_string()
             });
             let (engine, report) = build_workspace_deep_causality(workspace, repo).await?;
             let output_path = Path::new(workspace).join(output);
             write_bundle(&output_path, &engine)?;
+            let snapshot = write_content_snapshot(&Path::new(workspace).join(snapshot_dir), &engine)?;
             println!("{}", serde_json::to_string_pretty(&json!({
                 "bundle": output_path.to_string_lossy(),
+                "snapshot": snapshot.to_string_lossy(),
                 "report": report,
             }))?);
             return Ok(());
         }
-        Command::Federate { members, output } => {
+        Command::Federate { members, output, snapshot_dir } => {
             let members: Vec<FederatedWorkspaceMember> = read_json(members)?;
             let (engine, report) = build_federated_deep_causality(&members).await?;
             let output_path = Path::new(output);
             write_bundle(output_path, &engine)?;
+            let snapshot = write_content_snapshot(Path::new(snapshot_dir), &engine)?;
             println!("{}", serde_json::to_string_pretty(&json!({
                 "bundle": output_path.to_string_lossy(),
+                "snapshot": snapshot.to_string_lossy(),
                 "report": report,
             }))?);
             return Ok(());
@@ -122,12 +146,31 @@ async fn main() -> Result<()> {
             }))?);
             return Ok(());
         }
+        Command::EnrichHuman { reviews, ownerships, output } => {
+            let bundle_path = cli.bundle.as_deref().context("--bundle is required for enrich-human")?;
+            let mut engine: DeepCausalityEngine = read_json(bundle_path)?;
+            let reviews: Vec<HumanReviewObservation> = match reviews { Some(path) => read_json(path)?, None => vec![] };
+            let ownerships: Vec<HumanOwnershipObservation> = match ownerships { Some(path) => read_json(path)?, None => vec![] };
+            if reviews.is_empty() && ownerships.is_empty() {
+                anyhow::bail!("enrich-human requires at least one non-empty --reviews or --ownerships evidence file");
+            }
+            let report = ingest_human_evidence(&mut engine, &reviews, &ownerships);
+            let output_path = output.as_deref().unwrap_or(bundle_path);
+            write_bundle(Path::new(output_path), &engine)?;
+            println!("{}", serde_json::to_string_pretty(&json!({
+                "bundle": output_path,
+                "report": report,
+                "ownership_risks": engine.ownership_risks(),
+            }))?);
+            return Ok(());
+        }
         _ => {}
     }
 
     let engine = required_bundle(cli.bundle.as_deref())?;
     let result = match cli.command {
-        Command::Build { .. } | Command::Federate { .. } | Command::EnrichRuntime { .. } => unreachable!(),
+        Command::Build { .. } | Command::Federate { .. } | Command::EnrichRuntime { .. } | Command::EnrichHuman { .. } => unreachable!(),
+        Command::Contracts => serde_json::to_value(derive_contract_snapshots(&engine))?,
         Command::DataFlow { source, sink, depth } => serde_json::to_value(engine.data_flow_path(&source, &sink, depth))?,
         Command::Taint { sources, sinks, depth } => serde_json::to_value(engine.taint_paths_v2(&sources, &sinks, depth))?,
         Command::Reachable { source, sink, conditions, depth } => serde_json::to_value(engine.reachable_under(&source, &sink, &conditions, depth))?,
@@ -168,6 +211,7 @@ async fn main() -> Result<()> {
         Command::Summary => json!({
             "entities": engine.entities().count(),
             "facts": engine.facts().len(),
+            "contracts": derive_contract_snapshots(&engine).len(),
             "quality": engine.quality_metrics(),
             "concurrency_hazards": engine.concurrency_hazards().len(),
             "runtime_hotspots": engine.runtime_hotspots().len(),
