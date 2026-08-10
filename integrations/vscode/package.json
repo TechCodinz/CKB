@@ -1,8 +1,8 @@
 {
   "name": "ckb-vscode",
   "displayName": "CKB - Invisible Reality Architecture Intelligence",
-  "description": "See what code hides: cursor-driven semantic source reality, molecular architecture, exact runtime transmissions, Cloud continuity, fault pressure, ripple analysis and model-ready software memory inside VS Code.",
-  "version": "1.7.0",
+  "description": "See what code hides: cursor-driven semantic source reality, molecular architecture, exact runtime transmissions, bidirectional Cloud continuity, fault pressure, ripple analysis and model-ready software memory inside VS Code.",
+  "version": "1.8.0",
   "publisher": "TechCodinz",
   "icon": "icon.png",
   "license": "MIT",
@@ -10,11 +10,11 @@
   "keywords": ["architecture","dependency","analysis","mcp","ai","code-quality","architecture-memory","runtime-intelligence","blast-radius","code-graph","data-flow","observability","software-visualization","code-intelligence","opentelemetry","distributed-tracing","semantic-zoom","runtime-tracing","cloud-continuity"],
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Linters","Other","Programming Languages","Visualization"],
-  "activationEvents": ["onStartupFinished","onView:ckb.realityView"],
+  "activationEvents": ["onStartupFinished","onView:ckb.realityView","onUri"],
   "main": "./out/extensionV6.js",
   "contributes": {
     "viewsContainers": { "activitybar": [{ "id": "ckb-reality", "title": "CKB Invisible Reality", "icon": "icon.png" }] },
-    "views": { "ckb-reality": [{ "type": "webview", "id": "ckb.realityView", "name": "Invisible Reality V10", "contextualTitle": "CKB Semantic Editor + Live Transmission Reality" }] },
+    "views": { "ckb-reality": [{ "type": "webview", "id": "ckb.realityView", "name": "Invisible Reality V11", "contextualTitle": "CKB Semantic Editor + Live Transmission + Cloud Return" }] },
     "commands": [
       { "command": "ckb.openReality", "title": "CKB: Open Invisible Reality", "icon": "$(telescope)" },
       { "command": "ckb.inspectSemanticReality", "title": "CKB: Inspect Semantic Reality at Cursor", "icon": "$(symbol-namespace)" },
