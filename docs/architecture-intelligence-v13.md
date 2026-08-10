@@ -72,24 +72,79 @@ Implementation: `core/src/analysis/intelligence_fabric.rs`.
 
 Provider/model names do not change the evidence sections. They exist so an orchestrator can choose transport and budget behavior without teaching CKB a vendor-specific truth model.
 
-## Model capability profile
+## Frontier Model Capability Profile V2
 
-V13 accepts a neutral profile:
+The earlier boolean-only model profile remains accepted for compatibility, but the V13 contract now represents fast-changing provider behavior without pretending `false` means `unknown`.
 
-```json
-{
-  "provider": "optional-provider-name",
-  "model": "optional-model-name",
-  "contextWindowTokens": 200000,
-  "supportsStructuredOutput": true,
-  "supportsToolUse": true,
-  "supportsParallelTools": false,
-  "supportsImages": false,
-  "supportsCodeExecution": false
-}
+The canonical schema is `schemas/model-capability-profile.schema.json`. It can represent:
+
+- provider/model identity and aliases,
+- GA / preview / limited / deprecated / retired lifecycle,
+- release and verification timestamps plus freshness horizon,
+- context-window and max-output limits,
+- knowledge cutoff metadata,
+- input/output modalities,
+- supported API surfaces and preferred surface,
+- reasoning modes, defaults, adaptive/always-on behavior and manual-budget support,
+- explicit support states for function calling, structured output, parallel tools, code execution, computer use and MCP,
+- named provider tools,
+- deprecated, ignored, rejected and unsupported request parameters,
+- unsupported turn patterns such as response prefilling,
+- parameter migrations,
+- tokenizer migration notes,
+- primary-source provenance.
+
+Support is a six-state value: `supported | unsupported | preview | beta | limited | unknown`. **Unknown stays unknown.** CKB does not infer a capability because a neighboring model has it.
+
+Rust implementation: `core/src/analysis/frontier_model_profile.rs`.
+
+## Primary-source verified catalog
+
+CKB Cloud V13 ships a small bundled verified catalog as a safe bootstrap and also supports a trusted dynamic store. This prevents the intelligence architecture from requiring a code rewrite every time a provider introduces a new model or changes request semantics.
+
+The effective catalog is:
+
+```text
+bundled verified bootstrap
+          +
+trusted dynamic verified store
+          ↓
+exact provider/model overlay
+          ↓
+IDE / MCP / agent capability consumers
 ```
 
-These are declared capabilities, not CKB quality claims. Quality is learned only from observed evaluation outcomes.
+The dynamic store can only be updated through the dual-auth trusted sync path:
+
+```text
+POST /api/v1/mcp/architecture/internal/frontier-models/sync
+Authorization: Bearer ckb_live_...
+X-CKB-Internal-Secret: ...
+```
+
+A sync entry is rejected unless it has a valid model identity, verification timestamp, lifecycle state and at least one `official-doc`, `official-release`, or `provider-api` source. The profile is hashed before persistence. Malformed or hash-mismatched database records never override the bundled bootstrap catalog.
+
+The read-only developer endpoints are:
+
+```text
+GET  /api/v1/mcp/architecture/models/catalog
+POST /api/v1/mcp/architecture/models/request-adapt
+```
+
+`request-adapt` performs only data-driven compatibility transformations explicitly allowed by the verified profile. It can remove parameters documented as ignored/deprecated and report incompatible fields or turn patterns. It **does not execute the provider request**.
+
+## IDE parity
+
+VS Code and JetBrains V13 consume the same Cloud catalog. Both can:
+
+- compile architecture context at the cursor,
+- stay model-neutral or attach a verified model capability hint,
+- inspect the verified frontier catalog,
+- inspect observed model/task validation history,
+- inspect the Architecture Constitution,
+- check a JSON provider request against verified compatibility metadata without executing it.
+
+No IDE uploads arbitrary source contents merely to choose a model profile.
 
 ## Observed evaluation engine
 
@@ -106,6 +161,8 @@ Supported outcome dimensions include:
 - exact validation references.
 
 `ModelScorecard` aggregates recorded outcomes by task/provider/model. It is historical evidence, not a universal benchmark or a prediction of future performance.
+
+The observed model registry does **not** rank an unobserved new frontier model merely because its context window or tool list looks stronger. A model becomes recommendation-eligible only after enough CKB validation observations exist for that exact project/task profile, with rollback-rate gating. Automatic model selection and automatic execution remain disabled in V13 until those policies are separately validated.
 
 ## Guarded self-evolution
 
@@ -129,7 +186,7 @@ MONITOR / RESCAN / RETRACE
 ROLL BACK IF REQUIRED
 ```
 
-V13 deliberately sets autonomous source promotion to **false**. CKB may automatically update architecture memory, runtime evidence, history and model scorecards. It may also propose its own improvements. It must not silently self-deploy production source changes.
+V13 deliberately sets autonomous source promotion to **false**. CKB may automatically update architecture memory, runtime evidence, history, verified model metadata through the trusted data plane, and observed model scorecards. It may also propose its own improvements. It must not silently self-deploy production source changes.
 
 ## Existing CKB systems reused by V13
 
@@ -147,35 +204,23 @@ V13 is not a second architecture engine. It composes existing evidence systems:
 - Guarded Change transactions,
 - VS Code / JetBrains / MCP integrations.
 
-## Architecture Query Language direction
+## Architecture Query Language
 
-The query layer should resolve user/model intent into existing deterministic engines rather than make an LLM rediscover graph operations. Planned canonical operations are:
-
-```text
-MEMORY <query> [DEPTH n] [LIMIT n]
-PATH <source-symbol-id> -> <target-symbol-id> [DEPTH n]
-DEPENDENTS <symbol-id> [DEPTH n]
-IMPACT <source-path>[:line]
-DNA [symbol-id]
-HISTORY [snapshot-id]
-DIFF <from-snapshot> -> <to-snapshot>
-RUNTIME [symbol-id|trace-id]
-```
-
-Natural language remains supported; the orchestrator maps it into these evidence operations and can show the resolved operation to the caller.
+The V13 query layer resolves user/model intent into deterministic engines rather than making an LLM rediscover graph operations. Canonical operations include memory retrieval, path/failure-cone reasoning, impact analysis, Code DNA, snapshot history/diff and runtime evidence. Natural language can still be mapped into these operations while CKB preserves and exposes the resolved evidence operation.
 
 ## Continuous learning boundaries
 
 CKB architecture memory is allowed to self-update from verified inputs:
 
 - completed source scans,
-- incremental repository changes once an exact graph-delta engine is active,
+- incremental repository graph deltas,
 - persisted snapshots,
 - observed OTLP telemetry,
 - executed validation results,
-- explicit user decisions/feedback.
+- explicit user decisions/feedback,
+- trusted primary-source model capability metadata.
 
-No unverified model statement is written into the canonical architecture graph as a fact.
+No unverified model statement is written into the canonical architecture graph as a fact. No provider capability record changes source/runtime evidence classification.
 
 ## Current V13 branch status
 
