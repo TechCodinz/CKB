@@ -1,9 +1,9 @@
 //! Workspace builder for V13.1 Deep Software Causality.
 
-use crate::analysis::{
-    build_deep_causality_bundle, enrich_with_git_history, DeepCausalityEngine,
-    GitHistoryIngestReport, RepositoryArtifact,
-};
+use super::build_deep_causality_bundle;
+use crate::analysis::deep_causality::DeepCausalityEngine;
+use crate::analysis::deep_causality_extractors::RepositoryArtifact;
+use crate::analysis::deep_causality_history::{enrich_with_git_history, GitHistoryIngestReport};
 use crate::{DependencyGraph, FileAnalysis, LanguageParser};
 use anyhow::{Context, Result};
 use ignore::WalkBuilder;
@@ -54,9 +54,7 @@ pub async fn build_workspace_deep_causality(
 
         if supported_source(path) {
             let absolute = path.to_string_lossy().to_string();
-            if let Ok(analysis) = parser.parse_file(&absolute).await {
-                analyses.push(analysis);
-            }
+            if let Ok(analysis) = parser.parse_file(&absolute).await { analyses.push(analysis); }
         }
 
         if artifacts.len() < MAX_ARTIFACTS && causal_artifact_candidate(path, &relative) {
@@ -80,16 +78,10 @@ pub async fn build_workspace_deep_causality(
     let mut engine = build_deep_causality_bundle(&graph, repository.clone(), &artifacts);
     let history = enrich_with_git_history(&mut engine, &root, &repository, MAX_HISTORY_COMMITS);
     let report = WorkspaceCausalityReport {
-        root: root.to_string_lossy().replace('\\', "/"),
-        repository,
-        parsed_source_files: analyses.len(),
-        artifact_files: artifacts.len(),
-        skipped_large_artifacts,
-        graph_nodes: graph.node_count(),
-        graph_edges: graph.edge_count(),
-        causal_entities: engine.entities().count(),
-        causal_facts: engine.facts().len(),
-        history,
+        root: root.to_string_lossy().replace('\\', "/"), repository,
+        parsed_source_files: analyses.len(), artifact_files: artifacts.len(), skipped_large_artifacts,
+        graph_nodes: graph.node_count(), graph_edges: graph.edge_count(),
+        causal_entities: engine.entities().count(), causal_facts: engine.facts().len(), history,
     };
     Ok((engine, report))
 }
@@ -102,13 +94,9 @@ fn supported_source(path: &Path) -> bool {
 fn causal_artifact_candidate(path: &Path, relative: &str) -> bool {
     if supported_source(path) { return true; }
     let lower = relative.to_ascii_lowercase();
-    if lower.ends_with("codeowners")
-        || lower.ends_with("dockerfile")
-        || lower.contains("/.github/workflows/")
-        || lower.starts_with(".github/workflows/")
-        || lower.contains("openapi")
-        || lower.contains("swagger")
-    { return true; }
+    if lower.ends_with("codeowners") || lower.ends_with("dockerfile")
+        || lower.contains("/.github/workflows/") || lower.starts_with(".github/workflows/")
+        || lower.contains("openapi") || lower.contains("swagger") { return true; }
     matches!(path.extension().and_then(|v| v.to_str()).map(|v| v.to_ascii_lowercase()).as_deref(),
         Some("prisma" | "sql" | "tf" | "yaml" | "yml" | "json" | "toml" | "env" | "properties" | "xml" | "graphql" | "gql" | "proto"))
 }
@@ -116,9 +104,7 @@ fn causal_artifact_candidate(path: &Path, relative: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn artifact_selection_includes_architecture_files() {
+    #[test] fn artifact_selection_includes_architecture_files() {
         assert!(causal_artifact_candidate(Path::new("prisma/schema.prisma"), "prisma/schema.prisma"));
         assert!(causal_artifact_candidate(Path::new("docker-compose.yml"), "docker-compose.yml"));
         assert!(causal_artifact_candidate(Path::new(".github/CODEOWNERS"), ".github/CODEOWNERS"));
