@@ -9,7 +9,7 @@ const DEFAULT_PRISMA_METHODS = new Set([
 const DEFAULT_REDIS_METHODS = new Set([
   'get','getBuffer','set','setex','setEx','mget','mset','del','unlink','exists','expire','ttl','incr','incrby','decr','decrby',
   'hget','hset','hmget','hmset','hdel','hgetall','lpush','rpush','lpop','rpop','sadd','srem','smembers','zadd','zrem','zrange',
-  'xadd','xread','xreadgroup','publish','sendCommand',
+  'xadd','xread','xreadgroup','publish','subscribe','psubscribe','sendCommand',
 ]);
 
 function hostnameOf(input) {
@@ -29,7 +29,8 @@ function methodProxy(target, onMethod, shouldWrap) {
   return new Proxy(target, {
     get(object, prop, receiver) {
       const value = Reflect.get(object, prop, receiver);
-      if (typeof value !== 'function' || !shouldWrap(String(prop), object)) return value;
+      if (typeof value !== 'function') return value;
+      if (!shouldWrap(String(prop), object)) return value.bind(object);
       if (cache.has(prop)) return cache.get(prop);
       const wrapped = function ckbInstrumentedMethod(...args) {
         return onMethod(String(prop), value, object, args, this);
@@ -49,12 +50,15 @@ function recursiveMethodProxy(target, options, path = [], seen = new WeakMap()) 
       const value = Reflect.get(object, prop, receiver);
       const name = String(prop);
       const nextPath = [...path, name];
-      if (typeof value === 'function' && options.shouldWrap(name, nextPath, object)) {
-        return function ckbRecursiveObserved(...args) {
-          return options.onMethod(name, nextPath, value, object, args, this);
-        };
+      if (typeof value === 'function') {
+        if (options.shouldWrap(name, nextPath, object)) {
+          return function ckbRecursiveObserved(...args) {
+            return options.onMethod(name, nextPath, value, object, args, this);
+          };
+        }
+        return value.bind(object);
       }
-      if (value && (typeof value === 'object' || typeof value === 'function')) {
+      if (value && typeof value === 'object') {
         return recursiveMethodProxy(value, options, nextPath, seen);
       }
       return value;
@@ -206,7 +210,7 @@ export function createCkbAuto(options = {}) {
       (method, fn, owner, args) => live.span(`redis.${method}`, metadata(config, {
         kind: 'cache',
         flowType: 'cache',
-        direction: method === 'subscribe' ? 'inbound' : 'outbound',
+        direction: /subscribe/i.test(method) ? 'inbound' : 'outbound',
         functionName: config.functionName || `redis.${method}`,
         attributes: {
           'db.system': 'redis',
