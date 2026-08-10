@@ -57,17 +57,27 @@ The **CKB Invisible Reality** activity-bar view includes:
 - cursor change-ripple access
 - Cloud Living Universe continuity
 
+### IDE → Cloud Cursor Reality Continuity
+
+The editor context menu can now carry the current navigation target into CKB Cloud without embedding source contents in the URL:
+
+- `CKB: Continue Cursor Reality in Cloud` opens the same file/line in Cloud X-Ray.
+- `CKB: Ask Raiziom About Cursor Reality` opens the same navigation context and requests the global evidence-grounded Raiziom console.
+
+The continuity link can include the relative file path, line/column, current identifier and semantic depth hint. Those values are treated as navigation/advisory context; Cloud architecture and runtime evidence remain authoritative.
+
 ## Core features
 
 - **🔬 Semantic Editor Reality** — Cursor-aware LINE/CALL/SYMBOL/FILE/SUBSYSTEM/SYSTEM navigation
 - **🟢 Exact Runtime Evidence** — Runtime source context only when observed traces actually exist
+- **☁️ Cursor Cloud Continuity** — Resume the same source target in Cloud X-Ray or Raiziom
 - **🔍 Scan** — Full codebase architecture scan
 - **⚠️ Inline Diagnostics** — Architecture findings in source files
 - **⚡ Impact Analysis** — Predict direct/transitive change ripple at the cursor
 - **🧠 Architecture Memory** — Bounded model-ready architecture context
 - **🛡️ Architecture Check** — CI-style architecture guardrail check
 - **🤖 MCP / Agent Integration** — Expose CKB architecture intelligence to compatible AI clients
-- **🌌 Cloud Continuity** — Continue an investigation in the CKB Living Universe
+- **🌌 Cloud Living Universe** — Continue investigations across deeper visual/runtime surfaces
 
 ## Requirements
 
@@ -81,6 +91,8 @@ For deep local architecture intelligence, install the current CKB CLI/intelligen
 | `CKB: Semantic Zoom In` | Descend toward call/line detail |
 | `CKB: Semantic Zoom Out` | Ascend toward file/subsystem/system context |
 | `CKB: Semantic Zoom Auto` | Let selection + visible editor scale resolve depth |
+| `CKB: Continue Cursor Reality in Cloud` | Resume the current file/line in Cloud X-Ray |
+| `CKB: Ask Raiziom About Cursor Reality` | Continue the cursor target in contextual Cloud Raiziom |
 | `CKB: Open Invisible Reality` | Open the molecular/runtime architecture cockpit |
 | `CKB: Deep Activity Analysis` | Rebuild activity, hotspots and architecture memory |
 | `CKB: Query Architecture Memory` | Ask about a symbol, flow, responsibility or risk |
@@ -106,7 +118,8 @@ For deep local architecture intelligence, install the current CKB CLI/intelligen
   "ckb.liveRuntimePolling": true,
   "ckb.runtimePollIntervalMs": 2500,
   "ckb.autoScanOnOpen": true,
-  "ckb.showDiagnostics": true
+  "ckb.showDiagnostics": true,
+  "ckb.cloudExplorerUrl": "https://ckb-nu.vercel.app/project/current"
 }
 ```
 
