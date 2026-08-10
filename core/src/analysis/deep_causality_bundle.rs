@@ -3,6 +3,10 @@
 use super::{CausalArtifactExtractor, CausalGraphAdapter, DeepCausalityEngine, RepositoryArtifact};
 use crate::graph::DependencyGraph;
 
+#[path = "deep_causality_workspace.rs"]
+pub mod workspace;
+pub use workspace::*;
+
 /// Fuse CKB's authoritative dependency/runtime graph with repository artifact
 /// evidence. The adapter preserves existing graph/runtime identity; artifact
 /// extraction enriches it with schema/infra/config/security/event/ownership
