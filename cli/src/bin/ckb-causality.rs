@@ -1,8 +1,10 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use ckb_core::analysis::{
-    build_workspace_deep_causality, ApiContract, ArchitectureRule, ChangeOperation,
-    DeepCausalityEngine,
+    build_federated_deep_causality, build_workspace_deep_causality,
+    ingest_runtime_resource_observations, ApiContract, ArchitectureRule,
+    ChangeOperation, DeepCausalityEngine, FederatedWorkspaceMember,
+    RuntimeResourceObservation,
 };
 use serde::de::DeserializeOwned;
 use serde_json::json;
@@ -11,8 +13,8 @@ use std::{fs, path::Path};
 #[derive(Parser)]
 #[command(name = "ckb-causality", version, about = "CKB V13.1 Deep Software Causality")]
 struct Cli {
-    /// Existing DeepCausalityEngine JSON bundle. Required for query commands,
-    /// but not for `build`.
+    /// Existing DeepCausalityEngine JSON bundle. Required for query/mutation
+    /// commands, but not for `build` or `federate`.
     #[arg(long, global = true)]
     bundle: Option<String>,
     #[command(subcommand)]
@@ -25,6 +27,18 @@ enum Command {
         workspace: String,
         #[arg(long)] repository: Option<String>,
         #[arg(long, default_value = ".ckb/deep-causality.json")] output: String,
+    },
+    /// Build one organization-wide evidence bundle from a JSON array of
+    /// FederatedWorkspaceMember { root, repository } objects.
+    Federate {
+        members: String,
+        #[arg(long, default_value = ".ckb/deep-causality-federated.json")] output: String,
+    },
+    /// Merge observed profiler/APM resource samples into an existing bundle.
+    EnrichRuntime {
+        observations: String,
+        /// Output bundle. Defaults to overwriting --bundle.
+        #[arg(long)] output: Option<String>,
     },
     DataFlow { source: String, sink: String, #[arg(long, default_value_t = 24)] depth: usize },
     Taint { #[arg(long, value_delimiter = ',')] sources: Vec<String>, #[arg(long, value_delimiter = ',')] sinks: Vec<String>, #[arg(long, default_value_t = 24)] depth: usize },
@@ -59,28 +73,61 @@ fn required_bundle(path: Option<&str>) -> Result<DeepCausalityEngine> {
     read_json(path)
 }
 
+fn write_bundle(path: &Path, engine: &DeepCausalityEngine) -> Result<()> {
+    if let Some(parent) = path.parent() { fs::create_dir_all(parent)?; }
+    fs::write(path, serde_json::to_vec_pretty(engine)?)?;
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    if let Command::Build { workspace, repository, output } = &cli.command {
-        let repo = repository.clone().unwrap_or_else(|| {
-            Path::new(workspace).file_name().and_then(|v| v.to_str()).unwrap_or("workspace").to_string()
-        });
-        let (engine, report) = build_workspace_deep_causality(workspace, repo).await?;
-        let output_path = Path::new(workspace).join(output);
-        if let Some(parent) = output_path.parent() { fs::create_dir_all(parent)?; }
-        fs::write(&output_path, serde_json::to_vec_pretty(&engine)?)?;
-        println!("{}", serde_json::to_string_pretty(&json!({
-            "bundle": output_path.to_string_lossy(),
-            "report": report,
-        }))?);
-        return Ok(());
+    match &cli.command {
+        Command::Build { workspace, repository, output } => {
+            let repo = repository.clone().unwrap_or_else(|| {
+                Path::new(workspace).file_name().and_then(|v| v.to_str()).unwrap_or("workspace").to_string()
+            });
+            let (engine, report) = build_workspace_deep_causality(workspace, repo).await?;
+            let output_path = Path::new(workspace).join(output);
+            write_bundle(&output_path, &engine)?;
+            println!("{}", serde_json::to_string_pretty(&json!({
+                "bundle": output_path.to_string_lossy(),
+                "report": report,
+            }))?);
+            return Ok(());
+        }
+        Command::Federate { members, output } => {
+            let members: Vec<FederatedWorkspaceMember> = read_json(members)?;
+            let (engine, report) = build_federated_deep_causality(&members).await?;
+            let output_path = Path::new(output);
+            write_bundle(output_path, &engine)?;
+            println!("{}", serde_json::to_string_pretty(&json!({
+                "bundle": output_path.to_string_lossy(),
+                "report": report,
+            }))?);
+            return Ok(());
+        }
+        Command::EnrichRuntime { observations, output } => {
+            let bundle_path = cli.bundle.as_deref().context("--bundle is required for enrich-runtime")?;
+            let mut engine: DeepCausalityEngine = read_json(bundle_path)?;
+            let observations: Vec<RuntimeResourceObservation> = read_json(observations)?;
+            let report = ingest_runtime_resource_observations(&mut engine, &observations);
+            let output_path = output.as_deref().unwrap_or(bundle_path);
+            write_bundle(Path::new(output_path), &engine)?;
+            println!("{}", serde_json::to_string_pretty(&json!({
+                "bundle": output_path,
+                "report": report,
+                "hotspots": engine.runtime_hotspots(),
+            }))?);
+            return Ok(());
+        }
+        _ => {}
     }
 
     let engine = required_bundle(cli.bundle.as_deref())?;
     let result = match cli.command {
-        Command::Build { .. } => unreachable!(),
+        Command::Build { .. } | Command::Federate { .. } | Command::EnrichRuntime { .. } => unreachable!(),
         Command::DataFlow { source, sink, depth } => serde_json::to_value(engine.data_flow_path(&source, &sink, depth))?,
         Command::Taint { sources, sinks, depth } => serde_json::to_value(engine.taint_paths_v2(&sources, &sinks, depth))?,
         Command::Reachable { source, sink, conditions, depth } => serde_json::to_value(engine.reachable_under(&source, &sink, &conditions, depth))?,
