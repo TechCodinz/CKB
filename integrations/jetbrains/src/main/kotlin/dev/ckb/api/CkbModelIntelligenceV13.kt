@@ -72,6 +72,7 @@ object CkbModelIntelligenceV13 {
         path: String? = null,
         line: Int? = null,
         symbol: String? = null,
+        modelProfile: JsonObject? = null,
     ): JsonObject {
         val request = JsonObject().apply {
             addProperty("project_id", projectId.ifBlank { "current" })
@@ -84,6 +85,7 @@ object CkbModelIntelligenceV13 {
                 addProperty("maxNodes", 80)
                 addProperty("maxEdges", 160)
             })
+            if (modelProfile != null) add("modelProfile", modelProfile)
             if (!path.isNullOrBlank()) {
                 add("cursorContext", JsonObject().apply {
                     addProperty("path", path)
@@ -98,6 +100,17 @@ object CkbModelIntelligenceV13 {
     fun observedModelRegistry(projectId: String, task: String): JsonObject = get(
         "/architecture/models/observed-registry",
         mapOf("project_id" to projectId.ifBlank { "current" }, "task" to task),
+    )
+
+    fun frontierCatalog(): JsonObject = get("/architecture/models/catalog")
+
+    fun adaptFrontierRequest(provider: String, model: String, requestJson: JsonObject): JsonObject = post(
+        "/architecture/models/request-adapt",
+        JsonObject().apply {
+            addProperty("provider", provider)
+            addProperty("model", model)
+            add("request", requestJson)
+        },
     )
 
     fun constitution(): JsonObject = get("/architecture/constitution")
