@@ -1,22 +1,26 @@
 {
   "name": "ckb-vscode",
   "displayName": "CKB - Invisible Reality Architecture Intelligence",
-  "description": "See what code hides: semantic architecture, molecular data-flow paths, exact runtime transmissions, fault pressure, ripple analysis and model-ready software memory inside VS Code.",
-  "version": "1.5.0",
+  "description": "See what code hides: cursor-driven semantic source reality, molecular architecture, exact runtime transmissions, fault pressure, ripple analysis and model-ready software memory inside VS Code.",
+  "version": "1.6.0",
   "publisher": "TechCodinz",
   "icon": "icon.png",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/TechCodinz/CKB" },
-  "keywords": ["architecture","dependency","analysis","mcp","ai","code-quality","architecture-memory","runtime-intelligence","blast-radius","code-graph","data-flow","observability","software-visualization","code-intelligence","opentelemetry","distributed-tracing"],
+  "keywords": ["architecture","dependency","analysis","mcp","ai","code-quality","architecture-memory","runtime-intelligence","blast-radius","code-graph","data-flow","observability","software-visualization","code-intelligence","opentelemetry","distributed-tracing","semantic-zoom","runtime-tracing"],
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Linters","Other","Programming Languages","Visualization"],
   "activationEvents": ["onStartupFinished","onView:ckb.realityView"],
   "main": "./out/extensionV6.js",
   "contributes": {
     "viewsContainers": { "activitybar": [{ "id": "ckb-reality", "title": "CKB Invisible Reality", "icon": "icon.png" }] },
-    "views": { "ckb-reality": [{ "type": "webview", "id": "ckb.realityView", "name": "Invisible Reality V8", "contextualTitle": "CKB Molecular + Live Transmission Reality" }] },
+    "views": { "ckb-reality": [{ "type": "webview", "id": "ckb.realityView", "name": "Invisible Reality V10", "contextualTitle": "CKB Semantic Editor + Live Transmission Reality" }] },
     "commands": [
       { "command": "ckb.openReality", "title": "CKB: Open Invisible Reality", "icon": "$(telescope)" },
+      { "command": "ckb.inspectSemanticReality", "title": "CKB: Inspect Semantic Reality at Cursor", "icon": "$(symbol-namespace)" },
+      { "command": "ckb.semanticZoomIn", "title": "CKB: Semantic Zoom In", "icon": "$(zoom-in)" },
+      { "command": "ckb.semanticZoomOut", "title": "CKB: Semantic Zoom Out", "icon": "$(zoom-out)" },
+      { "command": "ckb.semanticZoomAuto", "title": "CKB: Semantic Zoom Auto", "icon": "$(sparkle)" },
       { "command": "ckb.revealArchitecture", "title": "CKB: Reveal My Architecture", "icon": "$(sparkle)" },
       { "command": "ckb.shareRealitySnapshot", "title": "CKB: Share Reality Snapshot", "icon": "$(share)" },
       { "command": "ckb.openCloudContinuity", "title": "CKB: Continue in Cloud Living Universe", "icon": "$(globe)" },
@@ -33,7 +37,10 @@
     ],
     "keybindings": [
       { "command": "ckb.impact", "key": "shift+ctrl+i", "mac": "shift+cmd+i", "when": "editorTextFocus" },
-      { "command": "ckb.queryMemory", "key": "shift+ctrl+m", "mac": "shift+cmd+m" }
+      { "command": "ckb.queryMemory", "key": "shift+ctrl+m", "mac": "shift+cmd+m" },
+      { "command": "ckb.inspectSemanticReality", "key": "shift+alt+r", "mac": "shift+alt+r", "when": "editorTextFocus" },
+      { "command": "ckb.semanticZoomIn", "key": "shift+alt+]", "mac": "shift+alt+]", "when": "editorTextFocus" },
+      { "command": "ckb.semanticZoomOut", "key": "shift+alt+[", "mac": "shift+alt+[", "when": "editorTextFocus" }
     ],
     "configuration": {
       "title": "CKB Invisible Reality Architecture Intelligence",
@@ -41,9 +48,10 @@
         "ckb.serverUrl": { "type": "string", "default": "http://localhost:3000", "description": "CKB Reality server used for local/static/runtime intelligence. A remote server cannot read local filesystem paths unless the project was scanned through a supported remote source flow." },
         "ckb.apiKey": { "type": "string", "default": "", "markdownDescription": "API key sent as `X-API-Key` only to the configured `ckb.serverUrl`.", "editPresentation": "singlelineText" },
         "ckb.runtimeProjectId": { "type": "string", "default": "", "description": "Optional Reality Engine project id used only for runtime/traces polling. Leave blank for the current/default project on a local CKB server." },
-        "ckb.liveRuntimePolling": { "type": "boolean", "default": true, "description": "Continuously refresh evidence-backed runtime/traces in the Invisible Reality V8 view. Static relations are never animated as runtime." },
+        "ckb.liveRuntimePolling": { "type": "boolean", "default": true, "description": "Continuously refresh evidence-backed runtime/traces in Invisible Reality. Static relations are never animated as runtime." },
         "ckb.runtimePollIntervalMs": { "type": "number", "default": 2500, "minimum": 1000, "maximum": 30000, "description": "Polling interval while exact Live Reality evidence is available. Offline/waiting states automatically back off." },
         "ckb.runtimeRequestTimeoutMs": { "type": "number", "default": 8000, "minimum": 3000, "maximum": 30000, "description": "Timeout for runtime/traces reads from the configured CKB Reality server." },
+        "ckb.editorSemanticReality": { "type": "boolean", "default": true, "description": "Enable cursor-driven semantic editor reality. CKB derives LINE/CALL/SYMBOL/FILE/SUBSYSTEM/SYSTEM depth from selection and visible editor scale, and only highlights runtime when exact observed trace evidence maps to the current source." },
         "ckb.cloudApiUrl": { "type": "string", "default": "https://ckb-backend-api.onrender.com", "description": "Authenticated CKB Cloud API used by the programmatic patch-transaction agent. Local source paths and source contents are never uploaded by this client." },
         "ckb.cliBinary": { "type": "string", "default": "ckb", "description": "Executable name/path for the standard CKB CLI." },
         "ckb.intelligenceBinary": { "type": "string", "default": "ckb-intelligence", "description": "Executable name/path for the high-performance CKB IDE intelligence facade." },
@@ -59,8 +67,11 @@
     },
     "menus": {
       "editor/context": [
+        { "when": "editorTextFocus", "command": "ckb.inspectSemanticReality", "group": "ckb@0" },
         { "when": "editorTextFocus", "command": "ckb.impact", "group": "ckb@1" },
-        { "when": "editorTextFocus", "command": "ckb.queryMemory", "group": "ckb@2" }
+        { "when": "editorTextFocus", "command": "ckb.queryMemory", "group": "ckb@2" },
+        { "when": "editorTextFocus", "command": "ckb.semanticZoomIn", "group": "ckb@3" },
+        { "when": "editorTextFocus", "command": "ckb.semanticZoomOut", "group": "ckb@4" }
       ],
       "view/title": [
         { "command": "ckb.revealArchitecture", "when": "view == ckb.realityView", "group": "navigation@1" },
@@ -68,6 +79,10 @@
         { "command": "ckb.openCloudContinuity", "when": "view == ckb.realityView", "group": "navigation@3" }
       ],
       "commandPalette": [
+        { "command": "ckb.inspectSemanticReality" },
+        { "command": "ckb.semanticZoomIn" },
+        { "command": "ckb.semanticZoomOut" },
+        { "command": "ckb.semanticZoomAuto" },
         { "command": "ckb.revealArchitecture" },
         { "command": "ckb.shareRealitySnapshot" },
         { "command": "ckb.openCloudContinuity" }
