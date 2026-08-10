@@ -1,6 +1,8 @@
 package dev.ckb.actions
 
 import com.google.gson.GsonBuilder
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
@@ -20,6 +22,7 @@ private val V13_TASKS = arrayOf("understand", "explain", "change", "debug", "rev
 private val prettyGson = GsonBuilder().setPrettyPrinting().create()
 
 private data class V13Cursor(val path: String, val line: Int, val column: Int, val symbol: String?)
+private data class ModelPick(val cancelled: Boolean, val profile: JsonObject?)
 
 private fun v13Cursor(e: AnActionEvent): V13Cursor? {
     val project = e.project ?: return null
@@ -89,6 +92,75 @@ private fun background(e: AnActionEvent, title: String, operation: () -> Any) {
     })
 }
 
+private fun catalogEntries(catalog: JsonObject): List<JsonObject> =
+    catalog.getAsJsonArray("entries")?.mapNotNull { element ->
+        if (element.isJsonObject) element.asJsonObject else null
+    } ?: emptyList()
+
+private fun profileLabel(profile: JsonObject): String {
+    val provider = profile.get("provider")?.asString ?: "unknown"
+    val model = profile.get("model")?.asString ?: "unknown"
+    val availability = profile.get("availability")?.asString ?: "unknown"
+    val freshness = profile.get("freshness")?.asString ?: "unknown"
+    return "$provider/$model  [$availability • $freshness]"
+}
+
+private fun chooseModel(project: com.intellij.openapi.project.Project, entries: List<JsonObject>, allowNeutral: Boolean): ModelPick {
+    val labels = mutableListOf<String>()
+    if (allowNeutral) labels += "CKB MODEL-NEUTRAL  [no provider assumptions]"
+    labels += entries.map(::profileLabel)
+    if (labels.isEmpty()) {
+        Messages.showWarningDialog(project, "CKB verified frontier model catalog is empty.", "CKB V13")
+        return ModelPick(true, null)
+    }
+    val index = Messages.showChooseDialog(
+        project,
+        "Capability metadata changes request/context hints only. It never changes CKB evidence truth or acts as an unobserved quality score.",
+        "CKB V13 Verified Frontier Model",
+        labels.toTypedArray(),
+        labels.first(),
+        null,
+    )
+    if (index !in labels.indices) return ModelPick(true, null)
+    if (allowNeutral && index == 0) return ModelPick(false, null)
+    val modelIndex = index - if (allowNeutral) 1 else 0
+    return ModelPick(false, entries.getOrNull(modelIndex))
+}
+
+private fun isSupported(value: String?): Boolean = value in setOf("supported", "preview", "beta")
+
+private fun contextProfile(profile: JsonObject): JsonObject {
+    val tools = profile.getAsJsonObject("tools") ?: JsonObject()
+    val modalities = profile.getAsJsonArray("inputModalities")?.mapNotNull { it.takeIf { value -> value.isJsonPrimitive }?.asString } ?: emptyList()
+    return JsonObject().apply {
+        addProperty("provider", profile.get("provider")?.asString)
+        addProperty("model", profile.get("model")?.asString)
+        profile.get("contextWindowTokens")?.takeIf { !it.isJsonNull }?.let { add("contextWindowTokens", it) }
+        addProperty("supportsStructuredOutput", isSupported(tools.get("structuredOutput")?.asString))
+        addProperty("supportsToolUse", isSupported(tools.get("functionCalling")?.asString))
+        addProperty("supportsParallelTools", isSupported(tools.get("parallelFunctionCalling")?.asString))
+        addProperty("supportsImages", "image" in modalities)
+        addProperty("supportsCodeExecution", isSupported(tools.get("codeExecution")?.asString))
+    }
+}
+
+private fun withCatalog(e: AnActionEvent, title: String, onSuccess: (List<JsonObject>) -> Unit) {
+    val project = e.project ?: return
+    ProgressManager.getInstance().run(object : Task.Backgroundable(project, title, true) {
+        override fun run(indicator: ProgressIndicator) {
+            indicator.isIndeterminate = true
+            try {
+                val entries = catalogEntries(CkbModelIntelligenceV13.frontierCatalog())
+                ApplicationManager.getApplication().invokeLater { onSuccess(entries) }
+            } catch (error: Exception) {
+                ApplicationManager.getApplication().invokeLater {
+                    Messages.showErrorDialog(project, error.message ?: error.toString(), title)
+                }
+            }
+        }
+    })
+}
+
 class CompileArchitectureContextV13Action : AnAction("Compile Model Architecture Context at Cursor") {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
@@ -107,8 +179,21 @@ class CompileArchitectureContextV13Action : AnAction("Compile Model Architecture
             null,
         )?.trim().orEmpty()
         if (query.isBlank()) return
-        background(e, "CKB V13 • Compile Architecture Context") {
-            CkbModelIntelligenceV13.compileContext("current", query, task, cursor.path, cursor.line, cursor.symbol)
+
+        withCatalog(e, "CKB V13 • Load Verified Frontier Profiles") { entries ->
+            val picked = chooseModel(project, entries, allowNeutral = true)
+            if (picked.cancelled) return@withCatalog
+            background(e, "CKB V13 • Compile Architecture Context") {
+                CkbModelIntelligenceV13.compileContext(
+                    "current",
+                    query,
+                    task,
+                    cursor.path,
+                    cursor.line,
+                    cursor.symbol,
+                    picked.profile?.let(::contextProfile),
+                )
+            }
         }
     }
 
@@ -122,6 +207,42 @@ class ShowObservedModelRegistryV13Action : AnAction("Show Observed Model Registr
         val task = chooseTask(e) ?: return
         background(e, "CKB V13 • Observed Model Registry") {
             CkbModelIntelligenceV13.observedModelRegistry("current", task)
+        }
+    }
+
+    override fun update(e: AnActionEvent) { e.presentation.isEnabled = e.project != null }
+}
+
+class ShowVerifiedFrontierModelCatalogV13Action : AnAction("Show Verified Frontier Model Catalog") {
+    override fun actionPerformed(e: AnActionEvent) {
+        background(e, "CKB V13 • Verified Frontier Model Catalog") { CkbModelIntelligenceV13.frontierCatalog() }
+    }
+
+    override fun update(e: AnActionEvent) { e.presentation.isEnabled = e.project != null }
+}
+
+class CheckFrontierModelRequestV13Action : AnAction("Check JSON Request Against Frontier Model") {
+    override fun actionPerformed(e: AnActionEvent) {
+        val project = e.project ?: return
+        val editor = FileEditorManager.getInstance(project).selectedTextEditor ?: run {
+            Messages.showWarningDialog(project, "Open a JSON request document first.", "CKB V13")
+            return
+        }
+        val requestJson = runCatching {
+            JsonParser.parseString(editor.document.text).asJsonObject
+        }.getOrElse {
+            Messages.showWarningDialog(project, "The active editor must contain a JSON object request.", "CKB V13")
+            return
+        }
+        withCatalog(e, "CKB V13 • Load Verified Frontier Profiles") { entries ->
+            val picked = chooseModel(project, entries, allowNeutral = false)
+            val profile = picked.profile
+            if (picked.cancelled || profile == null) return@withCatalog
+            val provider = profile.get("provider")?.asString ?: return@withCatalog
+            val model = profile.get("model")?.asString ?: return@withCatalog
+            background(e, "CKB V13 • Frontier Request Compatibility") {
+                CkbModelIntelligenceV13.adaptFrontierRequest(provider, model, requestJson)
+            }
         }
     }
 
