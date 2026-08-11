@@ -14,6 +14,8 @@ use tracing::{error, info, warn};
 
 #[path = "reality_gateway/chatgpt_mcp.rs"]
 mod chatgpt_mcp;
+#[path = "reality_gateway/universal_gateway.rs"]
+mod universal_gateway;
 
 const MAX_PROXY_BODY: usize = 90 * 1024 * 1024;
 
@@ -120,8 +122,13 @@ async fn health(State(state): State<GatewayState>) -> impl IntoResponse {
             StatusCode::OK,
             axum::Json(json!({
                 "status": "ok",
-                "service": "ckb-chatgpt-edge",
+                "service": "ckb-universal-model-edge",
                 "mcp": "/mcp",
+                "universal_model_gateway": {
+                    "capabilities": "/llm/capabilities",
+                    "tools": "/llm/tools",
+                    "call": "/llm/call"
+                },
                 "oauth_resource_metadata": "/.well-known/oauth-protected-resource",
                 "upstream": "reality_gateway"
             })),
@@ -130,7 +137,7 @@ async fn health(State(state): State<GatewayState>) -> impl IntoResponse {
             StatusCode::SERVICE_UNAVAILABLE,
             axum::Json(json!({
                 "status": "degraded",
-                "service": "ckb-chatgpt-edge",
+                "service": "ckb-universal-model-edge",
                 "message": error
             })),
         ),
@@ -282,7 +289,7 @@ async fn main() -> anyhow::Result<()> {
         warn!("CKB_INTERNAL_SECRET is not configured. OAuth token introspection and trusted gateway authentication will fail closed.");
     }
     if state.api_key.is_none() {
-        anyhow::bail!("CKB_API_KEY is required by the current production Reality gateway path. It is server-side infrastructure auth only; ChatGPT end users authenticate with OAuth.");
+        anyhow::bail!("CKB_API_KEY is required by the current production Reality gateway path. It is server-side infrastructure auth only; end users authenticate with OAuth.");
     }
 
     let executable = std::env::var("CKB_REALITY_GATEWAY_BIN")
@@ -314,11 +321,17 @@ async fn main() -> anyhow::Result<()> {
             "/mcp",
             get(chatgpt_mcp::get_mcp).post(chatgpt_mcp::post_mcp),
         )
+        .route("/llm/capabilities", get(universal_gateway::capabilities))
+        .route("/llm/tools", get(universal_gateway::list_tools))
+        .route(
+            "/llm/call",
+            axum::routing::post(universal_gateway::call_tool),
+        )
         .fallback(proxy)
         .with_state(state);
 
     let address = SocketAddr::from(([0, 0, 0, 0], edge_port));
-    info!("CKB ChatGPT MCP edge listening on {}", address);
+    info!("CKB Universal Model Gateway listening on {}", address);
     let listener = tokio::net::TcpListener::bind(address).await?;
     axum::serve(listener, app).await?;
     Ok(())
