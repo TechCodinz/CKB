@@ -21,6 +21,10 @@ name = "reality_gateway"
 path = "src/bin/reality_gateway.rs"
 
 [[bin]]
+name = "chatgpt_edge"
+path = "src/bin/chatgpt_edge.rs"
+
+[[bin]]
 name = "reality_bridge"
 path = "src/bin/reality_bridge.rs"
 
