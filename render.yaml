@@ -1,7 +1,8 @@
 # Public repo deploy config — production CKB Reality/architecture engine.
-# The authenticated gateway is the public process. It starts the tenant-isolated
-# Reality v5 engine on localhost, forwards only authenticated traffic, and keeps
-# expensive scans bounded while exposing a public health endpoint.
+# The ChatGPT MCP edge is the public process. It exposes /mcp, keeps /health public,
+# and forwards all existing application/API traffic to the hardened Reality gateway.
+# The Reality gateway still starts the tenant-isolated Reality v5 engine on localhost,
+# enforces authenticated traffic, bounds expensive scans, and preserves runtime traces.
 #
 # The local `ckb-intelligence` binary is also compiled as a release gate because
 # VS Code/JetBrains use that facade for deep local activity + architecture memory.
@@ -10,8 +11,8 @@ services:
     name: ckb-mcp-server
     env: rust
     plan: free
-    buildCommand: cargo build --locked --release -p ckb-mcp-server --bin ckb-mcp-server --bin reality_bridge --bin reality_server_v5 --bin reality_gateway && cargo build --locked --release -p ckb-cli --bin ckb-intelligence
-    startCommand: ./target/release/reality_gateway
+    buildCommand: cargo build --locked --release -p ckb-mcp-server --bin ckb-mcp-server --bin reality_bridge --bin reality_server_v5 --bin reality_gateway --bin chatgpt_edge && cargo build --locked --release -p ckb-cli --bin ckb-intelligence
+    startCommand: ./target/release/chatgpt_edge
     healthCheckPath: /health
     envVars:
       - key: RUST_LOG
@@ -35,7 +36,8 @@ services:
       # Must match INTERNAL_API_SECRET on the private ckb-backend-api service.
       - key: CKB_INTERNAL_SECRET
         sync: false
-      # Optional operator/API-key path. The cloud browser never receives it.
+      # Required for ChatGPT MCP bearer/API-key authentication and optional
+      # operator access. Configure a long random secret in Render.
       - key: CKB_API_KEY
         sync: false
       - key: ANTHROPIC_API_KEY
