@@ -5,7 +5,7 @@ description: Review a software repository with CKB when the user wants to unders
 
 Use this skill for repository-level architecture review with the CKB MCP tools.
 
-1. Establish the repository and a stable logical `project_id`. If the repository has not been scanned in the current CKB project namespace, call `ckb_scan_repository` first. Never claim a scan exists unless a CKB tool confirms it.
+1. Establish the repository and a stable logical `project_id`. Use only ASCII letters, digits, hyphens, and underscores in generated project IDs; prefer `owner-repo` (for example `TechCodinz-CKB`). Never generate spaces, slashes, colons, periods, or other punctuation in a CKB project ID. If the repository has not been scanned in the current CKB project namespace, call `ckb_scan_repository` first. Never claim a scan exists unless a CKB tool confirms it.
 2. Call `ckb_get_architecture_graph` and use its nodes, edges, evidence, and metadata as the primary architectural source of truth.
 3. Call `ckb_get_test_gaps` when the user asks about release readiness, weakly tested areas, regression risk, or engineering priorities.
 4. Call `ckb_get_drift_history` when the user asks how architecture changed over time, whether boundaries are eroding, or which areas are becoming riskier.
