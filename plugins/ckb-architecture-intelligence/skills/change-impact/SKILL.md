@@ -5,7 +5,7 @@ description: Analyze the blast radius, causal path, downstream failure cone, sna
 
 Use this skill when the user's main goal is change-risk analysis rather than a general repository overview.
 
-1. Identify the repository/project plus the exact file/component and change the user is considering. If the project has not been scanned in CKB, call `ckb_scan_repository` before impact analysis.
+1. Identify the repository/project plus the exact file/component and change the user is considering. For any generated logical `project_id`, use only ASCII letters, digits, hyphens, and underscores; prefer `owner-repo`. Never generate spaces, slashes, colons, periods, or other punctuation in a CKB project ID. If the project has not been scanned in CKB, call `ckb_scan_repository` before impact analysis.
 2. Call `ckb_analyze_impact` with the repository-relative file, relevant line when known, and the best matching `change_type`. Do not invent a line number when the user supplies one; preserve it exactly.
 3. Use the returned CKB graph evidence to identify directly affected and transitive areas. Keep CKB-computed impact separate from your own engineering interpretation.
 4. If the user provides or the graph reveals specific source and target node IDs whose relationship matters, call `ckb_find_causal_path` to explain how the effect propagates.
