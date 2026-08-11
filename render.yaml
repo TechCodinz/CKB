@@ -39,11 +39,12 @@ services:
       - key: CKB_MCP_RESOURCE
         value: "https://ckb-mcp-server.onrender.com"
       # Must match INTERNAL_API_SECRET on the private ckb-backend-api service.
-      # Used for Reality internal traffic and OAuth token introspection.
+      # Used for OAuth token introspection and trusted internal calls.
       - key: CKB_INTERNAL_SECRET
         sync: false
-      # Optional operator/API-development credential. ChatGPT end users do not
-      # receive or present this key; their path is OAuth 2.1 + PKCE.
+      # Required production credential for the existing Reality gateway path.
+      # This is server-side infrastructure/operator auth only. ChatGPT end users
+      # never receive or present it; their authentication path is OAuth 2.1 + PKCE.
       - key: CKB_API_KEY
         sync: false
       - key: ANTHROPIC_API_KEY
