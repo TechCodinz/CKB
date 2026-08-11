@@ -122,6 +122,7 @@ async fn health(State(state): State<GatewayState>) -> impl IntoResponse {
                 "status": "ok",
                 "service": "ckb-chatgpt-edge",
                 "mcp": "/mcp",
+                "oauth_resource_metadata": "/.well-known/oauth-protected-resource",
                 "upstream": "reality_gateway"
             })),
         ),
@@ -277,8 +278,11 @@ async fn main() -> anyhow::Result<()> {
         api_key: secret_value("CKB_API_KEY"),
     };
 
+    if state.internal_secret.is_none() {
+        warn!("CKB_INTERNAL_SECRET is not configured. OAuth token introspection and trusted gateway authentication will fail closed.");
+    }
     if state.api_key.is_none() {
-        warn!("CKB_API_KEY is not configured. ChatGPT MCP should use a dedicated API key before public deployment; internal-secret auth remains available for trusted infrastructure.");
+        warn!("CKB_API_KEY is not configured. Operator/API-key access is disabled; end users can still authenticate through CKB OAuth when the Cloud backend is configured.");
     }
 
     let executable = std::env::var("CKB_REALITY_GATEWAY_BIN")
@@ -302,6 +306,10 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/health", get(health))
+        .route(
+            "/.well-known/oauth-protected-resource",
+            get(chatgpt_mcp::oauth_protected_resource),
+        )
         .route(
             "/mcp",
             get(chatgpt_mcp::get_mcp).post(chatgpt_mcp::post_mcp),
