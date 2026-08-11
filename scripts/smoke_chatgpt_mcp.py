@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Production-safe smoke test for the CKB ChatGPT/Codex remote MCP surface.
+"""Production-safe smoke test for the canonical CKB remote MCP surface.
 
 This script intentionally tests only public discovery and the unauthenticated
 OAuth challenge. It never needs or prints a CKB user token or infrastructure
-secret.
+secret. Run scripts/smoke_universal_model_gateway.py as the companion test for
+provider-shaped function adapters.
 
 Usage:
     python scripts/smoke_chatgpt_mcp.py
@@ -147,7 +148,7 @@ def main() -> None:
         "tools/call",
         {
             "name": "ckb_get_architecture_graph",
-            "arguments": {"project_id": "smoke-test-never-executed"},
+            "arguments": {"project_id": "smoke_test_never_executed"},
         },
         request_id=4,
     )
@@ -163,7 +164,8 @@ def main() -> None:
         fail("OAuth challenge is missing required account-linking parameters")
     print("PASS: unauthenticated tool triggers OAuth account-linking challenge")
 
-    print("PASS: CKB remote MCP public smoke suite completed")
+    print("PASS: CKB canonical remote MCP public smoke suite completed")
+    print("NEXT: python scripts/smoke_universal_model_gateway.py")
 
 
 if __name__ == "__main__":
