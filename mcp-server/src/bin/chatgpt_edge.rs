@@ -282,7 +282,7 @@ async fn main() -> anyhow::Result<()> {
         warn!("CKB_INTERNAL_SECRET is not configured. OAuth token introspection and trusted gateway authentication will fail closed.");
     }
     if state.api_key.is_none() {
-        warn!("CKB_API_KEY is not configured. Operator/API-key access is disabled; end users can still authenticate through CKB OAuth when the Cloud backend is configured.");
+        anyhow::bail!("CKB_API_KEY is required by the current production Reality gateway path. It is server-side infrastructure auth only; ChatGPT end users authenticate with OAuth.");
     }
 
     let executable = std::env::var("CKB_REALITY_GATEWAY_BIN")
