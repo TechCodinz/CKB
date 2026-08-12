@@ -4,6 +4,10 @@ import * as path from 'path';
 const TASKS = ['understand', 'explain', 'change', 'debug', 'review', 'migrate', 'optimize', 'security'] as const;
 type FabricTask = typeof TASKS[number];
 
+interface ModelRegistryPickItem extends vscode.QuickPickItem {
+    item: any;
+}
+
 function slash(value: string) {
     return value.replace(/\\/g, '/').replace(/^\.\//, '');
 }
@@ -268,14 +272,14 @@ export class CkbModelIntelligenceV13 implements vscode.Disposable {
                 vscode.window.showInformationMessage('CKB has no model capability profiles yet. Models remain unranked until profiles and observed validations exist.');
                 return;
             }
-            const pick = await vscode.window.showQuickPick(registry.map((item: any) => ({
+            const pick = await vscode.window.showQuickPick<ModelRegistryPickItem>(registry.map((item: any): ModelRegistryPickItem => ({
                 label: `${item.provider}/${item.model}`,
                 description: item.observedScore == null ? 'unranked — no observed validation evidence' : `${(item.observedScore * 100).toFixed(1)}% observed score • ${item.observations} checks`,
                 detail: `${item.recommendationEligible ? 'recommendation evidence + lifecycle gate met' : item.confidenceBasis || 'not recommendation-eligible'} • ${item.availability || 'lifecycle unknown'} • ${item.freshness || 'freshness unknown'} • rollback ${item.rollbackRate == null ? 'unobserved' : `${(item.rollbackRate * 100).toFixed(1)}%`} • task ${task}`,
                 item,
             })), {
                 title: `CKB V13 • Observed Model Registry • ${task.toUpperCase()}`,
-                placeHolder: 'Scores use this project’s recorded validations only; CKB never auto-selects a stale/deprecated/retired profile',
+                placeHolder: 'Scores use this project\'s recorded validations only; CKB never auto-selects a stale/deprecated/retired profile',
             });
             if (pick) {
                 const doc = await vscode.workspace.openTextDocument({ language: 'json', content: JSON.stringify(pick.item, null, 2) });
