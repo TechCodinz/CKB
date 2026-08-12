@@ -1,4 +1,4 @@
-use ckb_core::analysis::{ApiContract, ArchitectureRule, ChangeOperation, DeepCausalityEngine};
+use ckb_core::{ApiContract, ArchitectureRule, ChangeOperation, DeepCausalityEngine};
 use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
 

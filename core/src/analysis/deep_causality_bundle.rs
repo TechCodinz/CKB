@@ -73,7 +73,8 @@ pub fn build_deep_causality_bundle(
 /// entity already present in the target federation.
 pub fn merge_deep_causality_evidence(target: &mut DeepCausalityEngine, source: &DeepCausalityEngine) -> Result<(), String> {
     for entity in source.entities() {
-        if let Some(existing) = target.entities().find(|candidate| candidate.id == entity.id).cloned() {
+        let existing_opt = target.entities().find(|candidate| candidate.id == entity.id).cloned();
+        if let Some(existing) = existing_opt {
             let mut merged = existing;
             if matches!(&merged.kind, super::CausalEntityKind::Unknown) && !matches!(&entity.kind, super::CausalEntityKind::Unknown) {
                 merged.kind = entity.kind.clone();

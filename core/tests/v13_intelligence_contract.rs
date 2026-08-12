@@ -2,21 +2,22 @@ use ckb_core::{
     architecture_query_manifest,
     parse_architecture_query,
     ArchitectureQueryOperation,
-    ArchitectureTask,
+    ArchitectureTaskKind,
     ContextBudget,
     ContextCompiler,
     EvidenceClass,
     EvidenceRecord,
     MemoryEdge,
+    MemoryEvidence,
     MemoryNode,
-    MemoryQueryResult,
+    ArchitectureMemorySlice,
+    MemoryRetrievalStats,
     ModelCapabilityProfile,
     OtlpReceiver,
-    PromotionDecision,
     PromotionGate,
     EvolutionProposal,
 };
-use ckb_core::types::NodeId;
+use ckb_core::NodeId;
 
 #[test]
 fn public_aql_is_deterministic_and_model_neutral() {
@@ -48,8 +49,13 @@ fn ambiguous_otlp_identity_is_not_a_source_symbol() {
 
 #[test]
 fn compiled_context_never_promotes_predicted_provenance_to_runtime() {
-    let memory = MemoryQueryResult {
+    let memory = ArchitectureMemorySlice {
+        version: "ckb-memory-v1".into(),
         query: "change checkout".into(),
+        depth: 3,
+        context: String::new(),
+        evidence_policy: "static-runtime-predicted-separated".into(),
+        synthetic: false,
         root_ids: vec!["src/checkout.ts::checkout".into()],
         nodes: vec![MemoryNode {
             id: "src/checkout.ts::checkout".into(),
@@ -58,28 +64,34 @@ fn compiled_context_never_promotes_predicted_provenance_to_runtime() {
             path: "src/checkout.ts".into(),
             line: 10,
             column: 1,
+            score: 1.0,
             fan_in: 3,
             fan_out: 2,
             activity_priority: 0.5,
             runtime: None,
-            evidence: vec![EvidenceRecord {
-                class: EvidenceClass::Predicted,
+            evidence: vec![MemoryEvidence {
                 source: "blast-radius".into(),
                 reference: "prediction-1".into(),
-                confidence: Some(0.9),
-                observed_at: None,
-                synthetic: false,
+                kind: "predicted".into(),
             }],
         }],
         edges: vec![MemoryEdge {
             source: "src/checkout.ts::checkout".into(),
             target: "src/payments.ts::charge".into(),
             kind: "call".into(),
+            weight: 1.0,
             evidence: vec![],
         }],
-        retrieval: Default::default(),
-        version: "ckb-memory-v1".into(),
-        synthetic: false,
+        retrieval: MemoryRetrievalStats {
+            graph_nodes: 2,
+            graph_edges: 1,
+            root_count: 1,
+            retrieved_nodes: 1,
+            retrieved_edges: 1,
+            runtime_observed_nodes: 0,
+            expansion_cap: 20,
+            truncated: false,
+        },
     };
     let profile = ModelCapabilityProfile {
         provider: Some("future-provider".into()),
@@ -93,7 +105,7 @@ fn compiled_context_never_promotes_predicted_provenance_to_runtime() {
     };
     let compiled = ContextCompiler::compile(
         &memory,
-        ArchitectureTask::Change,
+        ArchitectureTaskKind::Change,
         profile,
         ContextBudget { max_chars: 20_000, max_nodes: 20, max_edges: 20 },
     );
@@ -107,11 +119,15 @@ fn production_self_evolution_requires_explicit_promotion_and_validation() {
     let proposal = EvolutionProposal {
         id: "proposal-1".into(),
         summary: "change architecture engine".into(),
-        production_affecting: true,
-        validation: Default::default(),
-        explicit_promotion: false,
-        synthetic: false,
+        changes_production_behavior: true,
+        evidence_refs: vec!["evidence-1".into()],
+        compile_passed: None,
+        tests_passed: None,
+        contracts_passed: None,
+        security_checks_passed: None,
+        explicit_promotion_approved: false,
     };
     let decision = PromotionGate::evaluate(&proposal);
-    assert!(matches!(decision, PromotionDecision::Blocked { .. }));
+    assert!(!decision.promotable);
+    assert!(!decision.blockers.is_empty());
 }

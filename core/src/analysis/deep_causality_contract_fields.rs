@@ -83,7 +83,8 @@ fn enrich_prisma(engine: &mut DeepCausalityEngine, artifact: &RepositoryArtifact
         let type_name = type_token.trim_end_matches('?').to_string();
         let field_id = format!("{table_id}::column:{field}");
         upsert_field(engine, &field_id, field, &artifact.repository, &artifact.path, &type_name, required);
-        if let Some(mut entity) = engine.entities().find(|entity| entity.id == field_id).cloned() {
+        let maybe_entity = engine.entities().find(|entity| entity.id == field_id).cloned();
+        if let Some(mut entity) = maybe_entity {
             entity.kind = CausalEntityKind::Column;
             engine.upsert_entity(entity);
         }

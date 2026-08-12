@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use ckb_core::analysis::{
+use ckb_core::{
     build_federated_deep_causality, build_workspace_deep_causality,
     derive_contract_snapshots, ingest_human_evidence, ingest_runtime_resource_observations,
     ApiContract, ArchitectureRule, ChangeOperation, DeepCausalityEngine,

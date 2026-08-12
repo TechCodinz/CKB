@@ -616,7 +616,7 @@ mod tests {
             "fn value() -> i32 { 1 }\n",
         );
         assert_eq!(
-            std::fs::read_to_string(Path::new(&transaction.worktree_path).join("main.rs")).unwrap(),
+            std::fs::read_to_string(Path::new(&transaction.worktree_path).join("main.rs")).unwrap().replace("\r\n", "\n"),
             "fn value() -> i32 { 2 }\n",
         );
 
@@ -663,7 +663,7 @@ mod tests {
             "fn value() -> i32 { 1 }\n",
         );
         assert_eq!(
-            std::fs::read_to_string(Path::new(&transaction.worktree_path).join("main.rs")).unwrap(),
+            std::fs::read_to_string(Path::new(&transaction.worktree_path).join("main.rs")).unwrap().replace("\r\n", "\n"),
             "fn value() -> i32 { 1 }\n",
         );
         PatchTransactionEngine::cleanup(&transaction, true).unwrap();

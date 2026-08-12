@@ -60,6 +60,7 @@ struct ZipScanRequest {
     repo_name: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct ImpactRequest {
     file: String,
@@ -69,6 +70,7 @@ struct ImpactRequest {
     repo_name: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct OtlpRequest {
     raw_spans: Option<String>,
@@ -78,6 +80,7 @@ struct OtlpRequest {
     repo_name: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct MemoryQueryRequest {
     query: String,
@@ -87,6 +90,7 @@ struct MemoryQueryRequest {
     repo_name: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct CausalPathRequest {
     source: String,
@@ -96,6 +100,7 @@ struct CausalPathRequest {
     repo_name: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct FailureConeRequest {
     root: String,
@@ -104,6 +109,7 @@ struct FailureConeRequest {
     repo_name: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct DiffRequest {
     from_snapshot: String,

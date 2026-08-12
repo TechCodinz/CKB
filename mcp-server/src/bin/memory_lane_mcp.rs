@@ -1,4 +1,4 @@
-use ckb_core::analysis::{LearningOutcome, MemoryLaneEpisode, MemoryLaneStore};
+use ckb_core::{LearningOutcome, MemoryLaneEpisode, MemoryLaneStore};
 use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
 
@@ -23,7 +23,7 @@ fn call(name:&str,args:&Value)->anyhow::Result<Value>{
     Ok(match name {
         "ckb_memory_lane_status"=>json!({"version":lane.version,"profile":lane.profile,"episodes":lane.episodes().count(),"strategies":lane.rank_strategies()}),
         "ckb_memory_lane_recall"=>{
-            let terms=args.get("terms").and_then(Value::as_array).map(|v|v.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default();
+            let terms: Vec<String>=args.get("terms").and_then(Value::as_array).map(|v|v.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default();
             let limit=args.get("limit").and_then(Value::as_u64).map(|v|v as usize).unwrap_or(20);
             serde_json::to_value(lane.recall(&terms,limit))?
         },

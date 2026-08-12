@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use ckb_core::analysis::{
+use ckb_core::{
     observe_causal_snapshot, DeepCausalityEngine, LearningOutcome, MemoryLaneEpisode,
     MemoryLaneStore,
 };
