@@ -105,6 +105,8 @@ Before merging the bridge:
 
 The native Rust MCP hook, repo-scoped drift-timeline API, repo-scoped intelligence metrics, and non-billable replay metering are intentionally **follow-up hardening**, not prerequisites for the current server-side bridge contract.
 
+Keep the PR draft until the above checklist is executed against deployed CKB + EchoForge services.
+
 ## Closed loop
 
 `CKB code graph → runtime signal → Sentinel incident → CKB blast-radius/test-gap/drift evidence → guarded remediation → deployment → EchoForge verification → Failure Memory`
