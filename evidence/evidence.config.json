@@ -1,0 +1,14 @@
+{
+  "schema": "techcodinz-evidence-config-v1",
+  "project": "CKB",
+  "aggregation_group": "CKB",
+  "repositories": ["TechCodinz/CKB", "TechCodinz/ckb-cloud"],
+  "evidence_root": "evidence",
+  "sources": {
+    "github": {"enabled": true, "metrics": ["stars", "forks", "watchers", "open_issues", "contributors", "releases", "outside_pull_requests"]},
+    "marketplaces": [{"type": "visual-studio-marketplace", "extension_id": "TechCodinz.ckb-vscode", "metrics": ["installs", "downloads", "average_rating", "rating_count", "version", "published_at", "updated_at", "reviews"]}],
+    "public_web": {"enabled": true, "search_terms": ["CKB Code Knowledge Base TechCodinz", "TechCodinz ckb-vscode"]}
+  },
+  "product_metrics": ["projects_scanned", "repositories_analyzed", "architecture_graphs_generated", "active_users", "paid_accounts", "customer_outcomes"],
+  "rules": ["record only source-backed values", "unavailable is not zero", "preserve dated snapshots", "do not expose secrets or private customer data", "do not treat internal claims as independent recognition"]
+}
