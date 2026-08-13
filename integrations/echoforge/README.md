@@ -73,7 +73,7 @@ Then publish:
 node integrations/echoforge/publish-snapshot.mjs
 ```
 
-The publisher uses a stable source identity of `ckb:snapshot:<repo>:<commit>` so EchoForge can upsert the same project-scoped incident instead of creating another database row for the same snapshot.
+The publisher uses a stable source identity of `ckb:snapshot:<repo>:<commit>`. EchoForge scopes that identity by Sentinel project and upserts the same database incident on replay. A later hardening pass will also make repeated snapshots non-billable at monthly-incident metering level; until that change is validated, avoid excessively frequent replay loops and publish on meaningful scan/deploy boundaries.
 
 ## Tenant-scope rule
 
