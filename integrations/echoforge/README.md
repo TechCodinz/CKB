@@ -103,7 +103,7 @@ Before merging the bridge:
 7. disable EchoForge and confirm normal CKB scans/impact analysis still work;
 8. verify neither project key appears in browser bundles, logs, or API responses.
 
-The native Rust MCP hook, repo-scoped drift-timeline API, repo-scoped intelligence metrics, and non-billable replay metering are intentionally **follow-up hardening**, not prerequisites for the current server-side bridge contract.
+The deployable server-side bridge is implemented. Native Rust MCP publishing, repo-scoped drift-timeline/intelligence-metrics APIs, and replay-aware monthly metering remain hardening follow-ups rather than hidden requirements of the current contract.
 
 Keep the PR draft until the above checklist is executed against deployed CKB + EchoForge services.
 
