@@ -3,7 +3,7 @@
 /**
  * CKB → EchoForge Sentinel bridge publisher.
  *
- * Queries CKB's authenticated REST intelligence endpoints and publishes one
+ * Queries only repository/session-scoped CKB REST evidence and publishes one
  * idempotent architecture snapshot to the mapped EchoForge Sentinel project.
  * Designed for a private worker, CI post-scan step, cron job, or deployment hook.
  */
@@ -74,10 +74,10 @@ function maxRisk(value, depth = 0) {
 function countFindings(value) {
   if (Array.isArray(value)) return value.length;
   if (!value || typeof value !== "object") return 0;
-  for (const key of ["gaps", "violations", "items", "results", "entries", "repos"]) {
+  for (const key of ["gaps", "violations", "items", "results", "entries"]) {
     if (Array.isArray(value[key])) return value[key].length;
   }
-  return Object.keys(value).length;
+  return 0;
 }
 
 function severity(score) {
@@ -87,36 +87,40 @@ function severity(score) {
   return score > 0 ? "low" : "info";
 }
 
-async function ckb(path) {
+async function ckbRepo(path) {
   const separator = path.includes("?") ? "&" : "?";
-  return fetchJson(`${ckbUrl}${path}${separator}repo_name=${encodeURIComponent(repoName)}`, {
+  return fetchJson(`${ckbUrl}${path}${separator}repo=${encodeURIComponent(repoName)}`, {
     headers: { "x-api-key": ckbKey, "x-ckb-bridge-protocol": protocol },
   });
 }
 
+// CKB's current /metrics/intelligence endpoint aggregates every federated repo and
+// /drift-timeline reads the server working directory. Neither is safe evidence for a
+// single customer project. Use the explicitly mapped repo session instead.
 const results = await Promise.allSettled([
-  ckb("/api/v1/metrics/intelligence"),
-  ckb("/api/v1/test-gaps"),
-  ckb("/api/v1/drift-timeline"),
-  ckb("/api/v1/report"),
+  ckbRepo("/api/v1/report"),
+  ckbRepo("/api/v1/test-gaps"),
 ]);
 
-const names = ["metrics", "testGaps", "driftTimeline", "report"];
+const names = ["report", "testGaps"];
 const evidence = Object.fromEntries(results.map((result, index) => [names[index], result.status === "fulfilled" ? result.value : null]));
 const errors = results.flatMap((result, index) => result.status === "rejected" ? [`${names[index]}: ${result.reason?.message || "unavailable"}`] : []);
 
-const metricRisk = maxRisk(evidence.metrics);
+if (!evidence.report) {
+  throw new Error(`Mapped CKB repository '${repoName}' has no readable scanned report. Run POST /api/v1/scan with repo_name first.`);
+}
+
 const reportRisk = maxRisk(evidence.report);
 const testGapCount = countFindings(evidence.testGaps);
-const driftCount = countFindings(evidence.driftTimeline);
+const driftCount = countFindings(evidence.report?.drift || evidence.report?.violations);
 
 const signals = [
   {
     name: "ckb.failure_risk",
-    score: Math.max(metricRisk, reportRisk),
-    value: Math.max(metricRisk, reportRisk),
+    score: reportRisk,
+    value: reportRisk,
     tags: ["ckb", "architecture-intelligence", "failure-risk"],
-    metadata: { severity: severity(Math.max(metricRisk, reportRisk)), repo: repoName, commit_sha: commitSha },
+    metadata: { severity: severity(reportRisk), repo: repoName, commit_sha: commitSha },
   },
   {
     name: "ckb.test_gap",
@@ -130,7 +134,7 @@ const signals = [
     score: clamp(driftCount / 20, 0, 1),
     value: driftCount,
     tags: ["ckb", "architecture-intelligence", "drift"],
-    metadata: { finding_count: driftCount, repo: repoName, commit_sha: commitSha },
+    metadata: { finding_count: driftCount, repo: repoName, commit_sha: commitSha, evidence_source: "repo-report" },
   },
 ].filter((signal) => signal.score > 0 || signal.value > 0);
 
