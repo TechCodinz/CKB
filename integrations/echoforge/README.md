@@ -90,6 +90,19 @@ EchoForge's server-side bridge first verifies that the explicitly mapped repo ha
 
 CKB downtime is non-fatal to EchoForge incidents, and EchoForge downtime is non-fatal to normal CKB architecture analysis.
 
+## Release validation
+
+Before merging the bridge:
+
+1. run a named CKB scan for a test repository;
+2. create/map a Pro/Enterprise/PAYG Sentinel project to the exact `owner/repository` identity;
+3. publish one snapshot and confirm one Sentinel incident is created;
+4. publish the same snapshot again and confirm the same incident row is updated;
+5. ingest runtime telemetry containing `file`, `line`, and `commit_sha` and confirm the BlackBox `Code Intelligence` panel receives CKB impact/test-gap/drift evidence;
+6. disable CKB and confirm Sentinel still persists incidents;
+7. disable EchoForge and confirm normal CKB scans/impact analysis still work;
+8. verify neither project key appears in browser bundles, logs, or API responses.
+
 ## Closed loop
 
 `CKB code graph → runtime signal → Sentinel incident → CKB blast-radius/test-gap/drift evidence → guarded remediation → deployment → EchoForge verification → Failure Memory`
