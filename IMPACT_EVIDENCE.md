@@ -1,0 +1,67 @@
+# CKB Impact Evidence Register
+
+This file is the canonical register for verifiable CKB adoption, technical contribution, commercial impact and independent recognition. It is designed to preserve evidence as it happens instead of reconstructing it later.
+
+## Evidence rules
+
+1. Record only observed facts and measured values.
+2. Every metric or achievement must point to a source: marketplace analytics, GitHub analytics, release artifact, customer record, public article, conference listing, independent review, invoice, export or other reproducible record.
+3. Never convert estimates, memory or marketing language into evidence.
+4. Keep sensitive customer and commercial documents outside the public repository; record only redacted references here.
+5. Use dated snapshots so growth can be demonstrated over time.
+
+## Recognition
+
+Track evidence that other people or organisations recognise CKB or its creator's work, including:
+
+- VS Code Marketplace installs/downloads and ratings
+- GitHub stars, forks, contributors and outside pull requests
+- Independent developer reviews or technical write-ups
+- Public references to CKB in developer communities
+- Invitations to speak, demonstrate or teach the technology
+- Awards, accelerators, grants or recognised competitions
+- Third-party integrations or organisations adopting CKB
+
+## Innovation and technical contribution
+
+Track major releases and the specific engineering contribution behind them, for example:
+
+- architecture graph and dependency analysis
+- blast-radius and change-impact analysis
+- runtime/telemetry fusion
+- semantic clone detection
+- API contract validation
+- test-gap analysis
+- MCP/agent integrations
+- language/runtime expansion
+- performance, reliability and security improvements
+
+For every milestone, link the commit, release or design document and record any measurable outcome.
+
+## Commercial impact
+
+Track paying organisations, pilots, subscriptions, enterprise deployments, renewals and documented customer outcomes. Do not publish confidential contract values or personal customer information.
+
+## Evidence log
+
+| Date | Category | Metric / achievement | Value | Evidence reference | Independent? | Notes |
+|---|---|---|---|---|---|---|
+| YYYY-MM-DD | recognition | Example: Marketplace installs | 0 | Replace with dated Marketplace export/screenshot | Yes | Template row only |
+
+## Monthly snapshot
+
+At least once per month, capture:
+
+- Marketplace installs/downloads
+- GitHub stars/forks/watchers
+- External contributors and merged outside PRs
+- Active organisations or verified deployments where measurable
+- Releases shipped
+- Public mentions/reviews
+- Revenue/customers where applicable
+
+Store the original export or screenshot outside Git when it contains sensitive information and reference its date and location here.
+
+## Case-study record
+
+For each strong external deployment, capture the problem, environment, CKB capability used, measurable result, customer/third-party confirmation, date range and source reference. A case study should demonstrate impact rather than merely describe features.
