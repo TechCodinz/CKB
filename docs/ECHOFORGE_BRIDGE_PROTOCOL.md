@@ -4,6 +4,8 @@ CKB owns **code/architecture intelligence**. EchoForge Sentinel owns **runtime/i
 
 Bridge version: `ckb-echoforge/v1`
 
+**Implementation status:** the deployable server-side bidirectional bridge contract is implemented on the CKB bridge branch and EchoForge Sentinel branch. Native Rust publishing and additional repo-scoped CKB metrics are follow-up hardening.
+
 ## Runtime → CKB enrichment
 
 EchoForge stores an explicit `EchoForge Sentinel project ↔ CKB repo_name` mapping. Incident telemetry can identify affected source using `file`, `path`, `file_path`, `line`, `symbol`, and commit metadata.
