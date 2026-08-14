@@ -46,7 +46,11 @@ Track paying organisations, pilots, subscriptions, enterprise deployments, renew
 
 | Date | Category | Metric / achievement | Value | Evidence reference | Independent? | Notes |
 |---|---|---|---|---|---|---|
-| YYYY-MM-DD | recognition | Example: Marketplace installs | 0 | Replace with dated Marketplace export/screenshot | Yes | Template row only |
+| 2026-08-14 | recognition | GitHub stars | 0 | GitHub repository API snapshot, TechCodinz/CKB | Yes | Baseline; do not treat 0 as Marketplace adoption. |
+| 2026-08-14 | recognition | GitHub forks | 0 | GitHub repository API snapshot, TechCodinz/CKB | Yes | Baseline. |
+| 2026-08-14 | community | GitHub open issues | 7 | GitHub repository API snapshot, TechCodinz/CKB | Yes | Baseline; open issues are activity, not automatically independent recognition. |
+| 2026-08-14 | release | GitHub Releases | 0 published releases | GitHub Releases API, TechCodinz/CKB | Yes | Marketplace publication/versioning is tracked separately and must not be inferred from GitHub Releases. |
+| 2026-08-14 | recognition | VS Code Marketplace installs/downloads/ratings | unavailable in this capture | Microsoft Visual Studio Marketplace | Yes | Source query did not return the CKB listing metrics in this run; unavailable is intentionally not recorded as zero. |
 
 ## Monthly snapshot
 
