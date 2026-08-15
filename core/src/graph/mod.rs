@@ -402,6 +402,39 @@ impl DependencyGraph {
         }
         Ok(cycles)
     }
+
+    /// Return cycles formed by structural dependency edges only. Call-graph
+    /// recursion is valid control flow (polling, batching, tree traversal) and
+    /// must not be reported as an architectural import/type cycle.
+    pub fn find_architectural_cycles(&self) -> Result<Vec<Vec<NodeId>>> {
+        let mut structural = DiGraph::<NodeId, ()>::new();
+        let mut indices = HashMap::new();
+
+        for index in self.graph.node_indices() {
+            if let Some(id) = self.reverse_indices.get(&index) {
+                indices.insert(index, structural.add_node(id.clone()));
+            }
+        }
+
+        for edge in self.graph.edge_indices() {
+            if !matches!(self.graph[edge].kind, EdgeKind::Import | EdgeKind::Extends | EdgeKind::Implements) {
+                continue;
+            }
+            if let Some((from, to)) = self.graph.edge_endpoints(edge) {
+                if let (Some(structural_from), Some(structural_to)) = (indices.get(&from), indices.get(&to)) {
+                    structural.add_edge(*structural_from, *structural_to, ());
+                }
+            }
+        }
+
+        let mut cycles = Vec::new();
+        for component in petgraph::algo::kosaraju_scc(&structural) {
+            if component.len() > 1 {
+                cycles.push(component.into_iter().filter_map(|index| structural.node_weight(index).cloned()).collect());
+            }
+        }
+        Ok(cycles)
+    }
 }
 
 #[cfg(test)]
@@ -425,6 +458,26 @@ mod tests {
 
     fn analysis(path: &str, nodes: Vec<Node>, imports: Vec<Import>, calls: Vec<FunctionCall>) -> FileAnalysis {
         FileAnalysis { path: path.to_string(), nodes, imports, exports: vec![], calls, type_relations: vec![] }
+    }
+
+    #[test]
+    fn architectural_cycles_ignore_call_recursion_but_keep_import_cycles() {
+        let mut graph = DependencyGraph::new();
+        let first = node("src/a.ts", "first", NodeKind::Function, 1);
+        let second = node("src/b.ts", "second", NodeKind::Function, 1);
+        let first_id = first.id.clone();
+        let second_id = second.id.clone();
+        let first_index = graph.add_node(first);
+        let second_index = graph.add_node(second);
+
+        graph.add_edge_once(first_index, second_index, first_id.clone(), second_id.clone(), EdgeKind::Calls, 1.0, HashMap::new());
+        graph.add_edge_once(second_index, first_index, second_id.clone(), first_id.clone(), EdgeKind::Calls, 1.0, HashMap::new());
+        assert_eq!(graph.find_cycles().unwrap().len(), 1);
+        assert!(graph.find_architectural_cycles().unwrap().is_empty());
+
+        graph.add_edge_once(first_index, second_index, first_id.clone(), second_id.clone(), EdgeKind::Import, 1.0, HashMap::new());
+        graph.add_edge_once(second_index, first_index, second_id, first_id, EdgeKind::Import, 1.0, HashMap::new());
+        assert_eq!(graph.find_architectural_cycles().unwrap().len(), 1);
     }
 
     #[test]

@@ -119,7 +119,7 @@ impl ArchitectureAnalyzer {
             }
         }
 
-        for cycle in graph.find_cycles()? {
+        for cycle in graph.find_architectural_cycles()? {
             if cycle.len() < 2 { continue; }
             for pair in cycle.windows(2) {
                 let from = pair[0].clone();
