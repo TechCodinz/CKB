@@ -41,7 +41,7 @@ runs:
     - name: Cache Cargo/target
       uses: Swatinem/rust-cache@v2
       with:
-        workspaces: ${{ github.action_path }}/../../../..
+        workspaces: ${{ github.action_path }}/../../..
 
     - name: Build ckb CLI
       shell: bash
@@ -55,7 +55,7 @@ runs:
       # host target, which fails — wasm-bindgen's extern declarations only
       # resolve when actually targeting wasm32.
       run: |
-        cd "${{ github.action_path }}/../../../.."
+        cd "${{ github.action_path }}/../../.."
         cargo build --release --bin ckb-cli
         echo "$(pwd)/target/release" >> "$GITHUB_PATH"
 
