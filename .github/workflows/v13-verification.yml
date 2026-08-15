@@ -71,8 +71,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.2.0'
-      - name: Validate and build plugin
-        run: gradle -p integrations/jetbrains verifyPluginProjectConfiguration buildPlugin --no-daemon --stacktrace
+          cache-disabled: true
+      - name: Validate and build plugin from fresh platform dependencies
+        run: gradle -p integrations/jetbrains verifyPluginProjectConfiguration buildPlugin --no-daemon --refresh-dependencies --stacktrace
 
   protocol-schemas:
     name: V13 protocol schema validity
