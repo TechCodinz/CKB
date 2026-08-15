@@ -49,15 +49,21 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: integrations/vscode/package-lock.json
       - name: Install dependencies
         working-directory: integrations/vscode
         run: npm ci
+      - name: Audit release toolchain
+        working-directory: integrations/vscode
+        run: npm audit --audit-level=high
       - name: Compile
         working-directory: integrations/vscode
         run: npm run compile
+      - name: Package VSIX
+        working-directory: integrations/vscode
+        run: npx @vscode/vsce package --out /tmp/ckb-vscode.vsix
 
   jetbrains-extension:
     runs-on: ubuntu-latest
@@ -80,7 +86,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
       - name: Node SDK syntax check
         run: node --check bindings/node/index.js
       - name: Node Live Reality syntax check
