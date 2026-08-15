@@ -24,8 +24,8 @@ dependencies {
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.1'
 
     intellijPlatform {
-        // Build the new compatibility line against the oldest IDE we advertise.
-        // The previous 1.8.0 Marketplace build remains available for 2023.3-2024.3.
+        // Build the modern line against the oldest IDE it advertises.
+        // Marketplace 1.8.0 continues serving 2023.3-2024.3 users.
         intellijIdeaCommunity '2024.3.6'
         bundledPlugin 'com.intellij.java'
     }
@@ -47,17 +47,17 @@ intellijPlatform {
     pluginConfiguration {
         version = project.version
         ideaVersion {
-            // 1.9.x is the modern line. 1.8.0 continues serving older builds.
+            // JetBrains recommends no until-build for the 2024.3+ compatibility model.
+            // Publication is guarded by Plugin Verifier against the current stable IDE.
             sinceBuild = '243'
-            untilBuild = '261.*'
         }
     }
 
     pluginVerification {
         ides {
-            // Verify both the minimum declared build and the newest declared major line.
+            // Verify the minimum platform and the current stable 2026.2 line.
             current()
-            create IntelliJPlatformType.IntellijIdea, '2026.1.4'
+            create IntelliJPlatformType.IntellijIdea, '2026.2.0.1'
         }
     }
 }
