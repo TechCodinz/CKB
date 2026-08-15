@@ -2,7 +2,7 @@
     <id>dev.ckb.jetbrains</id>
     <name>CKB - Invisible Reality Architecture Intelligence</name>
     <vendor email="support@ckb.dev" url="https://ckb.dev">CKB</vendor>
-    <version>1.7.0</version>
+    <version>1.8.0</version>
     <idea-version since-build="233" until-build="243.*"/>
 
     <description><![CDATA[
