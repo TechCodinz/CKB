@@ -1,0 +1,79 @@
+name: Publish Open VSX Extension
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'integrations/vscode/**'
+      - '.github/workflows/publish-openvsx.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: open-vsx-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish-openvsx:
+    name: Package and publish to Open VSX
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: integrations/vscode/package-lock.json
+
+      - name: Install dependencies
+        working-directory: integrations/vscode
+        run: npm ci
+
+      - name: Compile extension
+        working-directory: integrations/vscode
+        run: npm run compile
+
+      - name: Read extension version
+        id: release
+        working-directory: integrations/vscode
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Package VSIX
+        working-directory: integrations/vscode
+        run: npx --yes @vscode/vsce@latest package --out ckb-vscode-${{ steps.release.outputs.version }}.vsix
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ckb-openvsx-${{ steps.release.outputs.version }}
+          path: integrations/vscode/ckb-vscode-${{ steps.release.outputs.version }}.vsix
+          retention-days: 90
+
+      - name: Publish to Open VSX
+        working-directory: integrations/vscode
+        env:
+          OPEN_VSX_TOKEN: ${{ secrets.OPEN_VSX_TOKEN || secrets.OVSX_TOKEN || secrets.OVSX_PAT || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$OPEN_VSX_TOKEN" ]]; then
+            echo "::error::Open VSX publishing credential is missing. Configure OPEN_VSX_TOKEN (or OVSX_TOKEN / OVSX_PAT) in repository Actions secrets."
+            exit 1
+          fi
+          npx --yes ovsx publish "ckb-vscode-${{ steps.release.outputs.version }}.vsix" -p "$OPEN_VSX_TOKEN"
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          echo "### CKB Open VSX" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Namespace: TechCodinz" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Extension: ckb-vscode" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Version: ${{ steps.release.outputs.version || 'not evaluated' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Registry: https://open-vsx.org/extension/TechCodinz/ckb-vscode" >> "$GITHUB_STEP_SUMMARY"
