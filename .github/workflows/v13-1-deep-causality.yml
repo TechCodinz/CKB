@@ -1,0 +1,102 @@
+name: V13.1 Deep Software Causality
+
+on:
+  pull_request:
+    paths:
+      - 'core/src/analysis/deep_causality*.rs'
+      - 'core/src/analysis/mod.rs'
+      - 'cli/Cargo.toml'
+      - 'cli/src/bin/ckb-causality.rs'
+      - 'mcp-server/src/bin/deep_causality_mcp.rs'
+      - 'mcp-server/Cargo.toml'
+      - 'integrations/vscode/package.json'
+      - 'integrations/vscode/package-lock.json'
+      - 'integrations/vscode/src/deepCausalityV131.ts'
+      - 'integrations/vscode/src/extensionV6.ts'
+      - 'integrations/jetbrains/build.gradle'
+      - 'integrations/jetbrains/src/main/kotlin/dev/ckb/actions/CkbDeepCausalityV131Action.kt'
+      - 'integrations/jetbrains/src/main/resources/META-INF/plugin.xml'
+      - 'schemas/deep-causality-v13.1.schema.json'
+      - '.github/workflows/v13-1-deep-causality.yml'
+  workflow_dispatch:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Core check
+        run: cargo check -p ckb-core --all-targets
+      - name: Core deep causality tests
+        run: cargo test -p ckb-core deep_causality -- --nocapture
+      - name: CLI check
+        run: cargo check -p ckb-cli --bin ckb-causality
+      - name: MCP check
+        run: cargo check -p ckb-mcp-server --bin deep_causality_mcp
+      - name: Full workspace regression
+        run: cargo test --workspace --all-targets
+
+  protocol:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse deep causality schema
+        run: python -m json.tool schemas/deep-causality-v13.1.schema.json >/dev/null
+      - name: Enforce evidence truth classes
+        run: |
+          python - <<'PY'
+          import json
+          s=json.load(open('schemas/deep-causality-v13.1.schema.json'))
+          values=set(s['$defs']['evidenceClass']['enum'])
+          required={'static','runtime','history','validation','human','predicted'}
+          assert values == required, (values, required)
+          PY
+      - name: Verify all 20 MCP causality tools remain registered
+        run: |
+          python - <<'PY'
+          import re
+          text=open('mcp-server/src/bin/deep_causality_mcp.rs').read()
+          names=set(re.findall(r'tool\("(ckb_[a-z0-9_]+)"', text))
+          required={
+            'ckb_data_flow','ckb_taint','ckb_reachable_under','ckb_constraints',
+            'ckb_concurrency_hazards','ckb_schema_impact','ckb_infra_impact','ckb_config_impact',
+            'ckb_distributed_flow','ckb_contract_diff','ckb_tests_for_change','ckb_policy',
+            'ckb_drift_forecast','ckb_simulate_change','ckb_runtime_hotspots','ckb_failure_propagation',
+            'ckb_temporal_diff','ckb_cross_repo_path','ckb_ownership_risk','ckb_quality_metrics'
+          }
+          assert required <= names, sorted(required-names)
+          PY
+
+  vscode:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: integrations/vscode
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: integrations/vscode/package-lock.json
+      - run: npm ci
+      - name: TypeScript compile
+        run: npm run compile
+      - name: VSIX package
+        run: npx vsce package --no-dependencies --out ckb-v13-1-ci.vsix
+
+  jetbrains:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
+      - name: Build JetBrains plugin
+        run: gradle -p integrations/jetbrains buildPlugin --no-daemon

@@ -8,6 +8,16 @@ pub mod test_coverage;
 pub mod memory;
 pub mod causal;
 pub mod activity;
+pub mod intelligence_fabric;
+pub mod incremental;
+pub mod query_language;
+pub mod frontier_model_profile;
+pub mod deep_causality;
+pub mod deep_causality_adapter;
+pub mod deep_causality_extractors;
+pub mod deep_causality_advanced;
+pub mod deep_causality_bundle;
+pub mod deep_causality_history;
 
 pub use boundaries::*;
 pub use patterns::*;
@@ -17,6 +27,17 @@ pub use test_coverage::*;
 pub use memory::*;
 pub use causal::*;
 pub use activity::*;
+pub use intelligence_fabric::*;
+pub use incremental::*;
+pub use query_language::*;
+pub use frontier_model_profile::*;
+pub use deep_causality::*;
+pub use deep_causality_adapter::*;
+pub use deep_causality_extractors::*;
+#[allow(unused_imports)]
+pub use deep_causality_advanced::*;
+pub use deep_causality_bundle::*;
+pub use deep_causality_history::*;
 
 use crate::graph::DependencyGraph;
 use crate::types::*;
@@ -98,7 +119,7 @@ impl ArchitectureAnalyzer {
             }
         }
 
-        for cycle in graph.find_cycles()? {
+        for cycle in graph.find_architectural_cycles()? {
             if cycle.len() < 2 { continue; }
             for pair in cycle.windows(2) {
                 let from = pair[0].clone();

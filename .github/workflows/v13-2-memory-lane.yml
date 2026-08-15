@@ -1,0 +1,54 @@
+name: V13.2 Memory Lane
+
+on:
+  pull_request:
+    paths:
+      - 'core/src/analysis/memory_lane*.rs'
+      - 'core/src/analysis/deep_causality_bundle.rs'
+      - 'cli/src/bin/ckb-memory-lane.rs'
+      - 'cli/Cargo.toml'
+      - 'mcp-server/src/bin/memory_lane_mcp.rs'
+      - 'mcp-server/Cargo.toml'
+      - 'schemas/memory-lane-v13.2.schema.json'
+      - '.github/workflows/v13-2-memory-lane.yml'
+  workflow_dispatch:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Core Memory Lane check
+        run: cargo check -p ckb-core --all-targets
+      - name: Memory Lane tests
+        run: cargo test -p ckb-core memory_lane -- --nocapture
+      - name: Memory Lane CLI check
+        run: cargo check -p ckb-cli --bin ckb-memory-lane
+      - name: Memory Lane MCP check
+        run: cargo check -p ckb-mcp-server --bin memory_lane_mcp
+      - name: Full workspace regression
+        run: cargo test --workspace --all-targets
+
+  truth-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse Memory Lane schema
+        run: python -m json.tool schemas/memory-lane-v13.2.schema.json >/dev/null
+      - name: Enforce safe self-improvement boundary
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          src=Path('core/src/analysis/memory_lane.rs').read_text()
+          required=[
+            'auto_apply_allowed: false',
+            'requires_guarded_change: true',
+            'requires_compiler_and_tests: true',
+            'MemoryLaneEvidence::Predicted',
+          ]
+          for item in required:
+            assert item in src, item
+          assert 'std::fs::write' not in src, 'adaptive reasoning core must not directly rewrite source files'
+          PY

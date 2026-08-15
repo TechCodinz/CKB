@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ckb.dev/schemas/model-lifecycle-profile.schema.json",
+  "title": "CKB Frontier Model Lifecycle Record V1",
+  "description": "Primary-source provider lifecycle evidence kept separate from model capability evidence. Calendar dates never infer provider state.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "provider",
+    "model",
+    "providerState",
+    "deprecatedAt",
+    "retirementAt",
+    "retirementDateKind",
+    "recommendedReplacement",
+    "verifiedAt",
+    "source",
+    "note",
+    "synthetic"
+  ],
+  "properties": {
+    "provider": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "model": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "providerState": {
+      "enum": ["active", "legacy", "deprecated", "retired", "preview", "shutdown-scheduled", "shutdown", "unknown"]
+    },
+    "deprecatedAt": { "type": ["string", "null"], "format": "date-time" },
+    "retirementAt": { "type": ["string", "null"], "format": "date-time" },
+    "retirementDateKind": { "enum": ["exact", "tentative", "earliest", null] },
+    "recommendedReplacement": { "type": ["string", "null"], "maxLength": 200 },
+    "verifiedAt": { "type": "string", "format": "date-time" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "reference", "observedAt"],
+      "properties": {
+        "kind": { "enum": ["official-doc", "official-release"] },
+        "reference": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "observedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "note": { "type": "string", "maxLength": 2000 },
+    "synthetic": { "const": false }
+  }
+}

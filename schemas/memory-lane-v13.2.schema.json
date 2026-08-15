@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ckb.dev/schemas/memory-lane-v13.2.schema.json",
+  "title": "CKB V13.2 Memory Lane State",
+  "type": "object",
+  "required": ["version", "profile", "episodes", "max_episodes"],
+  "properties": {
+    "version": { "const": "ckb-memory-lane-v13.2" },
+    "profile": {
+      "type": "object",
+      "required": ["projectId", "generation", "riskThreshold", "strategies"],
+      "properties": {
+        "projectId": { "type": "string", "minLength": 1 },
+        "generation": { "type": "integer", "minimum": 0 },
+        "riskThreshold": { "type": "number", "minimum": 0, "maximum": 1 },
+        "retrievalDepthBias": { "type": "integer" },
+        "runtimeEvidenceWeight": { "type": "number", "minimum": 0 },
+        "validationEvidenceWeight": { "type": "number", "minimum": 0 },
+        "historyEvidenceWeight": { "type": "number", "minimum": 0 },
+        "strategies": { "type": "object" },
+        "stableInvariants": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "rejectedPatterns": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      }
+    },
+    "episodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/episode" },
+      "maxItems": 20000
+    },
+    "max_episodes": { "type": "integer", "minimum": 100, "maximum": 20000 }
+  },
+  "$defs": {
+    "evidence": {
+      "enum": ["static", "runtime", "history", "validation", "human", "predicted"]
+    },
+    "kind": {
+      "enum": ["episodic", "semantic", "procedural", "runtime", "preference", "reflection"]
+    },
+    "episode": {
+      "type": "object",
+      "required": ["id", "projectId", "kind", "title", "summary", "evidence", "confidence", "createdAtMs"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "projectId": { "type": "string", "minLength": 1 },
+        "kind": { "$ref": "#/$defs/kind" },
+        "title": { "type": "string" },
+        "summary": { "type": "string" },
+        "entities": { "type": "array", "items": { "type": "string" } },
+        "strategy": { "type": ["string", "null"] },
+        "predictedScore": { "type": ["number", "null"] },
+        "observedScore": { "type": ["number", "null"] },
+        "evidence": { "$ref": "#/$defs/evidence" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "createdAtMs": { "type": "integer" },
+        "metadata": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    }
+  }
+}

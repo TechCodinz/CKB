@@ -1,0 +1,57 @@
+{
+  "version": "ckb-architecture-constitution-v1",
+  "evidencePolicy": "static-runtime-predicted-separated",
+  "rules": [
+    {
+      "id": "truth.runtime",
+      "blocking": true,
+      "requirement": "Runtime claims require observed telemetry; static reachability is never runtime evidence."
+    },
+    {
+      "id": "truth.prediction",
+      "blocking": true,
+      "requirement": "Simulations and forecasts remain PREDICTED until independently observed or validated."
+    },
+    {
+      "id": "truth.provenance",
+      "blocking": true,
+      "requirement": "Architecture claims exposed to models retain evidence source and reference."
+    },
+    {
+      "id": "identity.source",
+      "blocking": true,
+      "requirement": "Prefer repository-relative source paths, stable symbol IDs and source spans."
+    },
+    {
+      "id": "change.no-silent-mutation",
+      "blocking": true,
+      "requirement": "Reasoning and proposal operations never silently mutate, merge, push or deploy source."
+    },
+    {
+      "id": "change.validate-before-promote",
+      "blocking": true,
+      "requirement": "Production-affecting changes require appropriate compiler, test, contract and security validation before promotion."
+    },
+    {
+      "id": "security.context-minimization",
+      "blocking": true,
+      "requirement": "Compile bounded task-specific context and do not expose secrets or unrelated repository contents."
+    },
+    {
+      "id": "evolution.guarded",
+      "blocking": true,
+      "requirement": "Self-evolution may learn and propose automatically, but production source promotion remains validation-gated and explicit."
+    },
+    {
+      "id": "continuity.snapshot",
+      "blocking": true,
+      "requirement": "Long-running or resumed reasoning must retain an architecture snapshot anchor and explicitly rebase when canonical architecture memory advances."
+    },
+    {
+      "id": "model.identity-neutral",
+      "blocking": true,
+      "requirement": "Provider/model identity may affect transport and context budgeting but cannot change architecture evidence classification or provenance."
+    }
+  ],
+  "synthetic": false
+}

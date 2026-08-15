@@ -1,0 +1,101 @@
+name: V13 Architecture Intelligence Verification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'core/**'
+      - 'cli/**'
+      - 'mcp-server/**'
+      - 'integrations/vscode/**'
+      - 'integrations/jetbrains/**'
+      - 'schemas/**'
+      - 'docs/architecture-intelligence-v13.md'
+      - '.github/workflows/v13-verification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v13-verification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-intelligence:
+    name: Rust core + CLI + Reality server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Check workspace
+        run: cargo check --workspace --all-targets
+      - name: Test workspace
+        run: cargo test --workspace --all-targets
+
+  vscode-v13:
+    name: VS Code V13 TypeScript + VSIX
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: integrations/vscode/package-lock.json
+      - name: Install
+        working-directory: integrations/vscode
+        run: npm ci
+      - name: Compile
+        working-directory: integrations/vscode
+        run: npm run compile
+      - name: Package without publishing
+        working-directory: integrations/vscode
+        run: npx --yes @vscode/vsce@latest package --out ckb-v13-verification.vsix
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ckb-v13-vscode-verification
+          path: integrations/vscode/ckb-v13-verification.vsix
+          retention-days: 14
+
+  jetbrains-v13:
+    name: JetBrains V13 Kotlin + plugin package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
+      - name: Build plugin
+        run: gradle -p integrations/jetbrains buildPlugin --no-daemon --stacktrace
+
+  protocol-schemas:
+    name: V13 protocol schema validity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Parse protocol JSON
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const files = [
+            'schemas/model-capability-profile.schema.json',
+            'schemas/model-lifecycle-profile.schema.json',
+            'schemas/ckb-context-v1.schema.json',
+            'schemas/architecture-constitution-v1.json',
+            'schemas/architecture-query-v1.schema.json',
+          ];
+          for (const file of files) {
+            JSON.parse(fs.readFileSync(file, 'utf8'));
+            console.log(`valid JSON: ${file}`);
+          }
+          NODE

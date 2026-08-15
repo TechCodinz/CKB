@@ -2,7 +2,7 @@
     <id>dev.ckb.jetbrains</id>
     <name>CKB - Invisible Reality Architecture Intelligence</name>
     <vendor email="support@ckb.dev" url="https://ckb.dev">CKB</vendor>
-    <version>1.6.0</version>
+    <version>1.7.0</version>
     <idea-version since-build="233" until-build="243.*"/>
 
     <description><![CDATA[
@@ -16,12 +16,17 @@
             <li>🟢 Live Transmission Field V8 for exact observed HTTP, DB, cache, queue, event, WebSocket and function transitions</li>
             <li>↯ Exact parent/child runtime retracing when telemetry provides safe trace semantics</li>
             <li>⚡ Deep activity hotspots, change sensitivity and architecture boundaries</li>
-            <li>🧠 Bounded architecture memory for AI/model context without dumping the whole repository</li>
+            <li>🧠 V13 model-neutral context compiler with bounded, provenance-backed architecture memory</li>
+            <li>🧭 V13.1 Deep Software Causality for data flow, taint, concurrency, schema/infra/config impact, distributed flow, temporal and cross-repository reasoning</li>
+            <li>🌐 Primary-source-verified frontier model capability/lifecycle catalog with explicit unknown states</li>
+            <li>🧩 Data-driven request compatibility inspection for fast-changing model APIs without executing the request</li>
+            <li>📜 Machine-readable Architecture Constitution for current and future AI models</li>
+            <li>📈 Observed model registry based only on recorded validation outcomes</li>
             <li>🛡️ Evidence-backed architecture findings and dependency drift</li>
-            <li>🔮 Change ripple analysis before code is modified</li>
+            <li>🔮 Change simulation before code is modified, explicitly labeled PREDICTED until validated</li>
             <li>🤖 MCP/agent integration for model-neutral architecture intelligence</li>
         </ul>
-        Runtime animation and source-level runtime context are produced only from observed telemetry; static relationships are never presented as execution.<br><br>
+        Runtime animation and source-level runtime context are produced only from observed telemetry; static relationships are never presented as execution. Model/provider identity never changes CKB evidence truth, capability metadata is never used as an unobserved quality score, and V13.1 simulation/forecast output never promotes itself to observed fact.<br><br>
         Supports IntelliJ IDEA, PyCharm, WebStorm, GoLand, Rider and Android Studio families where platform compatibility permits.
     ]]></description>
 
@@ -40,7 +45,7 @@
                     icon="/icons/ckb_tool_window.svg"
                     factoryClass="dev.ckb.toolwindow.CkbMolecularToolWindowFactory"/>
         <toolWindow id="CKB Semantic Editor"
-                    displayName="CKB Semantic Editor V10"
+                    displayName="CKB Semantic Editor V13"
                     anchor="right"
                     secondary="true"
                     icon="/icons/ckb_tool_window.svg"
@@ -82,6 +87,30 @@
                     icon="AllIcons.Debugger.Watch">
                 <keyboard-shortcut keymap="$default" first-keystroke="shift ctrl I"/>
             </action>
+            <action id="CkbDeepCausalityV131Action"
+                    class="dev.ckb.actions.DeepCausalityV131Action"
+                    text="Deep Software Causality"
+                    description="Run V13.1 data-flow, taint, concurrency, schema/infra/config, distributed, temporal, cross-repository, ownership and change-simulation intelligence"/>
+            <action id="CkbCompileModelContextV13Action"
+                    class="dev.ckb.actions.CompileArchitectureContextV13Action"
+                    text="Compile Model Architecture Context at Cursor"
+                    description="Compile bounded V13 architecture evidence for any model/agent without dumping the repository"/>
+            <action id="CkbObservedModelRegistryV13Action"
+                    class="dev.ckb.actions.ShowObservedModelRegistryV13Action"
+                    text="Show Observed Model Registry"
+                    description="Inspect model/task outcomes learned only from recorded CKB validation evidence"/>
+            <action id="CkbVerifiedFrontierModelCatalogV13Action"
+                    class="dev.ckb.actions.ShowVerifiedFrontierModelCatalogV13Action"
+                    text="Show Verified Frontier Model Catalog"
+                    description="Inspect primary-source-verified frontier model capabilities, lifecycle, freshness and API constraints"/>
+            <action id="CkbCheckFrontierModelRequestV13Action"
+                    class="dev.ckb.actions.CheckFrontierModelRequestV13Action"
+                    text="Check JSON Request Against Frontier Model"
+                    description="Inspect the active JSON request against verified model-specific API constraints without executing it"/>
+            <action id="CkbArchitectureConstitutionV13Action"
+                    class="dev.ckb.actions.ShowArchitectureConstitutionV13Action"
+                    text="Show Architecture Constitution"
+                    description="Inspect the machine-readable truth and guarded-evolution rules used by CKB V13"/>
             <action id="CkbCloudContinuityAction"
                     class="dev.ckb.actions.ContinueSemanticRealityInCloudAction"
                     text="Continue Cursor Reality in CKB Cloud"
@@ -104,6 +133,10 @@
                     text="CKB: Analyze Change Ripple Here"
                     description="Predict architectural impact at this source location"
                     icon="AllIcons.Debugger.Watch"/>
+            <action id="CkbCompileModelContextV13ContextAction"
+                    class="dev.ckb.actions.CompileArchitectureContextV13Action"
+                    text="CKB: Compile Model Architecture Context Here"
+                    description="Compile bounded V13 architecture memory around this cursor"/>
             <action id="CkbCloudContinuityContextAction"
                     class="dev.ckb.actions.ContinueSemanticRealityInCloudAction"
                     text="CKB: Continue Cursor Reality in Cloud"

@@ -8,6 +8,14 @@ description = "CKB CLI - Architectural intelligence for AI-era development"
 name = "ckb-cli"
 path = "src/main.rs"
 
+[[bin]]
+name = "ckb-causality"
+path = "src/bin/ckb-causality.rs"
+
+[[bin]]
+name = "ckb-memory-lane"
+path = "src/bin/ckb-memory-lane.rs"
+
 [dependencies]
 ckb-core = { path = "../core", version = "0.1.0" }
 clap = { version = "4.4", features = ["derive"] }

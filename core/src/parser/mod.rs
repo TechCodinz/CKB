@@ -36,17 +36,28 @@ impl LanguageParser {
         Self { parsers }
     }
 
-    pub async fn parse_file(&self, path: &str) -> Result<FileAnalysis> {
+    fn parser_for_path(&self, path: &str) -> Result<&(dyn LanguageParserTrait + Send + Sync)> {
         let extension = Path::new(path)
             .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("");
+        self.parsers.get(extension)
+            .map(|parser| parser.as_ref())
+            .ok_or_else(|| anyhow::anyhow!("Unsupported file type: {}", extension))
+    }
 
-        let parser = self.parsers.get(extension)
-            .ok_or_else(|| anyhow::anyhow!("Unsupported file type: {}", extension))?;
-
+    pub async fn parse_file(&self, path: &str) -> Result<FileAnalysis> {
         let content = tokio::fs::read_to_string(path).await?;
-        parser.parse(path, &content)
+        self.parse_content(path, &content)
+    }
+
+    /// Parse caller-supplied source under a stable repository-relative path.
+    /// This is used by incremental IDE/repository learning so CKB can reparse
+    /// only verified changed files without requiring a full repository rescan.
+    /// The caller remains responsible for source authorization and transport;
+    /// the parser never uploads source on its own.
+    pub fn parse_content(&self, path: &str, content: &str) -> Result<FileAnalysis> {
+        self.parser_for_path(path)?.parse(path, content)
     }
 
     pub fn is_supported_extension(&self, ext: &std::ffi::OsStr) -> bool {
@@ -64,7 +75,11 @@ pub trait LanguageParserTrait: Send + Sync {
     fn parse(&self, path: &str, content: &str) -> Result<FileAnalysis>;
 }
 
-#[derive(Debug, Clone)]
+/// Persistable parsed source evidence. Storing this normalized AST-derived
+/// representation lets incremental learning rebuild cross-file resolution after
+/// a small change without reparsing every unchanged source file. It contains no
+/// source text.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FileAnalysis {
     pub path: String,
     pub nodes: Vec<Node>,

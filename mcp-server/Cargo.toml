@@ -32,6 +32,14 @@ path = "src/bin/architecture_memory_mcp_v3.rs"
 name = "build_diagnostic_server"
 path = "src/bin/build_diagnostic_server.rs"
 
+[[bin]]
+name = "deep_causality_mcp"
+path = "src/bin/deep_causality_mcp.rs"
+
+[[bin]]
+name = "memory_lane_mcp"
+path = "src/bin/memory_lane_mcp.rs"
+
 [dependencies]
 ckb-core = { path = "../core", version = "0.1.0" }
 axum = "0.7"

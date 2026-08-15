@@ -155,7 +155,7 @@ impl Rule for CircularDependencyRule {
         let mut violations = Vec::new();
         
         // Find cycles in graph
-        let cycles = graph.find_cycles()?;
+        let cycles = graph.find_architectural_cycles()?;
         
         for cycle in cycles {
             violations.push(DriftViolation {

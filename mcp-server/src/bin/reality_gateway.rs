@@ -12,7 +12,7 @@ use serde_json::{json, Map, Value};
 use std::{
     collections::HashMap,
     net::SocketAddr,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::Arc,
     time::Duration,
 };

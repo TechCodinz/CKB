@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ckb.dev/schemas/architecture-query-v1.schema.json",
+  "title": "CKB Architecture Query Language V1 Operation",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "query", "depth", "limit"],
+      "properties": {
+        "kind": { "const": "memory" },
+        "query": { "type": "string", "minLength": 1, "maxLength": 12000 },
+        "depth": { "type": "integer", "minimum": 1, "maximum": 8 },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 250 }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "source", "target", "depth"],
+      "properties": {
+        "kind": { "const": "path" },
+        "source": { "type": "string", "minLength": 1 },
+        "target": { "type": "string", "minLength": 1 },
+        "depth": { "type": "integer", "minimum": 1, "maximum": 32 }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "symbolId", "depth"],
+      "properties": {
+        "kind": { "const": "dependents" },
+        "symbolId": { "type": "string", "minLength": 1 },
+        "depth": { "type": "integer", "minimum": 1, "maximum": 32 }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "file", "line"],
+      "properties": {
+        "kind": { "const": "impact" },
+        "file": { "type": "string", "minLength": 1 },
+        "line": { "type": "integer", "minimum": 1 }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": { "const": "dna" },
+        "symbolId": { "type": ["string", "null"] }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": { "const": "history" },
+        "snapshotId": { "type": ["string", "null"] }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "fromSnapshot", "toSnapshot"],
+      "properties": {
+        "kind": { "const": "diff" },
+        "fromSnapshot": { "type": "string", "minLength": 1 },
+        "toSnapshot": { "type": "string", "minLength": 1 }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": { "const": "runtime" },
+        "identity": { "type": ["string", "null"] }
+      }
+    }
+  ]
+}

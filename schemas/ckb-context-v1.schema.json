@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ckb.dev/schemas/ckb-context-v1.schema.json",
+  "title": "CKB Compiled Architecture Context V1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "version",
+    "fabricVersion",
+    "task",
+    "query",
+    "sections",
+    "evidenceLedger",
+    "evidencePolicy",
+    "constitution",
+    "synthetic"
+  ],
+  "properties": {
+    "version": { "const": "ckb-context-v1" },
+    "fabricVersion": { "type": "string" },
+    "task": { "enum": ["understand", "explain", "change", "debug", "review", "migrate", "optimize", "security"] },
+    "query": { "type": "string" },
+    "sourceMemoryVersion": { "type": "string" },
+    "sourceRootIds": { "type": "array", "items": { "type": "string" } },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "content"],
+        "properties": {
+          "id": { "type": "string" },
+          "evidenceClass": { "type": ["string", "null"], "enum": ["static", "runtime", "predicted", "history", "human", "validation", null] },
+          "content": { "type": "string" }
+        }
+      }
+    },
+    "evidenceLedger": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "class", "source", "reference", "synthetic"],
+        "properties": {
+          "id": { "type": "string" },
+          "class": { "enum": ["static", "runtime", "predicted", "history", "human", "validation"] },
+          "source": { "type": "string" },
+          "reference": { "type": "string" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "observedAt": { "type": ["string", "null"] },
+          "synthetic": { "const": false }
+        }
+      }
+    },
+    "includedNodes": { "type": "integer", "minimum": 0 },
+    "includedEdges": { "type": "integer", "minimum": 0 },
+    "runtimeEvidenceRecords": { "type": "integer", "minimum": 0 },
+    "predictedEvidenceRecords": { "type": "integer", "minimum": 0 },
+    "charCount": { "type": "integer", "minimum": 0 },
+    "truncated": { "type": "boolean" },
+    "evidencePolicy": { "const": "static-runtime-predicted-separated" },
+    "constitution": { "type": "object" },
+    "modelProfile": { "type": "object" },
+    "synthetic": { "const": false }
+  }
+}

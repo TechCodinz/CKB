@@ -1,13 +1,16 @@
 //! OpenTelemetry OTLP Native Receiver
-//! Accepts OTLP/HTTP JSON span payloads and maps them to CKB graph NodeIds.
+//! Accepts OTLP/HTTP JSON span payloads and maps them to CKB runtime identities.
 //!
-//! Architecture Intelligence V2 rule: runtime observations must preserve
-//! provenance and source identity where available. A span name is only used as
-//! a final fallback because names alone are frequently ambiguous across files.
+//! V13 truth rule: runtime may be attached to a source graph node only when the
+//! telemetry contains a repository-resolvable source identity. Names,
+//! namespaces, service names and basenames are useful runtime evidence, but are
+//! not sufficient to claim which same-named source symbol executed.
 
 use serde::{Deserialize, Serialize};
 use crate::types::{NodeId, RuntimeMetrics};
 use std::collections::HashMap;
+
+pub const UNRESOLVED_RUNTIME_PREFIX: &str = "runtime-unresolved/";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OtlpSpan {
@@ -34,6 +37,10 @@ pub struct OtlpIngestReport {
     pub nodes_updated: usize,
     pub error_spans: usize,
     pub hotpath_nodes: Vec<String>,
+    /// Runtime identities that were observed but could not be safely attached
+    /// to an exact source graph NodeId. They remain runtime evidence rather
+    /// than being guessed onto a same-named symbol.
+    pub unresolved_runtime_identities: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -146,24 +153,69 @@ impl OtlpReceiver {
         spans
     }
 
+    fn safe_runtime_component(value: &str) -> String {
+        value.trim()
+            .replace('\\', "/")
+            .replace("::", "/")
+            .replace(['\n', '\r', '\t'], " ")
+            .chars()
+            .take(300)
+            .collect()
+    }
+
+    fn unresolved_identity(kind: &str, parts: &[&str]) -> NodeId {
+        let payload = parts.iter()
+            .map(|part| Self::safe_runtime_component(part))
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join("/");
+        NodeId(format!("{}{}{}{}",
+            UNRESOLVED_RUNTIME_PREFIX,
+            kind,
+            if payload.is_empty() { "" } else { "/" },
+            payload,
+        ))
+    }
+
     fn canonical_node_id(span: &NormalizedSpan) -> NodeId {
-        let file = span.attributes.get("code.file.path")
-            .or_else(|| span.attributes.get("code.filepath"))
-            .or_else(|| span.attributes.get("code.file.name"));
+        // Only a path-bearing code identity can be attached directly to a CKB
+        // source node. `code.file.name` is intentionally not accepted here: a
+        // basename such as `index.ts` is ambiguous across a real repository.
+        let file_path = span.attributes.get("code.file.path")
+            .or_else(|| span.attributes.get("code.filepath"));
+        let file_name = span.attributes.get("code.file.name");
         let function = span.attributes.get("code.function.name")
             .or_else(|| span.attributes.get("code.function"))
             .or_else(|| span.attributes.get("function.name"));
         let namespace = span.attributes.get("code.namespace")
             .or_else(|| span.attributes.get("service.name"));
 
-        match (file, function, namespace) {
-            (Some(file), Some(function), _) => NodeId(format!("{}::{}", file.replace('\\', "/"), function)),
-            (Some(file), None, _) => NodeId(format!("{}::file", file.replace('\\', "/"))),
-            (None, Some(function), Some(ns)) => NodeId(format!("{}::{}", ns, function)),
-            (None, Some(function), None) => NodeId(function.clone()),
-            (None, None, Some(ns)) => NodeId(format!("{}::{}", ns, span.name)),
-            _ => NodeId(span.name.clone()),
+        match (file_path, function) {
+            (Some(file), Some(function)) => NodeId(format!("{}::{}", file.replace('\\', "/"), function)),
+            (Some(file), None) => NodeId(format!("{}::file", file.replace('\\', "/"))),
+            (None, Some(function)) => {
+                if let Some(namespace) = namespace {
+                    Self::unresolved_identity("namespace-function", &[namespace, function])
+                } else if let Some(file_name) = file_name {
+                    Self::unresolved_identity("basename-function", &[file_name, function])
+                } else {
+                    Self::unresolved_identity("function", &[function])
+                }
+            }
+            (None, None) => {
+                if let Some(namespace) = namespace {
+                    Self::unresolved_identity("namespace-span", &[namespace, &span.name])
+                } else if let Some(file_name) = file_name {
+                    Self::unresolved_identity("basename-span", &[file_name, &span.name])
+                } else {
+                    Self::unresolved_identity("span", &[&span.name])
+                }
+            }
         }
+    }
+
+    pub fn is_unresolved_runtime_identity(id: &NodeId) -> bool {
+        id.0.starts_with(UNRESOLVED_RUNTIME_PREFIX)
     }
 
     pub fn ingest_spans(raw_payload: &str) -> anyhow::Result<HashMap<NodeId, RuntimeMetrics>> {
@@ -204,12 +256,16 @@ impl OtlpReceiver {
             .map(|(id, _)| id.0.clone())
             .collect();
         let error_spans = metrics.values().filter(|m| m.error_rate > 0.0).count();
+        let unresolved_runtime_identities = metrics.keys()
+            .filter(|id| Self::is_unresolved_runtime_identity(id))
+            .count();
 
         OtlpIngestReport {
             spans_ingested: metrics.values().map(|m| m.execution_count as usize).sum(),
-            nodes_updated: metrics.len(),
+            nodes_updated: metrics.len().saturating_sub(unresolved_runtime_identities),
             error_spans,
             hotpath_nodes: hotpaths,
+            unresolved_runtime_identities,
         }
     }
 }
@@ -219,7 +275,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ingests_all_standard_otlp_resources_and_maps_source_identity() {
+    fn ingests_all_standard_otlp_resources_and_maps_exact_source_identity() {
         let payload = r#"{
           "resourceSpans": [{"scopeSpans": [{"spans": [
             {"name":"login","startTimeUnixNano":"1000000","endTimeUnixNano":"3000000","attributes":[
@@ -238,16 +294,52 @@ mod tests {
         assert_eq!(m.execution_count, 2);
         assert!((m.avg_latency_ms - 3.5).abs() < 0.001);
         assert!((m.error_rate - 0.5).abs() < 0.001);
+        assert_eq!(OtlpReceiver::summarize(&metrics).unresolved_runtime_identities, 0);
     }
 
     #[test]
-    fn numeric_otlp_ok_is_not_an_error_but_numeric_error_is() {
+    fn name_only_spans_remain_unresolved_and_cannot_equal_source_node_names() {
         let payload = r#"[
           {"name":"ok","startTimeUnixNano":"0","endTimeUnixNano":"1000000","attributes":{},"status":{"code":1}},
           {"name":"bad","startTimeUnixNano":"0","endTimeUnixNano":"1000000","attributes":{},"status":{"code":2}}
         ]"#;
         let metrics = OtlpReceiver::ingest_spans(payload).unwrap();
-        assert_eq!(metrics.get(&NodeId("ok".into())).unwrap().error_rate, 0.0);
-        assert_eq!(metrics.get(&NodeId("bad".into())).unwrap().error_rate, 1.0);
+        let ok = metrics.iter().find(|(id, _)| id.0.ends_with("/ok")).unwrap();
+        let bad = metrics.iter().find(|(id, _)| id.0.ends_with("/bad")).unwrap();
+        assert!(OtlpReceiver::is_unresolved_runtime_identity(ok.0));
+        assert!(OtlpReceiver::is_unresolved_runtime_identity(bad.0));
+        assert_ne!(ok.0.0, "ok");
+        assert_ne!(bad.0.0, "bad");
+        assert_eq!(ok.1.error_rate, 0.0);
+        assert_eq!(bad.1.error_rate, 1.0);
+        assert_eq!(OtlpReceiver::summarize(&metrics).unresolved_runtime_identities, 2);
+    }
+
+    #[test]
+    fn namespace_function_is_runtime_evidence_but_not_source_identity() {
+        let payload = r#"[
+          {"name":"work","startTimeUnixNano":"0","endTimeUnixNano":"1000000","attributes":[
+            {"key":"service.name","value":{"stringValue":"billing"}},
+            {"key":"code.function.name","value":{"stringValue":"work"}}
+          ],"status":{"code":1}}
+        ]"#;
+        let metrics = OtlpReceiver::ingest_spans(payload).unwrap();
+        let id = metrics.keys().next().unwrap();
+        assert!(id.0.starts_with("runtime-unresolved/namespace-function/billing/work"));
+        assert!(!id.0.ends_with("::work"));
+    }
+
+    #[test]
+    fn basename_is_not_promoted_to_repository_path() {
+        let payload = r#"[
+          {"name":"login","startTimeUnixNano":"0","endTimeUnixNano":"1000000","attributes":[
+            {"key":"code.file.name","value":{"stringValue":"index.ts"}},
+            {"key":"code.function.name","value":{"stringValue":"login"}}
+          ],"status":{"code":1}}
+        ]"#;
+        let metrics = OtlpReceiver::ingest_spans(payload).unwrap();
+        let id = metrics.keys().next().unwrap();
+        assert!(id.0.starts_with("runtime-unresolved/basename-function/index.ts/login"));
+        assert_ne!(id.0, "index.ts::login");
     }
 }

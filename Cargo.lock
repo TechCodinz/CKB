@@ -433,7 +433,6 @@ name = "ckb-wasm"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "ckb-core",
  "serde",
  "serde_json",
  "wasm-bindgen",
