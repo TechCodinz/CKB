@@ -1,0 +1,81 @@
+name: Publish JetBrains Plugin
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'integrations/jetbrains/**'
+      - '.github/workflows/publish-jetbrains.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jetbrains-marketplace-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish-jetbrains:
+    name: Build and publish to JetBrains Marketplace
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.5
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
+
+      - name: Read plugin version
+        id: release
+        working-directory: integrations/jetbrains
+        shell: bash
+        run: |
+          VERSION="$(sed -n "s/^version = '\([^']*\)'/\1/p" build.gradle | head -1)"
+          test -n "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Compile plugin
+        working-directory: integrations/jetbrains
+        run: gradle compileKotlin --no-daemon
+
+      - name: Build plugin distribution
+        working-directory: integrations/jetbrains
+        run: gradle buildPlugin --no-daemon
+
+      - name: Upload plugin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ckb-jetbrains-${{ steps.release.outputs.version }}
+          path: integrations/jetbrains/build/distributions/*
+          retention-days: 90
+
+      - name: Publish to JetBrains Marketplace
+        working-directory: integrations/jetbrains
+        env:
+          PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN || secrets.JETBRAINS_MARKETPLACE_TOKEN || secrets.JETBRAINS_TOKEN || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$PUBLISH_TOKEN" ]]; then
+            echo "::error::JetBrains Marketplace credential is missing. Configure PUBLISH_TOKEN (or JETBRAINS_MARKETPLACE_TOKEN / JETBRAINS_TOKEN) in repository Actions secrets."
+            exit 1
+          fi
+          gradle publishPlugin --no-daemon
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          echo "### CKB JetBrains Marketplace" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Plugin XML ID: dev.ckb.jetbrains" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Version: ${{ steps.release.outputs.version || 'not evaluated' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Channel: Stable" >> "$GITHUB_STEP_SUMMARY"
