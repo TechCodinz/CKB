@@ -1,0 +1,93 @@
+name: Open VSX Public Package Smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'integrations/vscode/**'
+      - '.github/workflows/publish-openvsx.yml'
+      - '.github/workflows/smoke-openvsx.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ckb-openvsx-smoke
+  cancel-in-progress: true
+
+jobs:
+  registry:
+    name: Verify public Open VSX package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Read expected extension identity
+        id: expected
+        working-directory: integrations/vscode
+        shell: bash
+        run: |
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "publisher=$(node -p "require('./package.json').publisher")" >> "$GITHUB_OUTPUT"
+          echo "name=$(node -p "require('./package.json').name")" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve latest package from Open VSX
+        shell: bash
+        env:
+          EXPECTED_VERSION: ${{ steps.expected.outputs.version }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 30 \
+            'https://open-vsx.org/api/TechCodinz/ckb-vscode/latest' -o /tmp/openvsx.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const data = JSON.parse(fs.readFileSync('/tmp/openvsx.json', 'utf8'));
+          const expected = process.env.EXPECTED_VERSION;
+          if (data.version !== expected) {
+            throw new Error(`Open VSX latest is ${data.version}, expected ${expected}`);
+          }
+          const download = data.files?.download;
+          if (!download || typeof download !== 'string') throw new Error('Open VSX metadata has no package download URL');
+          fs.writeFileSync('/tmp/download-url.txt', download);
+          console.log(`Open VSX latest version: ${data.version}`);
+          NODE
+
+      - name: Download and inspect published VSIX
+        shell: bash
+        env:
+          EXPECTED_VERSION: ${{ steps.expected.outputs.version }}
+          EXPECTED_PUBLISHER: ${{ steps.expected.outputs.publisher }}
+          EXPECTED_NAME: ${{ steps.expected.outputs.name }}
+        run: |
+          set -euo pipefail
+          DOWNLOAD_URL="$(cat /tmp/download-url.txt)"
+          curl --fail --silent --show-error --location --max-time 60 "$DOWNLOAD_URL" -o /tmp/ckb-public.vsix
+          test -s /tmp/ckb-public.vsix
+          unzip -p /tmp/ckb-public.vsix extension/package.json >/tmp/published-package.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('/tmp/published-package.json', 'utf8'));
+          const checks = {
+            publisher: process.env.EXPECTED_PUBLISHER,
+            name: process.env.EXPECTED_NAME,
+            version: process.env.EXPECTED_VERSION,
+          };
+          for (const [key, expected] of Object.entries(checks)) {
+            if (String(pkg[key]) !== String(expected)) throw new Error(`Published ${key}=${pkg[key]}, expected ${expected}`);
+          }
+          if (!pkg.main) throw new Error('Published CKB extension has no main entrypoint');
+          console.log(`Verified public ${pkg.publisher}.${pkg.name} v${pkg.version} (${pkg.main})`);
+          NODE
+
+      - name: Public listing reachability
+        shell: bash
+        run: |
+          curl --fail --silent --show-error --location --max-time 30 \
+            'https://open-vsx.org/extension/TechCodinz/ckb-vscode' >/tmp/openvsx-listing.html
+          test -s /tmp/openvsx-listing.html
+          echo 'CKB public Open VSX listing is reachable.'
