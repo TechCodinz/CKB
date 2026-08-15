@@ -7,125 +7,537 @@
   "icon": "icon.png",
   "license": "MIT",
   "pricing": "Trial",
-  "repository": { "type": "git", "url": "https://github.com/TechCodinz/CKB" },
-  "keywords": ["architecture","dependency","analysis","mcp","ai","code-quality","architecture-memory","runtime-intelligence","blast-radius","code-graph","data-flow","observability","software-visualization","code-intelligence","opentelemetry","distributed-tracing","semantic-zoom","runtime-tracing","cloud-continuity","guarded-change","raiziom","model-context","architecture-intelligence","frontier-models","model-compatibility","taint-analysis","concurrency","schema-impact","infrastructure-as-code","software-causality"],
-  "engines": { "vscode": "^1.85.0" },
-  "categories": ["Linters","Other","Programming Languages","Visualization"],
-  "activationEvents": ["onStartupFinished","onView:ckb.realityView","onUri"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TechCodinz/CKB"
+  },
+  "keywords": [
+    "architecture",
+    "dependency",
+    "analysis",
+    "mcp",
+    "ai",
+    "code-quality",
+    "architecture-memory",
+    "runtime-intelligence",
+    "blast-radius",
+    "code-graph",
+    "data-flow",
+    "observability",
+    "software-visualization",
+    "code-intelligence",
+    "opentelemetry",
+    "distributed-tracing",
+    "semantic-zoom",
+    "runtime-tracing",
+    "cloud-continuity",
+    "guarded-change",
+    "raiziom",
+    "model-context",
+    "architecture-intelligence",
+    "frontier-models",
+    "model-compatibility",
+    "taint-analysis",
+    "concurrency",
+    "schema-impact",
+    "infrastructure-as-code",
+    "software-causality"
+  ],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Linters",
+    "Other",
+    "Programming Languages",
+    "Visualization"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:ckb.realityView",
+    "onUri"
+  ],
   "main": "./out/extensionV6.js",
   "contributes": {
-    "viewsContainers": { "activitybar": [{ "id": "ckb-reality", "title": "CKB Invisible Reality", "icon": "icon.png" }] },
-    "views": { "ckb-reality": [{ "type": "webview", "id": "ckb.realityView", "name": "Invisible Reality V13", "contextualTitle": "CKB Semantic Editor + Model Intelligence Fabric + Guarded Change" }] },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ckb-reality",
+          "title": "CKB Invisible Reality",
+          "icon": "icon.png"
+        }
+      ]
+    },
+    "views": {
+      "ckb-reality": [
+        {
+          "type": "webview",
+          "id": "ckb.realityView",
+          "name": "Invisible Reality V13",
+          "contextualTitle": "CKB Semantic Editor + Model Intelligence Fabric + Guarded Change"
+        }
+      ]
+    },
     "commands": [
-      { "command": "ckb.openReality", "title": "CKB: Open Invisible Reality", "icon": "$(telescope)" },
-      { "command": "ckb.deepCausality", "title": "CKB: Deep Software Causality", "icon": "$(circuit-board)" },
-      { "command": "ckb.inspectSemanticReality", "title": "CKB: Inspect Semantic Reality at Cursor", "icon": "$(symbol-namespace)" },
-      { "command": "ckb.semanticZoomIn", "title": "CKB: Semantic Zoom In", "icon": "$(zoom-in)" },
-      { "command": "ckb.semanticZoomOut", "title": "CKB: Semantic Zoom Out", "icon": "$(zoom-out)" },
-      { "command": "ckb.semanticZoomAuto", "title": "CKB: Semantic Zoom Auto", "icon": "$(sparkle)" },
-      { "command": "ckb.askRaiziomAtCursor", "title": "CKB: Ask Raiziom at Cursor (In IDE)", "icon": "$(comment-discussion)" },
-      { "command": "ckb.compileArchitectureContextAtCursor", "title": "CKB: Compile Model Architecture Context at Cursor", "icon": "$(package)" },
-      { "command": "ckb.showObservedModelRegistry", "title": "CKB: Show Observed Model Registry", "icon": "$(graph)" },
-      { "command": "ckb.showVerifiedFrontierModelCatalog", "title": "CKB: Show Verified Frontier Model Catalog", "icon": "$(verified-filled)" },
-      { "command": "ckb.checkFrontierModelRequest", "title": "CKB: Check JSON Request Against Frontier Model", "icon": "$(debug-alt-small)" },
-      { "command": "ckb.showArchitectureConstitution", "title": "CKB: Show Architecture Constitution", "icon": "$(law)" },
-      { "command": "ckb.prepareGuardedChangeAtCursor", "title": "CKB: Prepare Guarded Change at Cursor", "icon": "$(shield)" },
-      { "command": "ckb.validateGuardedWorkspaceChange", "title": "CKB: Validate Guarded Workspace Change", "icon": "$(verified)" },
-      { "command": "ckb.commitGuardedChange", "title": "CKB: Commit Validated Guarded Change", "icon": "$(git-commit)" },
-      { "command": "ckb.rollbackGuardedChange", "title": "CKB: Roll Back Guarded Change", "icon": "$(discard)" },
-      { "command": "ckb.openGuardedChangeReality", "title": "CKB: Open Guarded Change Reality", "icon": "$(git-compare)" },
-      { "command": "ckb.continueSemanticRealityInCloud", "title": "CKB: Continue Cursor Reality in Cloud", "icon": "$(cloud-upload)" },
-      { "command": "ckb.askRaiziomAboutCursor", "title": "CKB: Ask Raiziom About Cursor Reality in Cloud", "icon": "$(globe)" },
-      { "command": "ckb.revealArchitecture", "title": "CKB: Reveal My Architecture", "icon": "$(sparkle)" },
-      { "command": "ckb.shareRealitySnapshot", "title": "CKB: Share Reality Snapshot", "icon": "$(share)" },
-      { "command": "ckb.openCloudContinuity", "title": "CKB: Continue in Cloud Living Universe", "icon": "$(globe)" },
-      { "command": "ckb.explainCloudValue", "title": "CKB: Explore Cloud Reality Capabilities", "icon": "$(layers)" },
-      { "command": "ckb.deepActivity", "title": "CKB: Deep Activity Analysis", "icon": "$(pulse)" },
-      { "command": "ckb.queryMemory", "title": "CKB: Query Architecture Memory", "icon": "$(database)" },
-      { "command": "ckb.scan", "title": "CKB: Scan Project", "icon": "$(search)" },
-      { "command": "ckb.check", "title": "CKB: Check Architecture", "icon": "$(shield)" },
-      { "command": "ckb.impact", "title": "CKB: Analyze Change Ripple at Cursor", "icon": "$(git-compare)" },
-      { "command": "ckb.openExplorer", "title": "CKB: Open Cloud Living Universe", "icon": "$(globe)" },
-      { "command": "ckb.showStatus", "title": "CKB: Architecture Actions", "icon": "$(info)" },
-      { "command": "ckb.startServer", "title": "CKB: Start MCP Server", "icon": "$(server)" },
-      { "command": "ckb.setApiKey", "title": "CKB: Set API Key", "icon": "$(key)" }
+      {
+        "command": "ckb.openReality",
+        "title": "CKB: Open Invisible Reality",
+        "icon": "$(telescope)"
+      },
+      {
+        "command": "ckb.deepCausality",
+        "title": "CKB: Deep Software Causality",
+        "icon": "$(circuit-board)"
+      },
+      {
+        "command": "ckb.inspectSemanticReality",
+        "title": "CKB: Inspect Semantic Reality at Cursor",
+        "icon": "$(symbol-namespace)"
+      },
+      {
+        "command": "ckb.semanticZoomIn",
+        "title": "CKB: Semantic Zoom In",
+        "icon": "$(zoom-in)"
+      },
+      {
+        "command": "ckb.semanticZoomOut",
+        "title": "CKB: Semantic Zoom Out",
+        "icon": "$(zoom-out)"
+      },
+      {
+        "command": "ckb.semanticZoomAuto",
+        "title": "CKB: Semantic Zoom Auto",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "ckb.askRaiziomAtCursor",
+        "title": "CKB: Ask Raiziom at Cursor (In IDE)",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "ckb.compileArchitectureContextAtCursor",
+        "title": "CKB: Compile Model Architecture Context at Cursor",
+        "icon": "$(package)"
+      },
+      {
+        "command": "ckb.showObservedModelRegistry",
+        "title": "CKB: Show Observed Model Registry",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "ckb.showVerifiedFrontierModelCatalog",
+        "title": "CKB: Show Verified Frontier Model Catalog",
+        "icon": "$(verified-filled)"
+      },
+      {
+        "command": "ckb.checkFrontierModelRequest",
+        "title": "CKB: Check JSON Request Against Frontier Model",
+        "icon": "$(debug-alt-small)"
+      },
+      {
+        "command": "ckb.showArchitectureConstitution",
+        "title": "CKB: Show Architecture Constitution",
+        "icon": "$(law)"
+      },
+      {
+        "command": "ckb.prepareGuardedChangeAtCursor",
+        "title": "CKB: Prepare Guarded Change at Cursor",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "ckb.validateGuardedWorkspaceChange",
+        "title": "CKB: Validate Guarded Workspace Change",
+        "icon": "$(verified)"
+      },
+      {
+        "command": "ckb.commitGuardedChange",
+        "title": "CKB: Commit Validated Guarded Change",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "ckb.rollbackGuardedChange",
+        "title": "CKB: Roll Back Guarded Change",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "ckb.openGuardedChangeReality",
+        "title": "CKB: Open Guarded Change Reality",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "ckb.continueSemanticRealityInCloud",
+        "title": "CKB: Continue Cursor Reality in Cloud",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "ckb.askRaiziomAboutCursor",
+        "title": "CKB: Ask Raiziom About Cursor Reality in Cloud",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "ckb.revealArchitecture",
+        "title": "CKB: Reveal My Architecture",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "ckb.shareRealitySnapshot",
+        "title": "CKB: Share Reality Snapshot",
+        "icon": "$(share)"
+      },
+      {
+        "command": "ckb.openCloudContinuity",
+        "title": "CKB: Continue in Cloud Living Universe",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "ckb.explainCloudValue",
+        "title": "CKB: Explore Cloud Reality Capabilities",
+        "icon": "$(layers)"
+      },
+      {
+        "command": "ckb.deepActivity",
+        "title": "CKB: Deep Activity Analysis",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "ckb.queryMemory",
+        "title": "CKB: Query Architecture Memory",
+        "icon": "$(database)"
+      },
+      {
+        "command": "ckb.scan",
+        "title": "CKB: Scan Project",
+        "icon": "$(search)"
+      },
+      {
+        "command": "ckb.check",
+        "title": "CKB: Check Architecture",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "ckb.impact",
+        "title": "CKB: Analyze Change Ripple at Cursor",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "ckb.openExplorer",
+        "title": "CKB: Open Cloud Living Universe",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "ckb.showStatus",
+        "title": "CKB: Architecture Actions",
+        "icon": "$(info)"
+      },
+      {
+        "command": "ckb.startServer",
+        "title": "CKB: Start MCP Server",
+        "icon": "$(server)"
+      },
+      {
+        "command": "ckb.setApiKey",
+        "title": "CKB: Set API Key",
+        "icon": "$(key)"
+      }
     ],
     "keybindings": [
-      { "command": "ckb.impact", "key": "shift+ctrl+i", "mac": "shift+cmd+i", "when": "editorTextFocus" },
-      { "command": "ckb.queryMemory", "key": "shift+ctrl+m", "mac": "shift+cmd+m" },
-      { "command": "ckb.inspectSemanticReality", "key": "shift+alt+r", "mac": "shift+alt+r", "when": "editorTextFocus" },
-      { "command": "ckb.semanticZoomIn", "key": "shift+alt+]", "mac": "shift+alt+]", "when": "editorTextFocus" },
-      { "command": "ckb.semanticZoomOut", "key": "shift+alt+[", "mac": "shift+alt+[", "when": "editorTextFocus" },
-      { "command": "ckb.compileArchitectureContextAtCursor", "key": "shift+alt+c", "mac": "shift+alt+c", "when": "editorTextFocus" }
+      {
+        "command": "ckb.impact",
+        "key": "shift+ctrl+i",
+        "mac": "shift+cmd+i",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "ckb.queryMemory",
+        "key": "shift+ctrl+m",
+        "mac": "shift+cmd+m"
+      },
+      {
+        "command": "ckb.inspectSemanticReality",
+        "key": "shift+alt+r",
+        "mac": "shift+alt+r",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "ckb.semanticZoomIn",
+        "key": "shift+alt+]",
+        "mac": "shift+alt+]",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "ckb.semanticZoomOut",
+        "key": "shift+alt+[",
+        "mac": "shift+alt+[",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "ckb.compileArchitectureContextAtCursor",
+        "key": "shift+alt+c",
+        "mac": "shift+alt+c",
+        "when": "editorTextFocus"
+      }
     ],
     "configuration": {
       "title": "CKB Invisible Reality Architecture Intelligence",
       "properties": {
-        "ckb.serverUrl": { "type": "string", "default": "http://localhost:3000", "description": "CKB Reality server used for local/static/runtime intelligence. A remote server cannot read local filesystem paths unless the project was scanned through a supported remote source flow." },
-        "ckb.apiKey": { "type": "string", "default": "", "markdownDescription": "API key sent as `X-API-Key` only to the configured `ckb.serverUrl`. A `ckb_live_` key can also be used as the guarded-change Cloud fallback; direct guarded-change entry stores Cloud keys in VS Code SecretStorage.", "editPresentation": "singlelineText" },
-        "ckb.runtimeProjectId": { "type": "string", "default": "", "description": "Optional Reality Engine project id used only for runtime/traces polling. Leave blank for the current/default project on a local CKB server." },
-        "ckb.liveRuntimePolling": { "type": "boolean", "default": true, "description": "Continuously refresh evidence-backed runtime/traces in Invisible Reality. Static relations are never animated as runtime." },
-        "ckb.runtimePollIntervalMs": { "type": "number", "default": 2500, "minimum": 1000, "maximum": 30000, "description": "Polling interval while exact Live Reality evidence is available. Offline/waiting states automatically back off." },
-        "ckb.runtimeRequestTimeoutMs": { "type": "number", "default": 8000, "minimum": 3000, "maximum": 30000, "description": "Timeout for runtime/traces reads from the configured CKB Reality server." },
-        "ckb.editorSemanticReality": { "type": "boolean", "default": true, "description": "Enable cursor-driven semantic editor reality. CKB derives LINE/CALL/SYMBOL/FILE/SUBSYSTEM/SYSTEM depth from selection and visible editor scale, and only highlights runtime when exact observed trace evidence maps to the current source." },
-        "ckb.cloudApiUrl": { "type": "string", "default": "https://ckb-backend-api.onrender.com", "description": "Authenticated CKB Cloud API used for Raiziom evidence, model-neutral context compilation, verified frontier-model compatibility metadata and guarded transactions. Source contents and absolute local filesystem paths are not uploaded by this client; selected relative architecture identifiers/coordinates may be sent as context." },
-        "ckb.cloudProjectId": { "type": "string", "default": "current", "description": "CKB Cloud project identity used by in-IDE architecture intelligence, Raiziom and guarded-change requests. It must match the Cloud project whose architecture evidence should be authoritative." },
-        "ckb.cliBinary": { "type": "string", "default": "ckb", "description": "Executable name/path for the standard CKB CLI." },
-        "ckb.intelligenceBinary": { "type": "string", "default": "ckb-intelligence", "description": "Executable name/path for the high-performance CKB IDE intelligence facade." },
-        "ckb.causalityBinary": { "type": "string", "default": "ckb-causality", "description": "Executable name/path for the V13.1 Deep Software Causality CLI used to build local evidence bundles and run data-flow, taint, schema, infrastructure, concurrency, temporal, ownership and change-simulation intelligence." },
-        "ckb.analysisTimeoutMs": { "type": "number", "default": 120000, "minimum": 30000, "maximum": 600000, "description": "Maximum duration of a local deep architecture analysis or CKB server request." },
-        "ckb.autoScanOnOpen": { "type": "boolean", "default": true, "description": "Hydrate Invisible Reality shortly after a workspace opens." },
-        "ckb.rescanOnSave": { "type": "boolean", "default": true, "description": "Coalesce source-file changes and refresh architecture intelligence after editing activity settles." },
-        "ckb.rescanDebounceMs": { "type": "number", "default": 1400, "minimum": 350, "maximum": 30000, "description": "Quiet period used to coalesce rapid file changes into one analysis pass." },
-        "ckb.deepAnalysisOnSave": { "type": "boolean", "default": true, "description": "Refresh deep activity + architecture memory after the debounced save/change window." },
-        "ckb.showDiagnostics": { "type": "boolean", "default": true, "description": "Show evidence-backed architecture findings as inline diagnostics." },
-        "ckb.productGuidance": { "type": "boolean", "default": true, "description": "Show first-run reveal guidance and one-time evidence-backed milestones. Disable for a completely silent product experience." },
-        "ckb.cloudExplorerUrl": { "type": "string", "default": "https://ckb-nu.vercel.app/project/current", "description": "Cloud Project Explorer opened from the Invisible Reality cockpit and cursor continuity actions." }
+        "ckb.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:3000",
+          "description": "CKB Reality server used for local/static/runtime intelligence. A remote server cannot read local filesystem paths unless the project was scanned through a supported remote source flow."
+        },
+        "ckb.apiKey": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "API key sent as `X-API-Key` only to the configured `ckb.serverUrl`. A `ckb_live_` key can also be used as the guarded-change Cloud fallback; direct guarded-change entry stores Cloud keys in VS Code SecretStorage.",
+          "editPresentation": "singlelineText"
+        },
+        "ckb.runtimeProjectId": {
+          "type": "string",
+          "default": "",
+          "description": "Optional Reality Engine project id used only for runtime/traces polling. Leave blank for the current/default project on a local CKB server."
+        },
+        "ckb.liveRuntimePolling": {
+          "type": "boolean",
+          "default": true,
+          "description": "Continuously refresh evidence-backed runtime/traces in Invisible Reality. Static relations are never animated as runtime."
+        },
+        "ckb.runtimePollIntervalMs": {
+          "type": "number",
+          "default": 2500,
+          "minimum": 1000,
+          "maximum": 30000,
+          "description": "Polling interval while exact Live Reality evidence is available. Offline/waiting states automatically back off."
+        },
+        "ckb.runtimeRequestTimeoutMs": {
+          "type": "number",
+          "default": 8000,
+          "minimum": 3000,
+          "maximum": 30000,
+          "description": "Timeout for runtime/traces reads from the configured CKB Reality server."
+        },
+        "ckb.editorSemanticReality": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable cursor-driven semantic editor reality. CKB derives LINE/CALL/SYMBOL/FILE/SUBSYSTEM/SYSTEM depth from selection and visible editor scale, and only highlights runtime when exact observed trace evidence maps to the current source."
+        },
+        "ckb.cloudApiUrl": {
+          "type": "string",
+          "default": "https://ckb-backend-api.onrender.com",
+          "description": "Authenticated CKB Cloud API used for Raiziom evidence, model-neutral context compilation, verified frontier-model compatibility metadata and guarded transactions. Source contents and absolute local filesystem paths are not uploaded by this client; selected relative architecture identifiers/coordinates may be sent as context."
+        },
+        "ckb.cloudProjectId": {
+          "type": "string",
+          "default": "current",
+          "description": "CKB Cloud project identity used by in-IDE architecture intelligence, Raiziom and guarded-change requests. It must match the Cloud project whose architecture evidence should be authoritative."
+        },
+        "ckb.cliBinary": {
+          "type": "string",
+          "default": "ckb",
+          "description": "Executable name/path for the standard CKB CLI."
+        },
+        "ckb.intelligenceBinary": {
+          "type": "string",
+          "default": "ckb-intelligence",
+          "description": "Executable name/path for the high-performance CKB IDE intelligence facade."
+        },
+        "ckb.causalityBinary": {
+          "type": "string",
+          "default": "ckb-causality",
+          "description": "Executable name/path for the V13.1 Deep Software Causality CLI used to build local evidence bundles and run data-flow, taint, schema, infrastructure, concurrency, temporal, ownership and change-simulation intelligence."
+        },
+        "ckb.analysisTimeoutMs": {
+          "type": "number",
+          "default": 120000,
+          "minimum": 30000,
+          "maximum": 600000,
+          "description": "Maximum duration of a local deep architecture analysis or CKB server request."
+        },
+        "ckb.autoScanOnOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Hydrate Invisible Reality shortly after a workspace opens."
+        },
+        "ckb.rescanOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Coalesce source-file changes and refresh architecture intelligence after editing activity settles."
+        },
+        "ckb.rescanDebounceMs": {
+          "type": "number",
+          "default": 1400,
+          "minimum": 350,
+          "maximum": 30000,
+          "description": "Quiet period used to coalesce rapid file changes into one analysis pass."
+        },
+        "ckb.deepAnalysisOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Refresh deep activity + architecture memory after the debounced save/change window."
+        },
+        "ckb.showDiagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show evidence-backed architecture findings as inline diagnostics."
+        },
+        "ckb.productGuidance": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show first-run reveal guidance and one-time evidence-backed milestones. Disable for a completely silent product experience."
+        },
+        "ckb.cloudExplorerUrl": {
+          "type": "string",
+          "default": "https://ckb-nu.vercel.app/project/current",
+          "description": "Cloud Project Explorer opened from the Invisible Reality cockpit and cursor continuity actions."
+        }
       }
     },
     "menus": {
       "editor/context": [
-        { "when": "editorTextFocus", "command": "ckb.inspectSemanticReality", "group": "ckb@0" },
-        { "when": "editorTextFocus", "command": "ckb.askRaiziomAtCursor", "group": "ckb@1" },
-        { "when": "editorTextFocus", "command": "ckb.compileArchitectureContextAtCursor", "group": "ckb@2" },
-        { "when": "editorTextFocus", "command": "ckb.prepareGuardedChangeAtCursor", "group": "ckb@3" },
-        { "when": "editorTextFocus", "command": "ckb.impact", "group": "ckb@4" },
-        { "when": "editorTextFocus", "command": "ckb.queryMemory", "group": "ckb@5" },
-        { "when": "editorTextFocus", "command": "ckb.continueSemanticRealityInCloud", "group": "ckb@6" },
-        { "when": "editorTextFocus", "command": "ckb.askRaiziomAboutCursor", "group": "ckb@7" },
-        { "when": "editorTextFocus", "command": "ckb.semanticZoomIn", "group": "ckb@8" },
-        { "when": "editorTextFocus", "command": "ckb.semanticZoomOut", "group": "ckb@9" }
+        {
+          "when": "editorTextFocus",
+          "command": "ckb.inspectSemanticReality",
+          "group": "ckb@0"
+        },
+        {
+          "when": "editorTextFocus",
+          "command": "ckb.askRaiziomAtCursor",
+          "group": "ckb@1"
+        },
+        {
+          "when": "editorTextFocus",
+          "command": "ckb.compileArchitectureContextAtCursor",
+          "group": "ckb@2"
+        },
+        {
+          "when": "editorTextFocus",
+          "command": "ckb.prepareGuardedChangeAtCursor",
+          "group": "ckb@3"
+        },
+        {
+          "when": "editorTextFocus",
+          "command": "ckb.impact",
+          "group": "ckb@4"
+        },
+        {
+          "when": "editorTextFocus",
+          "command": "ckb.queryMemory",
+          "group": "ckb@5"
+        },
+        {
+          "when": "editorTextFocus",
+          "command": "ckb.continueSemanticRealityInCloud",
+          "group": "ckb@6"
+        },
+        {
+          "when": "editorTextFocus",
+          "command": "ckb.askRaiziomAboutCursor",
+          "group": "ckb@7"
+        },
+        {
+          "when": "editorTextFocus",
+          "command": "ckb.semanticZoomIn",
+          "group": "ckb@8"
+        },
+        {
+          "when": "editorTextFocus",
+          "command": "ckb.semanticZoomOut",
+          "group": "ckb@9"
+        }
       ],
       "view/title": [
-        { "command": "ckb.revealArchitecture", "when": "view == ckb.realityView", "group": "navigation@1" },
-        { "command": "ckb.shareRealitySnapshot", "when": "view == ckb.realityView", "group": "navigation@2" },
-        { "command": "ckb.openCloudContinuity", "when": "view == ckb.realityView", "group": "navigation@3" }
+        {
+          "command": "ckb.revealArchitecture",
+          "when": "view == ckb.realityView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ckb.shareRealitySnapshot",
+          "when": "view == ckb.realityView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "ckb.openCloudContinuity",
+          "when": "view == ckb.realityView",
+          "group": "navigation@3"
+        }
       ],
       "commandPalette": [
-        { "command": "ckb.deepCausality" },
-        { "command": "ckb.inspectSemanticReality" },
-        { "command": "ckb.semanticZoomIn" },
-        { "command": "ckb.semanticZoomOut" },
-        { "command": "ckb.semanticZoomAuto" },
-        { "command": "ckb.askRaiziomAtCursor" },
-        { "command": "ckb.compileArchitectureContextAtCursor" },
-        { "command": "ckb.showObservedModelRegistry" },
-        { "command": "ckb.showVerifiedFrontierModelCatalog" },
-        { "command": "ckb.checkFrontierModelRequest" },
-        { "command": "ckb.showArchitectureConstitution" },
-        { "command": "ckb.prepareGuardedChangeAtCursor" },
-        { "command": "ckb.validateGuardedWorkspaceChange" },
-        { "command": "ckb.commitGuardedChange" },
-        { "command": "ckb.rollbackGuardedChange" },
-        { "command": "ckb.openGuardedChangeReality" },
-        { "command": "ckb.continueSemanticRealityInCloud" },
-        { "command": "ckb.askRaiziomAboutCursor" },
-        { "command": "ckb.revealArchitecture" },
-        { "command": "ckb.shareRealitySnapshot" },
-        { "command": "ckb.openCloudContinuity" }
+        {
+          "command": "ckb.deepCausality"
+        },
+        {
+          "command": "ckb.inspectSemanticReality"
+        },
+        {
+          "command": "ckb.semanticZoomIn"
+        },
+        {
+          "command": "ckb.semanticZoomOut"
+        },
+        {
+          "command": "ckb.semanticZoomAuto"
+        },
+        {
+          "command": "ckb.askRaiziomAtCursor"
+        },
+        {
+          "command": "ckb.compileArchitectureContextAtCursor"
+        },
+        {
+          "command": "ckb.showObservedModelRegistry"
+        },
+        {
+          "command": "ckb.showVerifiedFrontierModelCatalog"
+        },
+        {
+          "command": "ckb.checkFrontierModelRequest"
+        },
+        {
+          "command": "ckb.showArchitectureConstitution"
+        },
+        {
+          "command": "ckb.prepareGuardedChangeAtCursor"
+        },
+        {
+          "command": "ckb.validateGuardedWorkspaceChange"
+        },
+        {
+          "command": "ckb.commitGuardedChange"
+        },
+        {
+          "command": "ckb.rollbackGuardedChange"
+        },
+        {
+          "command": "ckb.openGuardedChangeReality"
+        },
+        {
+          "command": "ckb.continueSemanticRealityInCloud"
+        },
+        {
+          "command": "ckb.askRaiziomAboutCursor"
+        },
+        {
+          "command": "ckb.revealArchitecture"
+        },
+        {
+          "command": "ckb.shareRealitySnapshot"
+        },
+        {
+          "command": "ckb.openCloudContinuity"
+        }
       ]
     }
   },
-  "scripts": { "compile": "tsc -p ./", "watch": "tsc -watch -p ./", "package": "vsce package", "publish": "vsce publish" },
-  "devDependencies": { "@types/vscode": "^1.85.0", "@types/node": "^20.0.0", "typescript": "^5.3.0", "@vscode/vsce": "^2.22.0" }
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.9.2",
+    "typescript": "^5.3.0"
+  }
 }

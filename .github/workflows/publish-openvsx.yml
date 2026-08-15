@@ -34,6 +34,10 @@ jobs:
         working-directory: integrations/vscode
         run: npm ci
 
+      - name: Audit release toolchain
+        working-directory: integrations/vscode
+        run: npm audit --audit-level=high
+
       - name: Compile extension
         working-directory: integrations/vscode
         run: npm run compile
@@ -44,9 +48,32 @@ jobs:
         shell: bash
         run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
+      - name: Check Open VSX registry version
+        id: registry
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 3 --retry-all-errors \
+            'https://open-vsx.org/api/TechCodinz/ckb-vscode' -o /tmp/openvsx.json
+          CURRENT_VERSION="$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('/tmp/openvsx.json','utf8')); process.stdout.write(String(j.version || '')); ")"
+          if [[ -z "$CURRENT_VERSION" ]]; then
+            echo "::error::Open VSX registry response did not include a version."
+            exit 1
+          fi
+          echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$CURRENT_VERSION" == "$RELEASE_VERSION" ]]; then
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            echo "Open VSX already has CKB v$RELEASE_VERSION; skipping duplicate publish."
+          else
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+            echo "Open VSX currently reports v$CURRENT_VERSION; CKB v$RELEASE_VERSION will be published."
+          fi
+
       - name: Package VSIX
         working-directory: integrations/vscode
-        run: npx --yes @vscode/vsce@latest package --out ckb-vscode-${{ steps.release.outputs.version }}.vsix
+        run: npx @vscode/vsce package --out ckb-vscode-${{ steps.release.outputs.version }}.vsix
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v4
@@ -56,6 +83,7 @@ jobs:
           retention-days: 90
 
       - name: Publish to Open VSX
+        if: steps.registry.outputs.should_publish == 'true'
         working-directory: integrations/vscode
         env:
           OPEN_VSX_TOKEN: ${{ secrets.OPEN_VSX_TOKEN || secrets.OPENVSX_TOKEN || secrets.OPENVSX_NAMESPACE_TOKEN || secrets.OVSX_TOKEN || secrets.OVSX_PAT || '' }}
@@ -76,4 +104,6 @@ jobs:
           echo "- Namespace: TechCodinz" >> "$GITHUB_STEP_SUMMARY"
           echo "- Extension: ckb-vscode" >> "$GITHUB_STEP_SUMMARY"
           echo "- Version: ${{ steps.release.outputs.version || 'not evaluated' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Registry version before publish: ${{ steps.registry.outputs.current_version || 'not evaluated' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Publish required: ${{ steps.registry.outputs.should_publish || 'not evaluated' }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Registry: https://open-vsx.org/extension/TechCodinz/ckb-vscode" >> "$GITHUB_STEP_SUMMARY"
