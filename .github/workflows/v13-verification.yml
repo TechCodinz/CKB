@@ -69,11 +69,11 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
-      - name: Verify Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v4
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
       - name: Build plugin
-        working-directory: integrations/jetbrains
-        run: ./gradlew buildPlugin --stacktrace
+        run: gradle -p integrations/jetbrains buildPlugin --no-daemon --stacktrace
 
   protocol-schemas:
     name: V13 protocol schema validity
