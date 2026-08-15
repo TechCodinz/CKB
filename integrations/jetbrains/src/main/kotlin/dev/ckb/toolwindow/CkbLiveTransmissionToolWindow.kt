@@ -133,7 +133,7 @@ class ExactRuntimeFlowCanvas : JPanel() {
             val left = 24
             val right = w - 24
             val y = h / 2
-            val spacing = if (count <= 1) 1 else (right - left).toDouble() / (count - 1)
+            val spacing = if (count <= 1) 1.0 else (right - left).toDouble() / (count - 1)
             for (i in 0 until count - 1) {
                 val x1 = (left + i * spacing).toInt()
                 val x2 = (left + (i + 1) * spacing).toInt()

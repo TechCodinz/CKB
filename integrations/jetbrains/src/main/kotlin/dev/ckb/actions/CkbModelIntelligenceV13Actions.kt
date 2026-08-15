@@ -55,9 +55,9 @@ private fun chooseTask(e: AnActionEvent): String? {
         project,
         "Choose how CKB should compile architecture memory for the model/agent.",
         "CKB V13 Architecture Task",
+        null,
         V13_TASKS.map { it.uppercase() }.toTypedArray(),
         V13_TASKS[0].uppercase(),
-        null,
     )
     return if (index in V13_TASKS.indices) V13_TASKS[index] else null
 }
@@ -121,9 +121,9 @@ private fun chooseModel(project: com.intellij.openapi.project.Project, entries: 
         project,
         "Capability metadata changes request/context hints only. It never changes CKB evidence truth or acts as an unobserved quality score.",
         "CKB V13 Verified Frontier Model",
+        null,
         labels.toTypedArray(),
         labels.first(),
-        null,
     )
     if (index !in labels.indices) return ModelPick(true, null)
     if (allowNeutral && index == 0) return ModelPick(false, null)

@@ -472,7 +472,7 @@ class CkbToolWindowPanel(private val project: Project) : JPanel(BorderLayout()) 
             font = font.deriveFont(11f)
             if (!isSelected) {
                 background = surface
-                val text = String(value ?: "")
+                val text = (value ?: "").toString()
                 foreground = when {
                     text.startsWith("CRITICAL") || text.startsWith("ERROR") -> JBColor(Color(174, 42, 65), Color(255, 97, 123))
                     text.startsWith("WARNING") -> JBColor(Color(160, 102, 24), Color(255, 189, 102))

@@ -140,9 +140,9 @@ class DeepCausalityV131Action : AnAction("Deep Software Causality") {
             project,
             "Choose an evidence-backed software causality operation. Runtime claims require observed runtime evidence; simulations/forecasts remain PREDICTED.",
             "CKB V13.1 • Deep Software Causality",
+            null,
             labels,
             labels.first(),
-            null,
         )
         if (index !in CAUSALITY_OPS.indices) return
         val op = CAUSALITY_OPS[index]
