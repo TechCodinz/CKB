@@ -123,8 +123,9 @@ jobs:
             npx --yes @vscode/vsce@latest publish "${FLAGS[@]}" --pat "$VSCE_TOKEN"
           else
             echo "VSCE_TOKEN is not configured; attempting VS Code Marketplace trusted publishing (OIDC)."
+            echo "Using the current vsce pre-release because OIDC trusted publishing was introduced after the latest stable npm release."
             echo "The Marketplace publisher must trust this exact GitHub repository/workflow before OIDC can succeed."
-            npx --yes @vscode/vsce@latest publish "${FLAGS[@]}" --oidc
+            npx --yes @vscode/vsce@next publish "${FLAGS[@]}" --oidc
           fi
 
       - name: Publish summary
