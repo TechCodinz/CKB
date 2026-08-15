@@ -51,6 +51,7 @@ Track paying organisations, pilots, subscriptions, enterprise deployments, renew
 | 2026-08-14 | community | GitHub open issues | 7 | GitHub repository API snapshot, TechCodinz/CKB | Yes | Baseline; open issues are activity, not automatically independent recognition. |
 | 2026-08-14 | release | GitHub Releases | 0 published releases | GitHub Releases API, TechCodinz/CKB | Yes | Marketplace publication/versioning is tracked separately and must not be inferred from GitHub Releases. |
 | 2026-08-14 | recognition | VS Code Marketplace installs/downloads/ratings | unavailable in this capture | Microsoft Visual Studio Marketplace | Yes | Source query did not return the CKB listing metrics in this run; unavailable is intentionally not recorded as zero. |
+| 2026-08-15 | distribution | Open VSX public extension publication | TechCodinz.ckb-vscode v1.10.1 | GitHub Actions run 31893247342, job 95032559025; Open VSX API/listing verification | Yes | Verification job resolved Open VSX latest as 1.10.1, downloaded and inspected the published VSIX, matched publisher/name/version and main entrypoint, and confirmed the public listing was reachable. This is external distribution evidence, not a claim of adoption or independent recognition. |
 
 ## Monthly snapshot
 
