@@ -58,12 +58,12 @@ jobs:
       - name: Publish to Open VSX
         working-directory: integrations/vscode
         env:
-          OPEN_VSX_TOKEN: ${{ secrets.OPEN_VSX_TOKEN || secrets.OVSX_TOKEN || secrets.OVSX_PAT || '' }}
+          OPEN_VSX_TOKEN: ${{ secrets.OPEN_VSX_TOKEN || secrets.OPENVSX_TOKEN || secrets.OPENVSX_NAMESPACE_TOKEN || secrets.OVSX_TOKEN || secrets.OVSX_PAT || '' }}
         shell: bash
         run: |
           set -euo pipefail
           if [[ -z "$OPEN_VSX_TOKEN" ]]; then
-            echo "::error::Open VSX publishing credential is missing. Configure OPEN_VSX_TOKEN (or OVSX_TOKEN / OVSX_PAT) in repository Actions secrets."
+            echo "::error::Open VSX publishing credential is missing. Configure OPEN_VSX_TOKEN (legacy OPENVSX_TOKEN / OPENVSX_NAMESPACE_TOKEN / OVSX_TOKEN / OVSX_PAT also supported) in repository Actions secrets."
             exit 1
           fi
           npx --yes ovsx publish "ckb-vscode-${{ steps.release.outputs.version }}.vsix" -p "$OPEN_VSX_TOKEN"
