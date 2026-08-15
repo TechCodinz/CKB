@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.10.0
+
+CKB V13.2 marketplace launch — the Invisible Reality architecture-intelligence experience is now aligned with the verified V13/V13.1/V13.2 core and Cloud release.
+
+- **Added:** Invisible Reality V13 semantic editor intelligence with cursor-driven LINE/CALL/SYMBOL/FILE/SUBSYSTEM/SYSTEM depth.
+- **Added:** Deep Software Causality workflows for data flow, taint, schema, infrastructure, concurrency, temporal, ownership and change-simulation analysis.
+- **Added:** Raiziom-grounded in-IDE architecture questions and model-neutral architecture-context compilation.
+- **Added:** Guarded Change Reality with prepare, validate, commit and rollback actions for evidence-backed workspace changes.
+- **Added:** bidirectional Cloud continuity between VS Code and the CKB Living Universe.
+- **Added:** verified frontier-model catalog, request compatibility checks and observed-model registry actions.
+- **Added:** architecture memory, deep activity analysis, shareable reality snapshots and product-guidance milestones.
+- **Changed:** Marketplace release is labeled as a trial experience, with paid Pro and Team capabilities continuing through CKB Cloud.
+- **Hardened:** local/static/runtime evidence boundaries, Cloud context handling, API-key storage paths and guarded-change validation.
+
 ## 1.1.0
 
 Fixes found during a pre-launch marketplace readiness review — none of
