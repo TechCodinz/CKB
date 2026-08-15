@@ -72,13 +72,19 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.5'
-      - name: Compile JetBrains plugin
+          gradle-version: '9.2.0'
+      - name: Validate and build JetBrains plugin
         working-directory: integrations/jetbrains
-        run: gradle compileKotlin --no-daemon
+        run: gradle verifyPluginProjectConfiguration buildPlugin --no-daemon
+      - name: Upload JetBrains plugin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ckb-jetbrains-build
+          path: integrations/jetbrains/build/distributions/*
+          retention-days: 14
 
   sdks:
     runs-on: ubuntu-latest
