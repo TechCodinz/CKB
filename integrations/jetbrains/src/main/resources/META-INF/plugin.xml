@@ -3,7 +3,7 @@
     <name>CKB - Invisible Reality Architecture Intelligence</name>
     <vendor email="support@ckb.dev" url="https://ckb.dev">CKB</vendor>
     <version>1.9.0</version>
-    <idea-version since-build="243" until-build="261.*"/>
+    <idea-version since-build="243"/>
 
     <description><![CDATA[
         <b>CKB – Invisible Reality Architecture Intelligence</b><br><br>
