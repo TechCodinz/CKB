@@ -2,8 +2,8 @@
     <id>dev.ckb.jetbrains</id>
     <name>CKB - Invisible Reality Architecture Intelligence</name>
     <vendor email="support@ckb.dev" url="https://ckb.dev">CKB</vendor>
-    <version>1.8.0</version>
-    <idea-version since-build="233" until-build="243.*"/>
+    <version>1.9.0</version>
+    <idea-version since-build="243"/>
 
     <description><![CDATA[
         <b>CKB – Invisible Reality Architecture Intelligence</b><br><br>
@@ -27,10 +27,11 @@
             <li>🤖 MCP/agent integration for model-neutral architecture intelligence</li>
         </ul>
         Runtime animation and source-level runtime context are produced only from observed telemetry; static relationships are never presented as execution. Model/provider identity never changes CKB evidence truth, capability metadata is never used as an unobserved quality score, and V13.1 simulation/forecast output never promotes itself to observed fact.<br><br>
-        Supports IntelliJ IDEA, PyCharm, WebStorm, GoLand, Rider and Android Studio families where platform compatibility permits.
+        Supports IntelliJ IDEA and JetBrains IDEs where the required IntelliJ Platform and Java plugin dependencies are available.
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.java</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow id="CKB"

@@ -5,6 +5,7 @@ out/
 dist/
 build/
 .gradle/
+.intellijPlatform/
 
 # Environment
 .env

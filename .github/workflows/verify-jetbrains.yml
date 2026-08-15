@@ -1,0 +1,60 @@
+name: Verify JetBrains Compatibility
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'integrations/jetbrains/**'
+      - '.github/workflows/verify-jetbrains.yml'
+      - '.github/workflows/publish-jetbrains.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'integrations/jetbrains/**'
+      - '.github/workflows/verify-jetbrains.yml'
+      - '.github/workflows/publish-jetbrains.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jetbrains-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verifier:
+    name: Plugin Verifier (2024.3 → current 2026.2)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.2.0'
+
+      - name: Validate project configuration
+        working-directory: integrations/jetbrains
+        run: gradle verifyPluginProjectConfiguration --no-daemon
+
+      - name: Build plugin
+        working-directory: integrations/jetbrains
+        run: gradle buildPlugin --no-daemon
+
+      - name: Run IntelliJ Plugin Verifier
+        working-directory: integrations/jetbrains
+        run: gradle verifyPlugin --no-daemon
+
+      - name: Upload verification reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ckb-jetbrains-compatibility-reports
+          path: integrations/jetbrains/build/reports/pluginVerifier/**
+          if-no-files-found: ignore
+          retention-days: 30

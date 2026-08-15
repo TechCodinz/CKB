@@ -14,6 +14,7 @@ on:
       - 'integrations/vscode/src/deepCausalityV131.ts'
       - 'integrations/vscode/src/extensionV6.ts'
       - 'integrations/jetbrains/build.gradle'
+      - 'integrations/jetbrains/gradle.properties'
       - 'integrations/jetbrains/src/main/kotlin/dev/ckb/actions/CkbDeepCausalityV131Action.kt'
       - 'integrations/jetbrains/src/main/resources/META-INF/plugin.xml'
       - 'schemas/deep-causality-v13.1.schema.json'
@@ -78,25 +79,25 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
           cache-dependency-path: integrations/vscode/package-lock.json
       - run: npm ci
       - name: TypeScript compile
         run: npm run compile
       - name: VSIX package
-        run: npx vsce package --no-dependencies --out ckb-v13-1-ci.vsix
+        run: npx @vscode/vsce package --no-dependencies --out ckb-v13-1-ci.vsix
 
   jetbrains:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.5'
+          gradle-version: '9.2.0'
       - name: Build JetBrains plugin
-        run: gradle -p integrations/jetbrains buildPlugin --no-daemon
+        run: gradle -p integrations/jetbrains verifyPluginProjectConfiguration buildPlugin --no-daemon
