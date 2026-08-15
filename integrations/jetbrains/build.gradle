@@ -1,14 +1,20 @@
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id 'java'
-    id 'org.jetbrains.kotlin.jvm' version '1.9.21'
-    id 'org.jetbrains.intellij' version '1.16.1'
+    id 'org.jetbrains.kotlin.jvm' version '2.0.21'
+    id 'org.jetbrains.intellij.platform' version '2.18.1'
 }
 
 group = 'dev.ckb'
-version = '1.8.0'
+version = '1.9.0'
 
 repositories {
     mavenCentral()
+    intellijPlatform {
+        defaultRepositories()
+    }
 }
 
 dependencies {
@@ -16,38 +22,54 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.10.1'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.1'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.1'
-}
 
-intellij {
-    version = '2023.3.2'
-    type = 'IC'
-    plugins = ['com.intellij.java']
-}
-
-tasks.withType(JavaCompile).configureEach {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
-
-tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-    kotlinOptions {
-        jvmTarget = '17'
+    intellijPlatform {
+        // Build the new compatibility line against the oldest IDE we advertise.
+        // The previous 1.8.0 Marketplace build remains available for 2023.3-2024.3.
+        intellijIdeaCommunity '2024.3.6'
+        bundledPlugin 'com.intellij.java'
     }
 }
 
-patchPluginXml {
-    sinceBuild = '233'
-    untilBuild = '243.*'
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_21)
+    }
+}
+
+intellijPlatform {
+    pluginConfiguration {
+        version = project.version
+        ideaVersion {
+            // 1.9.x is the modern line. 1.8.0 continues serving older builds.
+            sinceBuild = '243'
+            untilBuild = '261.*'
+        }
+    }
+
+    pluginVerification {
+        ides {
+            // Verify both the minimum declared build and the newest declared major line.
+            current()
+            create IntelliJPlatformType.IntellijIdea, '2026.1.4'
+        }
+    }
 }
 
 signPlugin {
-    certificateChain = System.getenv('CERTIFICATE_CHAIN') ?: ''
-    privateKey = System.getenv('PRIVATE_KEY') ?: ''
-    password = System.getenv('PRIVATE_KEY_PASSWORD') ?: ''
+    certificateChain = providers.environmentVariable('CERTIFICATE_CHAIN')
+    privateKey = providers.environmentVariable('PRIVATE_KEY')
+    password = providers.environmentVariable('PRIVATE_KEY_PASSWORD')
 }
 
 publishPlugin {
-    token = System.getenv('PUBLISH_TOKEN') ?: ''
+    token = providers.environmentVariable('PUBLISH_TOKEN')
 }
 
 test {
