@@ -21,6 +21,10 @@ name = "reality_gateway"
 path = "src/bin/reality_gateway.rs"
 
 [[bin]]
+name = "render_gateway"
+path = "src/bin/render_gateway.rs"
+
+[[bin]]
 name = "reality_bridge"
 path = "src/bin/reality_bridge.rs"
 
