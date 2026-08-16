@@ -1,17 +1,16 @@
-# Public repo deploy config — production CKB Reality/architecture engine.
-# The authenticated gateway is the public process. It starts the tenant-isolated
-# Reality v5 engine on localhost, forwards only authenticated traffic, and keeps
-# expensive scans bounded while exposing a public health endpoint.
-#
-# The local `ckb-intelligence` binary is also compiled as a release gate because
-# VS Code/JetBrains use that facade for deep local activity + architecture memory.
+# Temporary Render validation topology before the shared-VPS migration.
+# The outer render_gateway binds Render's public PORT immediately, then proxies
+# into the hardened Reality gateway + v5 engine. This prevents Render port-scan
+# timeouts while retaining the full advanced Reality stack.
 services:
   - type: web
     name: ckb-mcp-server
-    env: rust
+    runtime: rust
     plan: free
-    buildCommand: cargo build --locked --release -p ckb-mcp-server --bin ckb-mcp-server --bin reality_bridge --bin reality_server_v5 --bin reality_gateway && cargo build --locked --release -p ckb-cli --bin ckb-intelligence
-    startCommand: ./target/release/reality_gateway
+    region: oregon
+    autoDeployTrigger: commit
+    buildCommand: cargo build --locked --release -p ckb-mcp-server --bin render_gateway --bin reality_gateway --bin reality_server_v5 --bin ckb-mcp-server && cargo build --locked --release -p ckb-cli --bin ckb-intelligence
+    startCommand: ./target/release/render_gateway
     healthCheckPath: /health
     envVars:
       - key: RUST_LOG
@@ -25,17 +24,19 @@ services:
       - key: CKB_MAX_SPANS_PER_TRACE
         value: "1000"
       - key: CKB_ALLOWED_ORIGIN
-        sync: false
-      - key: CKB_BIND_ALL
-        value: "1"
+        value: https://ckb-nu.vercel.app
       - key: CKB_REALITY_DATA_DIR
-        value: "/opt/render/project/src/ckb_reality_data"
+        value: /opt/render/project/src/ckb_reality_data
       - key: CKB_BACKEND_URL
-        sync: false
-      # Must match INTERNAL_API_SECRET on the private ckb-backend-api service.
+        value: https://ckb-backend-api.onrender.com
+      # Import the exact backend internal secret so the two services cannot
+      # silently drift onto different credentials.
       - key: CKB_INTERNAL_SECRET
-        sync: false
-      # Optional operator/API-key path. The cloud browser never receives it.
+        fromService:
+          type: web
+          name: ckb-backend-api
+          envVarKey: INTERNAL_API_SECRET
+      # Optional operator/API-key path. The browser never receives it.
       - key: CKB_API_KEY
         sync: false
       - key: ANTHROPIC_API_KEY
