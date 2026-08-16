@@ -111,9 +111,14 @@ async fn proxy(State(state): State<StateData>, request: Request<Body>) -> Respon
         .request(method, format!("{}{}", state.upstream, path_and_query))
         .body(body.to_vec());
 
+    // Axum 0.7 and Reqwest 0.11 use different `http` crate major versions.
+    // Forward textual header names/values instead of passing their concrete
+    // HeaderName/HeaderValue types across that boundary.
     for (name, value) in headers.iter() {
         if name != header::HOST && name != header::CONTENT_LENGTH {
-            upstream = upstream.header(name, value);
+            if let Ok(value) = value.to_str() {
+                upstream = upstream.header(name.as_str(), value);
+            }
         }
     }
 
@@ -134,7 +139,11 @@ async fn proxy(State(state): State<StateData>, request: Request<Body>) -> Respon
 
     let status = StatusCode::from_u16(upstream.status().as_u16())
         .unwrap_or(StatusCode::BAD_GATEWAY);
-    let content_type = upstream.headers().get(reqwest::header::CONTENT_TYPE).cloned();
+    let content_type = upstream
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string);
     let bytes = upstream.bytes().await.unwrap_or_default();
 
     let mut builder = Response::builder().status(status);
