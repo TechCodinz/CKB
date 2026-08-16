@@ -52,6 +52,7 @@ Track paying organisations, pilots, subscriptions, enterprise deployments, renew
 | 2026-08-14 | release | GitHub Releases | 0 published releases | GitHub Releases API, TechCodinz/CKB | Yes | Marketplace publication/versioning is tracked separately and must not be inferred from GitHub Releases. |
 | 2026-08-14 | recognition | VS Code Marketplace installs/downloads/ratings | unavailable in this capture | Microsoft Visual Studio Marketplace | Yes | Source query did not return the CKB listing metrics in this run; unavailable is intentionally not recorded as zero. |
 | 2026-08-15 | distribution | Open VSX public extension publication | TechCodinz.ckb-vscode v1.10.1 | GitHub Actions run 31893247342, job 95032559025; Open VSX API/listing verification | Yes | Verification job resolved Open VSX latest as 1.10.1, downloaded and inspected the published VSIX, matched publisher/name/version and main entrypoint, and confirmed the public listing was reachable. This is external distribution evidence, not a claim of adoption or independent recognition. |
+| 2026-08-15 | technical contribution | JetBrains modern compatibility line | CKB JetBrains v1.9.0 supports IntelliJ Platform 2024.3.6 and verification through IntelliJ IDEA 2026.2.0.1 | TechCodinz/CKB PR #12; merge commit 7f4b0706d09fec8dc7c77e0af4702864b6c89cd5 | No | Modernized to IntelliJ Platform Gradle Plugin 2.18.1 and Java 21 with plugin-verifier gates. No live JetBrains Marketplace listing or adoption is claimed from this milestone. |
 
 ## Monthly snapshot
 
