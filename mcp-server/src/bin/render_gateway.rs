@@ -1,25 +1,118 @@
 use axum::{
     body::{to_bytes, Body},
     extract::State,
-    http::{header, Request, Response, StatusCode},
+    http::{header, HeaderMap, Request, Response, StatusCode},
     routing::get,
-    Json, Router,
+    Router,
 };
 use reqwest::Client;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::process::Command;
-use tracing::{error, info};
+use tracing::{error, info, warn};
+
+// The canonical CKB Reality tool registry and the provider-neutral adapter
+// layer live alongside the inner Reality gateway they call into. They are
+// mounted here rather than in a separate edge process so the immediate-bind
+// behaviour Render depends on is preserved for every public route.
+#[path = "reality_gateway/chatgpt_mcp.rs"]
+mod chatgpt_mcp;
+#[path = "reality_gateway/universal_gateway.rs"]
+mod universal_gateway;
 
 const MAX_PROXY_BODY: usize = 95 * 1024 * 1024;
 
 #[derive(Clone)]
-struct StateData {
+struct GatewayState {
     client: Client,
     upstream: Arc<String>,
+    // Alias of `upstream` used by the MCP and Universal Model Gateway modules.
+    child_base_url: Arc<String>,
+    internal_secret: Option<Arc<String>>,
+    api_key: Option<Arc<String>>,
 }
 
-async fn upstream_health(state: &StateData) -> Result<reqwest::Response, String> {
+fn secret_value(name: &str) -> Option<Arc<String>> {
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .map(Arc::new)
+}
+
+fn secure_eq(left: &str, right: &str) -> bool {
+    let left = left.as_bytes();
+    let right = right.as_bytes();
+    if left.len() != right.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (a, b) in left.iter().zip(right.iter()) {
+        diff |= a ^ b;
+    }
+    diff == 0
+}
+
+fn header_text<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
+    headers.get(name).and_then(|value| value.to_str().ok())
+}
+
+fn presented_api_key(headers: &HeaderMap) -> Option<&str> {
+    header_text(headers, "x-api-key").or_else(|| {
+        header_text(headers, header::AUTHORIZATION.as_str())
+            .and_then(|value| value.strip_prefix("Bearer "))
+    })
+}
+
+/// Server-to-server authorization for the trusted gateway path.
+///
+/// Unlike the historical edge binary, a missing credential does not abort the
+/// process: Render liveness depends on binding the public port immediately, so
+/// an unconfigured deployment fails closed per request with 503 instead of
+/// refusing to start.
+fn authorized(state: &GatewayState, headers: &HeaderMap) -> Result<(), (StatusCode, String)> {
+    if state.internal_secret.is_none() && state.api_key.is_none() {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            "CKB MCP authentication is not configured on this deployment".into(),
+        ));
+    }
+
+    let internal_ok = state
+        .internal_secret
+        .as_ref()
+        .and_then(|expected| {
+            header_text(headers, "x-ckb-internal-secret")
+                .map(|presented| secure_eq(presented, expected.as_str()))
+        })
+        .unwrap_or(false);
+    let api_ok = state
+        .api_key
+        .as_ref()
+        .and_then(|expected| {
+            presented_api_key(headers).map(|presented| secure_eq(presented, expected.as_str()))
+        })
+        .unwrap_or(false);
+
+    if internal_ok || api_ok {
+        Ok(())
+    } else {
+        Err((
+            StatusCode::UNAUTHORIZED,
+            "Missing or invalid CKB MCP credentials".into(),
+        ))
+    }
+}
+
+fn json_response(status: StatusCode, value: Value) -> Response<Body> {
+    Response::builder()
+        .status(status)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(value.to_string()))
+        .unwrap_or_else(|_| Response::new(Body::empty()))
+}
+
+async fn upstream_health(state: &GatewayState) -> Result<reqwest::Response, String> {
     state
         .client
         .get(format!("{}/health", state.upstream))
@@ -29,7 +122,7 @@ async fn upstream_health(state: &StateData) -> Result<reqwest::Response, String>
         .map_err(|error| error.to_string())
 }
 
-async fn health(State(state): State<StateData>) -> Response<Body> {
+async fn health(State(state): State<GatewayState>) -> Response<Body> {
     match upstream_health(&state).await {
         Ok(response) if response.status().is_success() => {
             let status = response.status();
@@ -69,11 +162,11 @@ async fn health(State(state): State<StateData>) -> Response<Body> {
     }
 }
 
-async fn ready(State(state): State<StateData>) -> Response<Body> {
+async fn ready(State(state): State<GatewayState>) -> Response<Body> {
     health(State(state)).await
 }
 
-async fn proxy(State(state): State<StateData>, request: Request<Body>) -> Response<Body> {
+async fn proxy(State(state): State<GatewayState>, request: Request<Body>) -> Response<Body> {
     let method = match reqwest::Method::from_bytes(request.method().as_str().as_bytes()) {
         Ok(method) => method,
         Err(_) => {
@@ -137,8 +230,8 @@ async fn proxy(State(state): State<StateData>, request: Request<Body>) -> Respon
         }
     };
 
-    let status = StatusCode::from_u16(upstream.status().as_u16())
-        .unwrap_or(StatusCode::BAD_GATEWAY);
+    let status =
+        StatusCode::from_u16(upstream.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
     let content_type = upstream
         .headers()
         .get(reqwest::header::CONTENT_TYPE)
@@ -189,14 +282,51 @@ async fn main() -> anyhow::Result<()> {
         std::process::exit(1);
     });
 
-    let state = StateData {
-        client: Client::builder().timeout(Duration::from_secs(300)).build()?,
-        upstream: Arc::new(format!("http://127.0.0.1:{gateway_port}")),
+    let upstream = Arc::new(format!("http://127.0.0.1:{gateway_port}"));
+    let internal_secret = secret_value("CKB_INTERNAL_SECRET");
+    let api_key = secret_value("CKB_API_KEY");
+
+    if internal_secret.is_none() {
+        warn!("CKB_INTERNAL_SECRET is not configured. OAuth token introspection and trusted gateway authentication will fail closed.");
+    }
+    if api_key.is_none() {
+        warn!("CKB_API_KEY is not configured. The MCP and Universal Model Gateway routes will fail closed until it is set.");
+    }
+
+    let state = GatewayState {
+        client: Client::builder()
+            .timeout(Duration::from_secs(300))
+            .build()?,
+        upstream: Arc::clone(&upstream),
+        child_base_url: upstream,
+        internal_secret,
+        api_key,
     };
 
     let app = Router::new()
         .route("/health", get(health))
         .route("/ready", get(ready))
+        // RFC 9728 protected-resource metadata. MCP clients discover the Cloud
+        // authorization server from here before presenting a token.
+        .route(
+            "/.well-known/oauth-protected-resource",
+            get(chatgpt_mcp::oauth_protected_resource),
+        )
+        // Stateless Streamable HTTP MCP endpoint.
+        .route(
+            "/mcp",
+            get(chatgpt_mcp::get_mcp).post(chatgpt_mcp::post_mcp),
+        )
+        // Universal Model Gateway: provider-shaped views of the one canonical
+        // registry. Adapter calls route back through the MCP handler, so they
+        // cannot bypass its scope checks.
+        .route("/llm/capabilities", get(universal_gateway::capabilities))
+        .route("/llm/tools", get(universal_gateway::list_tools))
+        .route(
+            "/llm/call",
+            axum::routing::post(universal_gateway::call_tool),
+        )
+        // Everything else continues to the inner Reality gateway unchanged.
         .fallback(proxy)
         .with_state(state);
 

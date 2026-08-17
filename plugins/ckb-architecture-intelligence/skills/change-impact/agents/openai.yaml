@@ -1,0 +1,7 @@
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "ckb-architecture-intelligence"
+      description: "CKB blast radius, causal path, failure cone, snapshot diff and guardrail tools"
+      transport: "streamable_http"
+      url: "https://ckb-mcp-server.onrender.com/mcp"

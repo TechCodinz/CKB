@@ -29,6 +29,12 @@ services:
         value: /opt/render/project/src/ckb_reality_data
       - key: CKB_BACKEND_URL
         value: https://ckb-backend-api.onrender.com
+      # RFC 9728 resource identifier for this MCP resource server, and the
+      # audience the Cloud authorization server stamps into access tokens. Must
+      # match CKB_MCP_RESOURCE on ckb-backend-api exactly, or every introspected
+      # token is rejected.
+      - key: CKB_MCP_RESOURCE
+        value: https://ckb-mcp-server.onrender.com
       # Import the exact backend internal secret so the two services cannot
       # silently drift onto different credentials.
       - key: CKB_INTERNAL_SECRET
