@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.10.2
+
+First-run and connectivity failures now explain themselves instead of surfacing raw Node error codes.
+
+- **Fixed:** a fresh install with no CKB CLI and no configured server reported `connect ECONNREFUSED 127.0.0.1:3000`. CKB now states that no analysis backend is available and names the two ways to fix it, in a single notification rather than two competing ones.
+- **Fixed:** connection failures are translated by cause — server unreachable, address unresolvable, TLS not verifiable, request timed out (including free-tier cold starts), authentication required, and connection reset — each naming the URL that was tried.
+- **Fixed:** a `401` now distinguishes "no API key stored" from "the stored key was rejected", and points at the *CKB: Set API Key* command.
+
 ## 1.10.0
 
 CKB V13.2 marketplace launch — the Invisible Reality architecture-intelligence experience is now aligned with the verified V13/V13.1/V13.2 core and Cloud release.
