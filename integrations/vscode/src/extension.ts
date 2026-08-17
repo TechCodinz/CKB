@@ -15,6 +15,7 @@ import {
 } from './intelligence';
 import { CkbRealityViewProvider } from './realityView';
 import { CkbTransactionAgent } from './transactions';
+import { describeRequestFailure } from './requestFailure';
 
 const execFileAsync = promisify(execFile);
 
@@ -89,7 +90,7 @@ async function fetchApi(endpoint: string, method: string = 'GET', body?: any): P
                 resolve(parsed);
             });
         });
-        request.on('error', reject);
+        request.on('error', (error: any) => reject(new Error(describeRequestFailure(error, baseUrl, Boolean(apiKey)))));
         request.setTimeout(analysisTimeout(), () => request.destroy(new Error('CKB server request timed out')));
         if (payload) request.write(payload);
         request.end();
@@ -193,7 +194,17 @@ async function scanWorkspaceReport(root: string): Promise<any> {
             await fetchApi('/api/v1/scan', 'POST', { path: root });
             return await fetchApi('/api/v1/report');
         } catch (serverError: any) {
-            if (isCliMissing(cliError)) warnCliUnavailableOnce();
+            // Neither path is available. Previously this raised the raw server
+            // error on top of the CLI warning, so a first-time user saw both an
+            // actionable notice and "connect ECONNREFUSED 127.0.0.1:3000". State
+            // the actual situation once: CKB needs either local binaries or a
+            // reachable server, and neither is configured.
+            if (isCliMissing(cliError)) {
+                warnCliUnavailableOnce();
+                throw new Error(
+                    `CKB has no analysis backend available. Install the CKB CLI for local analysis, or set "ckb.serverUrl" to a reachable CKB server. (${serverError?.message || serverError})`
+                );
+            }
             throw serverError;
         }
     }
