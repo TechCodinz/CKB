@@ -1,0 +1,33 @@
+{
+  "name": "ckb-architecture-intelligence",
+  "version": "0.1.0",
+  "description": "Architecture intelligence workflows backed by the CKB remote MCP server.",
+  "author": {
+    "name": "TechCodinz"
+  },
+  "homepage": "https://ckb-nu.vercel.app",
+  "repository": "https://github.com/TechCodinz/CKB",
+  "license": "MIT",
+  "keywords": [
+    "architecture",
+    "codebase",
+    "dependency-graph",
+    "blast-radius",
+    "code-intelligence",
+    "mcp"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "CKB Architecture Intelligence",
+    "shortDescription": "Understand code architecture, impact, drift and test gaps.",
+    "longDescription": "Use CKB's persistent architecture graph, runtime evidence, Git history, Architecture Memory and blast-radius engine from ChatGPT and Codex.",
+    "developerName": "TechCodinz",
+    "capabilities": ["Read"],
+    "websiteURL": "https://ckb-nu.vercel.app",
+    "defaultPrompt": [
+      "Use CKB to review this repository's architecture and highest-risk areas.",
+      "Use CKB to show the blast radius of this proposed code change.",
+      "Use CKB to find architecture drift and graph-aware test gaps."
+    ]
+  }
+}
