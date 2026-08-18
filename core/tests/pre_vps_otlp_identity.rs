@@ -1,5 +1,4 @@
-use ckb_core::OtlpReceiver;
-use ckb_core::types::NodeId;
+use ckb_core::{NodeId, OtlpReceiver};
 
 #[test]
 fn same_named_functions_across_services_never_collapse_without_source_paths() {
