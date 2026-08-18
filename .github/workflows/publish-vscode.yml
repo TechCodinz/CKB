@@ -83,20 +83,25 @@ jobs:
           cache: 'npm'
           cache-dependency-path: integrations/vscode/package-lock.json
 
-      - name: Install dependencies
+      - name: Install locked dependencies
         if: steps.release.outputs.should_publish == 'true'
         working-directory: integrations/vscode
         run: npm ci
+
+      - name: Audit release toolchain
+        if: steps.release.outputs.should_publish == 'true'
+        working-directory: integrations/vscode
+        run: npm audit --audit-level=high
 
       - name: Compile extension
         if: steps.release.outputs.should_publish == 'true'
         working-directory: integrations/vscode
         run: npm run compile
 
-      - name: Package VSIX
+      - name: Package exact VSIX with lockfile-installed vsce
         if: steps.release.outputs.should_publish == 'true'
         working-directory: integrations/vscode
-        run: npx --yes @vscode/vsce@latest package --out ckb-vscode-${{ steps.release.outputs.version }}.vsix
+        run: npx --no-install vsce package --out ckb-vscode-${{ steps.release.outputs.version }}.vsix
 
       - name: Upload VSIX artifact
         if: steps.release.outputs.should_publish == 'true'
@@ -106,7 +111,7 @@ jobs:
           path: integrations/vscode/ckb-vscode-${{ steps.release.outputs.version }}.vsix
           retention-days: 90
 
-      - name: Publish to VS Code Marketplace
+      - name: Publish exact VSIX to VS Code Marketplace
         if: steps.release.outputs.should_publish == 'true'
         working-directory: integrations/vscode
         env:
@@ -115,17 +120,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          FLAGS=()
+          VSIX="ckb-vscode-${{ steps.release.outputs.version }}.vsix"
+          FLAGS=(--packagePath "$VSIX")
           if [[ "$PRE_RELEASE" == "true" ]]; then FLAGS+=(--pre-release); fi
 
           if [[ -n "$VSCE_TOKEN" ]]; then
-            echo "Publishing CKB ${{ steps.release.outputs.version }} with Marketplace PAT authentication."
-            npx --yes @vscode/vsce@latest publish "${FLAGS[@]}" --pat "$VSCE_TOKEN"
+            echo "Publishing exact verified artifact $VSIX with Marketplace PAT authentication."
+            npx --no-install vsce publish "${FLAGS[@]}" --pat "$VSCE_TOKEN"
           else
             echo "VSCE_TOKEN is not configured; attempting VS Code Marketplace trusted publishing (OIDC)."
-            echo "Using the current vsce pre-release because OIDC trusted publishing was introduced after the latest stable npm release."
-            echo "The Marketplace publisher must trust this exact GitHub repository/workflow before OIDC can succeed."
-            npx --yes @vscode/vsce@next publish "${FLAGS[@]}" --oidc
+            echo "The TechCodinz publisher must contain a trusted-publishing policy for this exact repository/workflow."
+            npx --no-install vsce publish "${FLAGS[@]}" --oidc
           fi
 
       - name: Publish summary
