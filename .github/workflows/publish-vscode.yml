@@ -61,12 +61,19 @@ jobs:
           elif [[ "${{ github.event_name }}" == "push" ]]; then
             BEFORE="${{ github.event.before }}"
             OLD_VERSION=""
+            PUBLISH_WORKFLOW_CHANGED=false
             if [[ -n "$BEFORE" && ! "$BEFORE" =~ ^0+$ ]]; then
               OLD_VERSION="$(git show "$BEFORE:integrations/vscode/package.json" 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{try{process.stdout.write(JSON.parse(s).version||'')}catch{}})" || true)"
+              if git diff --name-only "$BEFORE" "$GITHUB_SHA" | grep -Fxq '.github/workflows/publish-vscode.yml'; then
+                PUBLISH_WORKFLOW_CHANGED=true
+              fi
             fi
             if [[ "$OLD_VERSION" != "$VERSION" ]]; then
               SHOULD_PUBLISH=true
               REASON="package version changed ${OLD_VERSION:-none} -> $VERSION"
+            elif [[ "$PUBLISH_WORKFLOW_CHANGED" == "true" ]]; then
+              SHOULD_PUBLISH=true
+              REASON="publisher workflow changed; reconcile current v$VERSION"
             fi
           fi
 
