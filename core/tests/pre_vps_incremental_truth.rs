@@ -1,6 +1,7 @@
-use ckb_core::{FileDeltaKind, IncrementalArchitectureEngine, RepositoryAnalysisState, VerifiedFileDelta};
-use ckb_core::parser::FileAnalysis;
-use ckb_core::types::{FunctionCall, Node, NodeId, NodeKind};
+use ckb_core::{
+    FileAnalysis, FileDeltaKind, FunctionCall, IncrementalArchitectureEngine, Node, NodeId,
+    NodeKind, RepositoryAnalysisState, VerifiedFileDelta,
+};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
