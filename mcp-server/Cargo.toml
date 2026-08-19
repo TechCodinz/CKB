@@ -13,6 +13,10 @@ name = "ckb-mcp-server"
 path = "src/main.rs"
 
 [[bin]]
+name = "ckb-omnicode-validate"
+path = "src/bin/omnicode_validate.rs"
+
+[[bin]]
 name = "reality_server_v5"
 path = "src/bin/reality_server_v5.rs"
 
