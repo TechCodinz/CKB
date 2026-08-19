@@ -60,6 +60,7 @@ Track paying organisations, pilots, subscriptions, enterprise deployments, renew
 | 2026-08-17 | community | GitHub open issues | 9 | GitHub repository API snapshot, TechCodinz/CKB | Yes | Activity increased from the 2026-08-14 baseline of 7; this is activity, not automatically recognition. |
 | 2026-08-18 | community | GitHub open issues | 3 | GitHub repository API snapshot, TechCodinz/CKB, captured 2026-08-18 | Yes | Open-issue count decreased from 9 on 2026-08-17 to 3. This records repository activity, not adoption or recognition. |
 | 2026-08-18 | release engineering | Exact-artifact Marketplace publish path hardened on main | guarded exact-artifact publishing, locked-toolchain/Linux release preflight and Marketplace reconciliation logic consolidated | TechCodinz/CKB commit a5685b318532c6d571879b9fe9c9cedb62b47e98 | No | Release-engineering milestone only. No successful VS Code Marketplace publication for v1.10.2 was verified in this capture, so the 2026-08-17 publication blocker remains the latest source-backed distribution status. |
+| 2026-08-19 | community | GitHub open issues | 4 | GitHub repository API snapshot, TechCodinz/CKB, captured 2026-08-19 | Yes | Open-issue count increased from 3 on 2026-08-18 to 4. Stars and forks remain 0 in the same snapshot. This records repository activity, not adoption or recognition. |
 
 ## Monthly snapshot
 
