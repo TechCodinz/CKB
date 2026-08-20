@@ -38,7 +38,10 @@ impl TraceContext {
     }
 
     pub fn traceparent(&self) -> String {
-        format!("00-{}-{}-{:02x}", self.trace_id, self.span_id, self.trace_flags)
+        format!(
+            "00-{}-{}-{:02x}",
+            self.trace_id, self.span_id, self.trace_flags
+        )
     }
 
     pub fn parse_traceparent(value: &str) -> Option<Self> {
@@ -148,7 +151,11 @@ impl<E: Exporter> RuntimeCollector<E> {
         Self::with_batch_limit(service_name, exporter, 32)
     }
 
-    pub fn with_batch_limit(service_name: impl Into<String>, exporter: E, max_batch: usize) -> Self {
+    pub fn with_batch_limit(
+        service_name: impl Into<String>,
+        exporter: E,
+        max_batch: usize,
+    ) -> Self {
         Self {
             service_name: service_name.into().trim().chars().take(120).collect(),
             exporter,
@@ -168,8 +175,12 @@ impl<E: Exporter> RuntimeCollector<E> {
         flow_type: FlowType,
         attributes: BTreeMap<String, String>,
     ) -> ActiveSpan {
-        let context = parent.map(TraceContext::child).unwrap_or_else(TraceContext::new_root);
-        let parent_span_id = parent.map(|value| value.span_id.clone()).unwrap_or_default();
+        let context = parent
+            .map(TraceContext::child)
+            .unwrap_or_else(TraceContext::new_root);
+        let parent_span_id = parent
+            .map(|value| value.span_id.clone())
+            .unwrap_or_default();
         let mut safe = sanitize_attributes(attributes);
         safe.insert("ckb.flow.type".into(), flow_type.as_str().into());
         ActiveSpan {
@@ -195,7 +206,11 @@ impl<E: Exporter> RuntimeCollector<E> {
         attributes.insert("http.request.method".into(), bounded(method, 16));
         attributes.insert("http.route".into(), safe_route_template(route_template));
         self.start_span(
-            format!("{} {}", bounded(method, 16), safe_route_template(route_template)),
+            format!(
+                "{} {}",
+                bounded(method, 16),
+                safe_route_template(route_template)
+            ),
             parent,
             FlowType::HttpClient,
             attributes,
@@ -377,7 +392,9 @@ fn generated_hex(width: usize, domain: &str) -> String {
 }
 
 fn is_lower_hex(value: &str) -> bool {
-    value.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    value
+        .bytes()
+        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 #[cfg(test)]
@@ -412,9 +429,15 @@ mod tests {
 
     #[test]
     fn invalid_traceparents_are_rejected() {
-        assert!(TraceContext::parse_traceparent("00-00000000000000000000000000000000-0000000000000000-01").is_none());
+        assert!(TraceContext::parse_traceparent(
+            "00-00000000000000000000000000000000-0000000000000000-01"
+        )
+        .is_none());
         assert!(TraceContext::parse_traceparent("00-nothex-1234-01").is_none());
-        assert!(TraceContext::parse_traceparent("00-ABCDEFABCDEFABCDEFABCDEFABCDEFAB-abcdefabcdefabcd-01").is_none());
+        assert!(TraceContext::parse_traceparent(
+            "00-ABCDEFABCDEFABCDEFABCDEFABCDEFAB-abcdefabcdefabcd-01"
+        )
+        .is_none());
     }
 
     #[test]
@@ -426,7 +449,10 @@ mod tests {
             ("request.body".into(), "sensitive".into()),
         ]);
         let safe = sanitize_attributes(attributes);
-        assert_eq!(safe.get("db.system").map(String::as_str), Some("postgresql"));
+        assert_eq!(
+            safe.get("db.system").map(String::as_str),
+            Some("postgresql")
+        );
         assert!(!safe.contains_key("authorization"));
         assert!(!safe.contains_key("user.session.token"));
         assert!(!safe.contains_key("request.body"));
@@ -434,7 +460,10 @@ mod tests {
 
     #[test]
     fn route_template_drops_origin_query_and_fragment() {
-        assert_eq!(safe_route_template("https://example.com/orders/:id?token=nope#top"), "/orders/:id");
+        assert_eq!(
+            safe_route_template("https://example.com/orders/:id?token=nope#top"),
+            "/orders/:id"
+        );
         assert_eq!(safe_route_template("orders/:id?debug=true"), "/orders/:id");
     }
 
@@ -456,7 +485,10 @@ mod tests {
 
     #[test]
     fn failed_export_keeps_batch_for_retry() {
-        let exporter = MemoryExporter { payloads: vec![], fail: true };
+        let exporter = MemoryExporter {
+            payloads: vec![],
+            fail: true,
+        };
         let mut collector = RuntimeCollector::with_batch_limit("svc", exporter, 1);
         let span = collector.start_span("work", None, FlowType::Function, BTreeMap::new());
         assert!(collector.finish_span(span, true).is_err());
