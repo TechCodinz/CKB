@@ -69,6 +69,25 @@ jobs:
       - name: Core compile check
         run: cargo check -p ckb-core
 
+  rust-runtime-agent:
+    name: Rust runtime collector
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Format check
+        run: cargo fmt --manifest-path integrations/runtime/rust/Cargo.toml -- --check
+
+      - name: Unit and privacy tests
+        run: cargo test --manifest-path integrations/runtime/rust/Cargo.toml
+
   go-runtime-agent:
     name: Go runtime agent
     runs-on: ubuntu-latest
