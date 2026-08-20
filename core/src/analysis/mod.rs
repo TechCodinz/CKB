@@ -20,6 +20,7 @@ pub mod deep_causality_bundle;
 pub mod deep_causality_history;
 pub mod live_execution;
 pub mod runtime_diagnostics;
+pub mod evolution_memory;
 
 pub use boundaries::*;
 pub use patterns::*;
@@ -42,6 +43,7 @@ pub use deep_causality_bundle::*;
 pub use deep_causality_history::*;
 pub use live_execution::*;
 pub use runtime_diagnostics::*;
+pub use evolution_memory::*;
 
 use crate::graph::DependencyGraph;
 use crate::types::*;
