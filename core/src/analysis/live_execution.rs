@@ -185,8 +185,14 @@ impl LiveExecutionAnalyzer {
             for step in &trace.steps {
                 traced_nodes.insert(step.source.clone());
                 traced_nodes.insert(step.target.clone());
-                outgoing.entry(step.source.clone()).or_default().insert(step.target.clone());
-                incoming.entry(step.target.clone()).or_default().insert(step.source.clone());
+                outgoing
+                    .entry(step.source.clone())
+                    .or_default()
+                    .insert(step.target.clone());
+                incoming
+                    .entry(step.target.clone())
+                    .or_default()
+                    .insert(step.source.clone());
             }
         }
 
@@ -206,11 +212,13 @@ impl LiveExecutionAnalyzer {
             let error_rate = metrics.map(|m| m.error_rate).unwrap_or(0.0);
             let out_count = outgoing.get(&node_id).map(HashSet::len).unwrap_or(0);
             let in_count = incoming.get(&node_id).map(HashSet::len).unwrap_or(0);
-            let runtime_only_identity = Self::is_unresolved_runtime_identity(&node_id)
-                || !static_nodes.contains(&node_id);
+            let runtime_only_identity =
+                Self::is_unresolved_runtime_identity(&node_id) || !static_nodes.contains(&node_id);
 
             let mut signals = vec![RuntimeSignal::Observed];
-            if execution_count >= self.thresholds.hot_execution_count || metrics.map(|m| m.is_hotpath).unwrap_or(false) {
+            if execution_count >= self.thresholds.hot_execution_count
+                || metrics.map(|m| m.is_hotpath).unwrap_or(false)
+            {
                 signals.push(RuntimeSignal::Hot);
             }
             if avg_latency_ms >= self.thresholds.slow_avg_latency_ms {
@@ -253,7 +261,9 @@ impl LiveExecutionAnalyzer {
             });
         }
 
-        let can_assess_absence = observation_window.as_ref().is_some_and(ObservationWindow::is_valid);
+        let can_assess_absence = observation_window
+            .as_ref()
+            .is_some_and(ObservationWindow::is_valid);
         let mut dead_code_candidates = Vec::new();
         if can_assess_absence {
             for node_id in static_nodes {
@@ -283,7 +293,10 @@ impl LiveExecutionAnalyzer {
 
         node_insights.sort_by(|a, b| a.node_id.0.cmp(&b.node_id.0));
         RuntimeFusionReport {
-            observed_nodes: node_insights.iter().filter(|node| node.signals.contains(&RuntimeSignal::Observed)).count(),
+            observed_nodes: node_insights
+                .iter()
+                .filter(|node| node.signals.contains(&RuntimeSignal::Observed))
+                .count(),
             node_insights,
             dead_code_candidates,
             unresolved_runtime_identities,
@@ -356,7 +369,11 @@ impl LiveExecutionAnalyzer {
         if desired == 0.0 || trace.steps.is_empty() {
             return Vec::new();
         }
-        let total: f64 = trace.steps.iter().map(|step| step.duration_ms.max(0.0)).sum();
+        let total: f64 = trace
+            .steps
+            .iter()
+            .map(|step| step.duration_ms.max(0.0))
+            .sum();
         if total <= f64::EPSILON {
             return Vec::new();
         }
@@ -388,7 +405,14 @@ mod tests {
         NodeId(value.to_string())
     }
 
-    fn step(trace: &str, span: &str, parent: &str, source: &str, target: &str, duration: f64) -> ObservedExecutionStep {
+    fn step(
+        trace: &str,
+        span: &str,
+        parent: &str,
+        source: &str,
+        target: &str,
+        duration: f64,
+    ) -> ObservedExecutionStep {
         ObservedExecutionStep {
             trace_id: trace.into(),
             span_id: span.into(),
@@ -412,18 +436,27 @@ mod tests {
         let analyzer = LiveExecutionAnalyzer::default();
         let unresolved = node("runtime-unresolved/function/work");
         let mut runtime = HashMap::new();
-        runtime.insert(unresolved.clone(), RuntimeMetrics {
-            execution_count: 9,
-            avg_latency_ms: 4.0,
-            error_rate: 0.0,
-            is_hotpath: false,
-        });
+        runtime.insert(
+            unresolved.clone(),
+            RuntimeMetrics {
+                execution_count: 9,
+                avg_latency_ms: 4.0,
+                error_rate: 0.0,
+                is_hotpath: false,
+            },
+        );
         let report = analyzer.fuse(&HashSet::new(), &runtime, &[], None);
         assert_eq!(report.unresolved_runtime_identities, 1);
-        let insight = report.node_insights.iter().find(|item| item.node_id == unresolved).unwrap();
+        let insight = report
+            .node_insights
+            .iter()
+            .find(|item| item.node_id == unresolved)
+            .unwrap();
         assert!(insight.runtime_only_identity);
         assert!(insight.signals.contains(&RuntimeSignal::UnresolvedIdentity));
-        assert!(!insight.evidence.contains(&"source-identity-resolved".to_string()));
+        assert!(!insight
+            .evidence
+            .contains(&"source-identity-resolved".to_string()));
     }
 
     #[test]
@@ -432,14 +465,21 @@ mod tests {
         let id = node("src/checkout.ts::checkout");
         let static_nodes = HashSet::from([id.clone()]);
         let mut runtime = HashMap::new();
-        runtime.insert(id.clone(), RuntimeMetrics {
-            execution_count: 900,
-            avg_latency_ms: 650.0,
-            error_rate: 0.08,
-            is_hotpath: true,
-        });
+        runtime.insert(
+            id.clone(),
+            RuntimeMetrics {
+                execution_count: 900,
+                avg_latency_ms: 650.0,
+                error_rate: 0.08,
+                is_hotpath: true,
+            },
+        );
         let report = analyzer.fuse(&static_nodes, &runtime, &[], None);
-        let insight = report.node_insights.iter().find(|item| item.node_id == id).unwrap();
+        let insight = report
+            .node_insights
+            .iter()
+            .find(|item| item.node_id == id)
+            .unwrap();
         assert!(insight.signals.contains(&RuntimeSignal::Hot));
         assert!(insight.signals.contains(&RuntimeSignal::Slow));
         assert!(insight.signals.contains(&RuntimeSignal::Unstable));
@@ -459,7 +499,10 @@ mod tests {
             &static_nodes,
             &HashMap::new(),
             &[],
-            Some(ObservationWindow { start_unix_nano: 10, end_unix_nano: 10 }),
+            Some(ObservationWindow {
+                start_unix_nano: 10,
+                end_unix_nano: 10,
+            }),
         );
         assert!(invalid_window.dead_code_candidates.is_empty());
 
@@ -467,7 +510,10 @@ mod tests {
             &static_nodes,
             &HashMap::new(),
             &[],
-            Some(ObservationWindow { start_unix_nano: 10, end_unix_nano: 20 }),
+            Some(ObservationWindow {
+                start_unix_nano: 10,
+                end_unix_nano: 20,
+            }),
         );
         assert_eq!(with_window.dead_code_candidates, vec![id]);
     }
@@ -487,8 +533,14 @@ mod tests {
         let result = analyzer.causal_neighborhood(&trace, &node("service"));
         assert!(result.complete_for_trace);
         assert_eq!(result.selected_edges.len(), 2);
-        assert!(result.observed_before.iter().all(|edge| edge.trace_id == "trace-1"));
-        assert!(result.observed_after.iter().all(|edge| edge.trace_id == "trace-1"));
+        assert!(result
+            .observed_before
+            .iter()
+            .all(|edge| edge.trace_id == "trace-1"));
+        assert!(result
+            .observed_after
+            .iter()
+            .all(|edge| edge.trace_id == "trace-1"));
         assert!(!result.synthetic);
 
         let missing = analyzer.causal_neighborhood(&trace, &node("not-observed"));
