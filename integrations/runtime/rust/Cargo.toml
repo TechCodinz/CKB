@@ -1,0 +1,12 @@
+[package]
+name = "ckb-live-runtime"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Evidence-first CKB Live Reality runtime collector for Rust applications"
+license = "MIT"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
