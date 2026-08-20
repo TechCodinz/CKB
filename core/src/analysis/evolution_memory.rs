@@ -133,17 +133,37 @@ pub fn build_evolution_memory(
     incidents: &[IncidentObservation],
     association_horizon_ms: u64,
 ) -> EvolutionMemoryReport {
-    let valid_snapshots: Vec<_> = snapshots.iter().filter(|item| valid_snapshot(item)).cloned().collect();
-    let mut valid_deployments: Vec<_> = deployments.iter().filter(|item| valid_deployment(item)).cloned().collect();
-    let mut valid_runtime: Vec<_> = runtime_windows.iter().filter(|item| valid_runtime(item)).cloned().collect();
-    let valid_incidents: Vec<_> = incidents.iter().filter(|item| valid_incident(item)).cloned().collect();
+    let valid_snapshots: Vec<_> = snapshots
+        .iter()
+        .filter(|item| valid_snapshot(item))
+        .cloned()
+        .collect();
+    let mut valid_deployments: Vec<_> = deployments
+        .iter()
+        .filter(|item| valid_deployment(item))
+        .cloned()
+        .collect();
+    let mut valid_runtime: Vec<_> = runtime_windows
+        .iter()
+        .filter(|item| valid_runtime(item))
+        .cloned()
+        .collect();
+    let valid_incidents: Vec<_> = incidents
+        .iter()
+        .filter(|item| valid_incident(item))
+        .cloned()
+        .collect();
 
     valid_deployments.sort_by_key(|item| item.observed_unix_nano);
     valid_runtime.sort_by_key(|item| item.window_start_unix_nano);
 
     let mut snapshots_by_commit: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for snapshot in &valid_snapshots {
-        if let Some(commit) = snapshot.commit_sha.as_ref().filter(|value| !value.trim().is_empty()) {
+        if let Some(commit) = snapshot
+            .commit_sha
+            .as_ref()
+            .filter(|value| !value.trim().is_empty())
+        {
             snapshots_by_commit
                 .entry(commit.clone())
                 .or_default()
@@ -164,13 +184,19 @@ pub fn build_evolution_memory(
             .iter()
             .filter(|window| {
                 window.window_start_unix_nano >= deployment.observed_unix_nano
-                    && window.window_start_unix_nano.saturating_sub(deployment.observed_unix_nano) <= horizon_nanos
+                    && window
+                        .window_start_unix_nano
+                        .saturating_sub(deployment.observed_unix_nano)
+                        <= horizon_nanos
             })
             .min_by_key(|window| window.window_start_unix_nano);
 
         if let (Some(before), Some(after)) = (before, after) {
             let matching_snapshot_id = deployment.commit_sha.as_ref().and_then(|commit| {
-                snapshots_by_commit.get(commit).and_then(|ids| ids.last()).cloned()
+                snapshots_by_commit
+                    .get(commit)
+                    .and_then(|ids| ids.last())
+                    .cloned()
             });
             runtime_shifts.push(RuntimeShift {
                 deployment_id: deployment.deployment_id.clone(),
@@ -278,7 +304,9 @@ mod tests {
         assert_eq!(shift.execution_delta, 40);
         assert!(shift.evidence_policy.contains("not a causal"));
         assert_eq!(report.incident_proximity.len(), 1);
-        assert!(report.incident_proximity[0].evidence_policy.contains("does not establish"));
+        assert!(report.incident_proximity[0]
+            .evidence_policy
+            .contains("does not establish"));
         assert!(!report.synthetic);
     }
 
