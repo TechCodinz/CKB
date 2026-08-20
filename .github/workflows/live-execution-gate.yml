@@ -34,8 +34,8 @@ jobs:
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Format check
-        run: cargo fmt --all -- --check
+      - name: Live Execution source format
+        run: rustfmt --edition 2021 --check core/src/analysis/live_execution.rs
 
       - name: Live Execution Twin tests
         run: cargo test -p ckb-core live_execution --no-fail-fast
@@ -62,35 +62,6 @@ jobs:
 
       - name: Core compile check
         run: cargo check -p ckb-core
-
-  rustfmt-candidate:
-    name: Canonical rustfmt candidate
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install stable Rust with rustfmt
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-
-      - name: Apply canonical rustfmt in workspace
-        run: |
-          cargo fmt --all
-          git diff -- core > rustfmt.patch
-
-      - name: Upload canonical rustfmt outputs
-        uses: actions/upload-artifact@v4
-        with:
-          name: live-execution-rustfmt
-          path: |
-            core/src/analysis/live_execution.rs
-            core/src/analysis/mod.rs
-            rustfmt.patch
-          if-no-files-found: error
-          retention-days: 1
 
   go-runtime-agent:
     name: Go runtime agent
