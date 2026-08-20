@@ -10,3 +10,5 @@ license = "MIT"
 path = "src/lib.rs"
 
 [dependencies]
+
+[workspace]
