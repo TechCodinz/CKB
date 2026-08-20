@@ -1,0 +1,81 @@
+{
+  "provider": "google",
+  "model": "gemini-3.7-flash",
+  "aliases": [],
+  "availability": "ga",
+  "releasedAt": "2026-08-13T00:00:00Z",
+  "verifiedAt": "2026-08-20T00:00:00Z",
+  "staleAfterDays": 30,
+  "contextWindowTokens": 1048576,
+  "maxOutputTokens": 65536,
+  "knowledgeCutoff": null,
+  "inputModalities": ["text", "image", "video", "audio", "pdf"],
+  "outputModalities": ["text"],
+  "apiSurfaces": ["interactions", "generate-content"],
+  "preferredApiSurface": "interactions",
+  "reasoning": {
+    "support": "supported",
+    "modes": ["low", "medium", "high"],
+    "defaultMode": "medium",
+    "adaptive": "unknown",
+    "alwaysOn": null,
+    "manualBudgetSupported": false
+  },
+  "tools": {
+    "functionCalling": "supported",
+    "structuredOutput": "supported",
+    "parallelFunctionCalling": "unknown",
+    "codeExecution": "supported",
+    "computerUse": "preview",
+    "mcp": "unknown",
+    "namedTools": [
+      "code-execution",
+      "computer-use-preview",
+      "file-search",
+      "function-calling",
+      "google-maps-grounding",
+      "search-grounding",
+      "url-context"
+    ]
+  },
+  "requestConstraints": {
+    "deprecatedParameters": ["temperature", "top_p", "top_k"],
+    "rejectedParameters": [],
+    "ignoredParameters": [],
+    "unsupportedParameters": ["candidate_count"],
+    "unsupportedTurnPatterns": ["prefilled-model-turn"],
+    "parameterMigrations": [
+      {
+        "from": "thinking_budget",
+        "to": "thinking_level",
+        "action": "review",
+        "note": "Replace numeric thinking budgets with thinking_level. Gemini 3.7 Flash supports low, medium, and high; medium is the default."
+      }
+    ],
+    "notes": [
+      "thinking_level=minimal is unsupported on Gemini 3.7 Flash and returns an error.",
+      "Remove temperature, top_p, and top_k when migrating to Gemini 3.7 Flash.",
+      "Google recommends previous_interaction_id for stateful multi-turn Interactions API conversations.",
+      "Prefilled model turns are unsupported.",
+      "GenerateContent function responses must include call_id and name."
+    ]
+  },
+  "tokenizerNotes": [],
+  "declaredSources": [
+    {
+      "kind": "official-release",
+      "reference": "https://ai.google.dev/gemini-api/docs/changelog",
+      "observedAt": "2026-08-20T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash",
+      "observedAt": "2026-08-20T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/latest-model",
+      "observedAt": "2026-08-20T00:00:00Z"
+    }
+  ]
+}
