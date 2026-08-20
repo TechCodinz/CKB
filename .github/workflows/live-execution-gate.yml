@@ -1,0 +1,179 @@
+name: Live Execution Twin Gate
+
+on:
+  pull_request:
+    paths:
+      - 'core/**'
+      - 'mcp-server/**'
+      - 'integrations/runtime/**'
+      - 'docs/live-execution-twin.md'
+      - '.github/workflows/live-execution-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-execution-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-runtime-intelligence:
+    name: Core runtime intelligence
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Live Execution source format
+        run: rustfmt --edition 2021 --check core/src/analysis/live_execution.rs core/src/analysis/runtime_diagnostics.rs core/src/analysis/evolution_memory.rs
+
+      - name: Live Execution Twin tests
+        run: cargo test -p ckb-core live_execution --no-fail-fast
+
+      - name: Runtime diagnostics tests
+        run: cargo test -p ckb-core runtime_diagnostics --no-fail-fast
+
+      - name: Evolution memory tests
+        run: cargo test -p ckb-core evolution_memory --no-fail-fast
+
+      - name: Core compile check
+        run: cargo check -p ckb-core
+
+  core-runtime-verification:
+    name: Core runtime compile and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Live Execution Twin tests
+        run: cargo test -p ckb-core live_execution --no-fail-fast
+
+      - name: Runtime diagnostics tests
+        run: cargo test -p ckb-core runtime_diagnostics --no-fail-fast
+
+      - name: Evolution memory tests
+        run: cargo test -p ckb-core evolution_memory --no-fail-fast
+
+      - name: Core compile check
+        run: cargo check -p ckb-core
+
+  rust-runtime-agent:
+    name: Rust runtime collector
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Format check
+        run: cargo fmt --manifest-path integrations/runtime/rust/Cargo.toml -- --check
+
+      - name: Unit and privacy tests
+        run: cargo test --manifest-path integrations/runtime/rust/Cargo.toml
+
+  go-runtime-agent:
+    name: Go runtime agent
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: integrations/runtime/go
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+          cache-dependency-path: integrations/runtime/go/go.mod
+
+      - name: Format check
+        run: test -z "$(gofmt -l .)"
+
+      - name: Unit tests
+        run: go test ./...
+
+      - name: Vet
+        run: go vet ./...
+
+  browser-runtime-agent:
+    name: Browser runtime collector
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+
+      - name: Unit and privacy tests
+        run: node --test integrations/runtime/browser/ckb-browser.test.mjs
+
+      - name: Syntax check
+        run: node --check integrations/runtime/browser/ckb-browser.mjs
+
+  java-runtime-agent:
+    name: Java runtime collector
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Compile collector and tests
+        run: javac -Xlint:all -d integrations/runtime/java/out integrations/runtime/java/src/ckb/runtime/CkbLiveRuntime.java integrations/runtime/java/src/ckb/runtime/CkbLiveRuntimeTest.java
+
+      - name: Unit and privacy tests
+        run: java -cp integrations/runtime/java/out ckb.runtime.CkbLiveRuntimeTest
+
+  dotnet-runtime-agent:
+    name: .NET runtime collector
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build collector
+        run: dotnet build integrations/runtime/dotnet/Ckb.LiveRuntime/Ckb.LiveRuntime.csproj --configuration Release
+
+      - name: Unit and privacy self-test
+        run: dotnet run --project integrations/runtime/dotnet/selftest/SelfTest.csproj --configuration Release
