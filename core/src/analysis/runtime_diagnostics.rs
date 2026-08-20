@@ -230,7 +230,9 @@ pub struct MultiServiceRuntimeBody {
     pub synthetic: bool,
 }
 
-pub fn multi_service_runtime_body(observations: &[ObservedServiceBoundary]) -> MultiServiceRuntimeBody {
+pub fn multi_service_runtime_body(
+    observations: &[ObservedServiceBoundary],
+) -> MultiServiceRuntimeBody {
     #[derive(Default)]
     struct NodeAccumulator {
         calls: u64,
@@ -246,7 +248,8 @@ pub fn multi_service_runtime_body(observations: &[ObservedServiceBoundary]) -> M
     }
 
     let mut nodes: BTreeMap<String, NodeAccumulator> = BTreeMap::new();
-    let mut edges: BTreeMap<(String, String, String), (RuntimeFlowType, EdgeAccumulator)> = BTreeMap::new();
+    let mut edges: BTreeMap<(String, String, String), (RuntimeFlowType, EdgeAccumulator)> =
+        BTreeMap::new();
     for observation in observations {
         let source = observation.source_service.trim();
         let target = observation.target_service.trim();
@@ -342,7 +345,15 @@ mod tests {
     use super::*;
     use crate::types::NodeId;
 
-    fn step(trace: &str, span: &str, source: &str, target: &str, start: u64, duration_ms: u64, error: bool) -> ObservedExecutionStep {
+    fn step(
+        trace: &str,
+        span: &str,
+        source: &str,
+        target: &str,
+        start: u64,
+        duration_ms: u64,
+        error: bool,
+    ) -> ObservedExecutionStep {
         ObservedExecutionStep {
             trace_id: trace.into(),
             span_id: span.into(),
@@ -365,12 +376,28 @@ mod tests {
     fn line_execution_requires_explicit_valid_observation() {
         let report = line_execution_report(&[
             ObservedLineExecution {
-                file: "src/pay.rs".into(), line: 44, hits: 8, source: LineEvidenceSource::Profiler,
-                observed_start_unix_nano: 10, observed_end_unix_nano: 20, trace_ids: vec!["t1".into()], function_id: None, evidence_ref: None, synthetic: false,
+                file: "src/pay.rs".into(),
+                line: 44,
+                hits: 8,
+                source: LineEvidenceSource::Profiler,
+                observed_start_unix_nano: 10,
+                observed_end_unix_nano: 20,
+                trace_ids: vec!["t1".into()],
+                function_id: None,
+                evidence_ref: None,
+                synthetic: false,
             },
             ObservedLineExecution {
-                file: "src/fake.rs".into(), line: 1, hits: 1, source: LineEvidenceSource::RuntimeProbe,
-                observed_start_unix_nano: 10, observed_end_unix_nano: 20, trace_ids: vec![], function_id: None, evidence_ref: None, synthetic: true,
+                file: "src/fake.rs".into(),
+                line: 1,
+                hits: 1,
+                source: LineEvidenceSource::RuntimeProbe,
+                observed_start_unix_nano: 10,
+                observed_end_unix_nano: 20,
+                trace_ids: vec![],
+                function_id: None,
+                evidence_ref: None,
+                synthetic: true,
             },
         ]);
         assert_eq!(report.observed_lines.len(), 1);
@@ -381,13 +408,17 @@ mod tests {
     #[test]
     fn trace_compare_reports_first_observed_divergence_only() {
         let success = ObservedExecutionTrace {
-            trace_id: "ok".into(), roots: vec![], steps: vec![
+            trace_id: "ok".into(),
+            roots: vec![],
+            steps: vec![
                 step("ok", "1", "request", "controller", 1, 2, false),
                 step("ok", "2", "controller", "service", 3_000_001, 4, false),
             ],
         };
         let failed = ObservedExecutionTrace {
-            trace_id: "bad".into(), roots: vec![], steps: vec![
+            trace_id: "bad".into(),
+            roots: vec![],
+            steps: vec![
                 step("bad", "1", "request", "controller", 1, 2, false),
                 step("bad", "2", "controller", "database", 3_000_001, 9, true),
             ],
@@ -404,9 +435,33 @@ mod tests {
     #[test]
     fn service_body_uses_only_explicit_service_boundaries() {
         let report = multi_service_runtime_body(&[
-            ObservedServiceBoundary { trace_id: "t1".into(), source_service: "web".into(), target_service: "api".into(), flow_type: RuntimeFlowType::HttpClient, duration_ms: 4.0, error: false, observed_unix_nano: 10 },
-            ObservedServiceBoundary { trace_id: "t2".into(), source_service: "api".into(), target_service: "db".into(), flow_type: RuntimeFlowType::Database, duration_ms: 8.0, error: true, observed_unix_nano: 20 },
-            ObservedServiceBoundary { trace_id: "".into(), source_service: "invented".into(), target_service: "db".into(), flow_type: RuntimeFlowType::Database, duration_ms: 2.0, error: false, observed_unix_nano: 30 },
+            ObservedServiceBoundary {
+                trace_id: "t1".into(),
+                source_service: "web".into(),
+                target_service: "api".into(),
+                flow_type: RuntimeFlowType::HttpClient,
+                duration_ms: 4.0,
+                error: false,
+                observed_unix_nano: 10,
+            },
+            ObservedServiceBoundary {
+                trace_id: "t2".into(),
+                source_service: "api".into(),
+                target_service: "db".into(),
+                flow_type: RuntimeFlowType::Database,
+                duration_ms: 8.0,
+                error: true,
+                observed_unix_nano: 20,
+            },
+            ObservedServiceBoundary {
+                trace_id: "".into(),
+                source_service: "invented".into(),
+                target_service: "db".into(),
+                flow_type: RuntimeFlowType::Database,
+                duration_ms: 2.0,
+                error: false,
+                observed_unix_nano: 30,
+            },
         ]);
         assert_eq!(report.boundaries.len(), 2);
         assert_eq!(report.services.len(), 3);
