@@ -63,6 +63,30 @@ jobs:
       - name: Core compile check
         run: cargo check -p ckb-core
 
+  rustfmt-candidate:
+    name: Canonical rustfmt candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust with rustfmt
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Apply canonical rustfmt in workspace
+        run: cargo fmt --all
+
+      - name: Upload formatted Live Execution source
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-execution-rustfmt
+          path: core/src/analysis/live_execution.rs
+          if-no-files-found: error
+          retention-days: 1
+
   go-runtime-agent:
     name: Go runtime agent
     runs-on: ubuntu-latest
