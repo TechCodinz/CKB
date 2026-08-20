@@ -1,0 +1,44 @@
+name: Live Execution Twin Gate
+
+on:
+  pull_request:
+    paths:
+      - 'core/**'
+      - 'mcp-server/**'
+      - 'integrations/runtime/**'
+      - 'docs/live-execution-twin.md'
+      - '.github/workflows/live-execution-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-execution-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-runtime-intelligence:
+    name: Core runtime intelligence
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Live Execution Twin tests
+        run: cargo test -p ckb-core live_execution --no-fail-fast
+
+      - name: Core compile check
+        run: cargo check -p ckb-core
