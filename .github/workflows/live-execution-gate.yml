@@ -132,3 +132,23 @@ jobs:
 
       - name: Syntax check
         run: node --check integrations/runtime/browser/ckb-browser.mjs
+
+  java-runtime-agent:
+    name: Java runtime collector
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Compile collector and tests
+        run: javac -Xlint:all -d integrations/runtime/java/out integrations/runtime/java/src/ckb/runtime/CkbLiveRuntime.java integrations/runtime/java/src/ckb/runtime/CkbLiveRuntimeTest.java
+
+      - name: Unit and privacy tests
+        run: java -cp integrations/runtime/java/out ckb.runtime.CkbLiveRuntimeTest
