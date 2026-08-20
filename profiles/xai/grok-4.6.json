@@ -1,0 +1,55 @@
+{
+  "provider": "xai",
+  "model": "grok-4.6",
+  "aliases": [],
+  "availability": "ga",
+  "releasedAt": "2026-08-12T00:00:00Z",
+  "verifiedAt": "2026-08-20T00:00:00Z",
+  "staleAfterDays": 30,
+  "contextWindowTokens": 500000,
+  "maxOutputTokens": null,
+  "knowledgeCutoff": "2026-02-01",
+  "inputModalities": ["text", "image"],
+  "outputModalities": ["text"],
+  "apiSurfaces": ["responses", "chat-completions"],
+  "preferredApiSurface": "responses",
+  "reasoning": {
+    "support": "supported",
+    "modes": ["low", "medium", "high", "xhigh"],
+    "defaultMode": "high",
+    "adaptive": "unknown",
+    "alwaysOn": true,
+    "manualBudgetSupported": false
+  },
+  "tools": {
+    "functionCalling": "supported",
+    "structuredOutput": "supported",
+    "parallelFunctionCalling": "unknown",
+    "codeExecution": "supported",
+    "computerUse": "unknown",
+    "mcp": "unknown",
+    "namedTools": ["function-calling", "web-search", "x-search", "code-execution"]
+  },
+  "requestConstraints": {
+    "deprecatedParameters": [],
+    "rejectedParameters": ["presencePenalty", "frequencyPenalty", "stop"],
+    "ignoredParameters": [],
+    "unsupportedParameters": [],
+    "unsupportedTurnPatterns": [],
+    "parameterMigrations": [],
+    "notes": [
+      "Reasoning cannot be disabled on Grok 4.6.",
+      "xhigh reasoning effort is supported on Grok 4.6.",
+      "xAI documents no text output limit for Grok 4.6.",
+      "xAI recommends prompt_cache_key on Responses API or x-grok-conv-id on Chat Completions for reliable conversation cache affinity.",
+      "Context compaction is recommended by xAI for long agent loops."
+    ]
+  },
+  "tokenizerNotes": [],
+  "declaredSources": [
+    {"kind":"official-release","reference":"https://docs.x.ai/developers/release-notes","observedAt":"2026-08-20T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://docs.x.ai/developers/grok-4-6","observedAt":"2026-08-20T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://docs.x.ai/developers/models/grok-4.6","observedAt":"2026-08-20T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://docs.x.ai/developers/model-capabilities/text/reasoning","observedAt":"2026-08-20T00:00:00Z"}
+  ]
+}
