@@ -83,19 +83,27 @@ type spanRecord struct {
 	Status            spanStatus  `json:"status"`
 }
 
+type scope struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
+type scopeSpans struct {
+	Scope scope        `json:"scope"`
+	Spans []spanRecord `json:"spans"`
+}
+
+type resource struct {
+	Attributes []attribute `json:"attributes"`
+}
+
+type resourceSpans struct {
+	Resource   resource     `json:"resource"`
+	ScopeSpans []scopeSpans `json:"scopeSpans"`
+}
+
 type otlpEnvelope struct {
-	ResourceSpans []struct {
-		Resource struct {
-			Attributes []attribute `json:"attributes"`
-		} `json:"resource"`
-		ScopeSpans []struct {
-			Scope struct {
-				Name    string `json:"name"`
-				Version string `json:"version"`
-			} `json:"scope"`
-			Spans []spanRecord `json:"spans"`
-		} `json:"scopeSpans"`
-	} `json:"resourceSpans"`
+	ResourceSpans []resourceSpans `json:"resourceSpans"`
 }
 
 // Client batches observed spans and sends standard OTLP/HTTP JSON to CKB.
@@ -174,12 +182,11 @@ func (c *Client) Configured() bool {
 	return c != nil && c.endpoint != "" && c.key != ""
 }
 
-func randomHex(bytes int) string {
-	buf := make([]byte, bytes)
+func randomHex(count int) string {
+	buf := make([]byte, count)
 	if _, err := rand.Read(buf); err != nil {
-		// A trace identity must not be fabricated from a predictable fallback.
-		// Returning empty causes the instrumentation call to execute normally but
-		// skip telemetry for that span.
+		// Never replace a failed cryptographic runtime identity with predictable
+		// bytes. The application still executes; only that telemetry span is skipped.
 		return ""
 	}
 	return hex.EncodeToString(buf)
@@ -205,6 +212,16 @@ func bounded(value string, max int) string {
 	return value
 }
 
+func sensitiveAttributeName(key string) bool {
+	lower := strings.ToLower(key)
+	for _, token := range []string{"authorization", "cookie", "secret", "password", "payload", "body", "sql", "token", "credential"} {
+		if strings.Contains(lower, token) {
+			return true
+		}
+	}
+	return false
+}
+
 func safeAttributes(metadata Metadata) []attribute {
 	flowType := bounded(metadata.FlowType, 80)
 	if flowType == "" {
@@ -228,7 +245,7 @@ func safeAttributes(metadata Metadata) []attribute {
 	for key, value := range metadata.Attributes {
 		key = bounded(key, 120)
 		value = bounded(value, 300)
-		if key == "" || value == "" || strings.Contains(strings.ToLower(key), "authorization") || strings.Contains(strings.ToLower(key), "cookie") || strings.Contains(strings.ToLower(key), "secret") || strings.Contains(strings.ToLower(key), "password") || strings.Contains(strings.ToLower(key), "payload") || strings.Contains(strings.ToLower(key), "body") || strings.Contains(strings.ToLower(key), "sql") {
+		if key == "" || value == "" || sensitiveAttributeName(key) {
 			continue
 		}
 		values = append(values, attr(key, value))
@@ -238,7 +255,7 @@ func safeAttributes(metadata Metadata) []attribute {
 	}
 	out := values[:0]
 	for _, item := range values {
-		if item.Key == "ckb.runtime.observed" || item.Value.BoolValue != nil || item.Value.StringValue != "" {
+		if item.Value.BoolValue != nil || item.Value.StringValue != "" {
 			out = append(out, item)
 		}
 	}
@@ -291,6 +308,14 @@ func traceparent(traceID, spanID string) string {
 	return "00-" + traceID + "-" + spanID + "-01"
 }
 
+func cloneMetadata(input map[string]string) map[string]string {
+	out := make(map[string]string, len(input)+4)
+	for key, value := range input {
+		out[key] = value
+	}
+	return out
+}
+
 func (c *Client) enqueue(span spanRecord) {
 	if !c.Configured() || span.TraceID == "" || span.SpanID == "" {
 		return
@@ -334,8 +359,8 @@ func (c *Client) observedSpan(name string, metadata Metadata, traceID, spanID, p
 	}
 }
 
-// Span executes fn and emits one observed span after it finishes. The returned
-// context may be used for child work so parent/child identity is exact.
+// Span executes fn and emits one observed span after it finishes. The child
+// context passed to fn carries the exact parent identity for nested work.
 func (c *Client) Span(ctx context.Context, name string, metadata Metadata, fn func(context.Context) error) error {
 	if fn == nil {
 		return errors.New("CKB Span requires a function")
@@ -356,8 +381,9 @@ func (c *Client) Span(ctx context.Context, name string, metadata Metadata, fn fu
 	return err
 }
 
-// Middleware wraps a real net/http handler. Route templates should be supplied
-// by the application as name when available; raw query strings are never sent.
+// Middleware wraps a real net/http handler. `name` should be a stable route or
+// operation template such as `GET /orders/{id}`. CKB deliberately does not
+// inspect or export r.URL.Path because raw path segments can contain user data.
 func (c *Client) Middleware(name string, metadata Metadata, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if next == nil {
@@ -377,8 +403,9 @@ func (c *Client) Middleware(name string, metadata Metadata, next http.Handler) h
 		metadata.Protocol = r.Proto
 		metadata.Attributes = cloneMetadata(metadata.Attributes)
 		metadata.Attributes["http.request.method"] = bounded(r.Method, 16)
-		// Use only host + path. Query values are intentionally dropped.
-		metadata.Attributes["http.route.observed"] = bounded(r.URL.Path, 300)
+		if stableRoute := bounded(name, 240); stableRoute != "" {
+			metadata.Attributes["http.route"] = stableRoute
+		}
 		_ = c.Span(ctx, name, metadata, func(spanCtx context.Context) error {
 			next.ServeHTTP(w, r.WithContext(spanCtx))
 			return nil
@@ -386,16 +413,9 @@ func (c *Client) Middleware(name string, metadata Metadata, next http.Handler) h
 	})
 }
 
-func cloneMetadata(input map[string]string) map[string]string {
-	out := make(map[string]string, len(input)+4)
-	for key, value := range input {
-		out[key] = value
-	}
-	return out
-}
-
 // Transport wraps outbound HTTP and propagates W3C traceparent. It records the
-// method and destination host only; body, headers and query values stay private.
+// method and destination hostname only; body, application headers, URL path and
+// query values stay outside CKB telemetry.
 type Transport struct {
 	Client *Client
 	Base   http.RoundTripper
@@ -407,7 +427,10 @@ func (t Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if base == nil {
 		base = http.DefaultTransport
 	}
-	if t.Client == nil || req == nil {
+	if req == nil {
+		return nil, errors.New("CKB HTTP transport received a nil request")
+	}
+	if t.Client == nil {
 		return base.RoundTrip(req)
 	}
 	parent := traceFromContext(req.Context())
@@ -436,7 +459,8 @@ func (t Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 			"server.address":      bounded(clone.URL.Hostname(), 240),
 		},
 	}
-	t.Client.enqueue(t.Client.observedSpan("http.client", metadata, traceID, spanID, parent.SpanID, start, err != nil || (response != nil && response.StatusCode >= 500)))
+	failed := err != nil || (response != nil && response.StatusCode >= 500)
+	t.Client.enqueue(t.Client.observedSpan("http.client", metadata, traceID, spanID, parent.SpanID, start, failed))
 	return response, err
 }
 
@@ -470,8 +494,8 @@ func (c *Client) Message(ctx context.Context, system, operation, direction strin
 	return c.Span(ctx, "messaging."+bounded(operation, 120), metadata, fn)
 }
 
-// SafeURL returns scheme/host/path only. It exists for integrations that need a
-// bounded destination identity while guaranteeing query/userinfo removal.
+// SafeURL removes userinfo, query and fragment. It is available to integrations
+// that need a bounded destination label without exporting credential/query data.
 func SafeURL(raw string) string {
 	parsed, err := url.Parse(raw)
 	if err != nil {
@@ -534,8 +558,8 @@ func (c *Client) restoreBatch(batch []spanRecord) {
 	c.queue = combined
 }
 
-// Flush sends one bounded batch. Failed batches are restored to memory; the
-// application request is never failed because CKB telemetry transport failed.
+// Flush sends one bounded batch. Failed batches are restored while the client
+// is running; telemetry transport failure never fails an application request.
 func (c *Client) Flush(ctx context.Context) error {
 	if !c.Configured() {
 		return nil
@@ -544,31 +568,13 @@ func (c *Client) Flush(ctx context.Context) error {
 	if len(batch) == 0 {
 		return nil
 	}
-	payload := otlpEnvelope{}
-	payload.ResourceSpans = make([]struct {
-		Resource struct {
-			Attributes []attribute `json:"attributes"`
-		} `json:"resource"`
-		ScopeSpans []struct {
-			Scope struct {
-				Name    string `json:"name"`
-				Version string `json:"version"`
-			} `json:"scope"`
-			Spans []spanRecord `json:"spans"`
-		} `json:"scopeSpans"`
-	}, 1)
-	payload.ResourceSpans[0].Resource.Attributes = c.resourceAttributes()
-	payload.ResourceSpans[0].ScopeSpans = make([]struct {
-		Scope struct {
-			Name    string `json:"name"`
-			Version string `json:"version"`
-		} `json:"scope"`
-		Spans []spanRecord `json:"spans"`
-	}, 1)
-	payload.ResourceSpans[0].ScopeSpans[0].Scope.Name = "ckb.live.reality"
-	payload.ResourceSpans[0].ScopeSpans[0].Scope.Version = "1.0.0"
-	payload.ResourceSpans[0].ScopeSpans[0].Spans = batch
-
+	payload := otlpEnvelope{ResourceSpans: []resourceSpans{{
+		Resource: resource{Attributes: c.resourceAttributes()},
+		ScopeSpans: []scopeSpans{{
+			Scope: scope{Name: "ckb.live.reality", Version: "1.0.0"},
+			Spans: batch,
+		}},
+	}}}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		c.restoreBatch(batch)
