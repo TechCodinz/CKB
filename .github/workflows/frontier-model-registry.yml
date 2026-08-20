@@ -1,0 +1,60 @@
+name: Frontier Model Registry
+
+on:
+  pull_request:
+    paths:
+      - 'profiles/**'
+      - 'schemas/model-capability-profile.schema.json'
+      - 'core/src/analysis/frontier_model_profile.rs'
+      - 'core/src/analysis/frontier_model_registry.rs'
+      - 'mcp-server/src/bin/model_registry_api.rs'
+      - '.github/workflows/frontier-model-registry.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'profiles/**'
+      - 'schemas/model-capability-profile.schema.json'
+      - 'core/src/analysis/frontier_model_profile.rs'
+      - 'core/src/analysis/frontier_model_registry.rs'
+      - 'mcp-server/src/bin/model_registry_api.rs'
+      - '.github/workflows/frontier-model-registry.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Validate profile JSON parses
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+          files = sorted(pathlib.Path('profiles').glob('*/*.json'))
+          if not files:
+              raise SystemExit('no frontier model profiles found')
+          seen = set()
+          for path in files:
+              data = json.loads(path.read_text())
+              key = (str(data.get('provider', '')).lower(), str(data.get('model', '')).lower())
+              if not all(key):
+                  raise SystemExit(f'{path}: provider/model are required')
+              if key in seen:
+                  raise SystemExit(f'{path}: duplicate provider/model {key}')
+              seen.add(key)
+              if data.get('sourceKind') not in (None, 'system-verified-primary-source'):
+                  raise SystemExit(f'{path}: unexpected sourceKind')
+              if not data.get('declaredSources'):
+                  raise SystemExit(f'{path}: declaredSources must not be empty')
+          print(f'validated {len(files)} profile files')
+          PY
+
+      - name: Test registry and request guards
+        run: cargo test --locked -p ckb-core frontier_model_registry
+
+      - name: Compile model registry API
+        run: cargo check --locked -p ckb-mcp-server --bin model_registry_api
