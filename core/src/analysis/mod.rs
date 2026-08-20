@@ -18,6 +18,7 @@ pub mod deep_causality_extractors;
 pub mod deep_causality_advanced;
 pub mod deep_causality_bundle;
 pub mod deep_causality_history;
+pub mod live_execution;
 
 pub use boundaries::*;
 pub use patterns::*;
@@ -38,6 +39,7 @@ pub use deep_causality_extractors::*;
 pub use deep_causality_advanced::*;
 pub use deep_causality_bundle::*;
 pub use deep_causality_history::*;
+pub use live_execution::*;
 
 use crate::graph::DependencyGraph;
 use crate::types::*;
