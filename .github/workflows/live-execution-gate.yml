@@ -35,10 +35,13 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Live Execution source format
-        run: rustfmt --edition 2021 --check core/src/analysis/live_execution.rs
+        run: rustfmt --edition 2021 --check core/src/analysis/live_execution.rs core/src/analysis/runtime_diagnostics.rs
 
       - name: Live Execution Twin tests
         run: cargo test -p ckb-core live_execution --no-fail-fast
+
+      - name: Runtime diagnostics tests
+        run: cargo test -p ckb-core runtime_diagnostics --no-fail-fast
 
       - name: Core compile check
         run: cargo check -p ckb-core
@@ -59,6 +62,9 @@ jobs:
 
       - name: Live Execution Twin tests
         run: cargo test -p ckb-core live_execution --no-fail-fast
+
+      - name: Runtime diagnostics tests
+        run: cargo test -p ckb-core runtime_diagnostics --no-fail-fast
 
       - name: Core compile check
         run: cargo check -p ckb-core
