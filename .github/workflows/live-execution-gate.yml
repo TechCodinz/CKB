@@ -77,13 +77,18 @@ jobs:
           components: rustfmt
 
       - name: Apply canonical rustfmt in workspace
-        run: cargo fmt --all
+        run: |
+          cargo fmt --all
+          git diff -- core > rustfmt.patch
 
-      - name: Upload formatted Live Execution source
+      - name: Upload canonical rustfmt outputs
         uses: actions/upload-artifact@v4
         with:
           name: live-execution-rustfmt
-          path: core/src/analysis/live_execution.rs
+          path: |
+            core/src/analysis/live_execution.rs
+            core/src/analysis/mod.rs
+            rustfmt.patch
           if-no-files-found: error
           retention-days: 1
 
