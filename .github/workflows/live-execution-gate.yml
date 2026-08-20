@@ -88,3 +88,22 @@ jobs:
 
       - name: Vet
         run: go vet ./...
+
+  browser-runtime-agent:
+    name: Browser runtime collector
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+
+      - name: Unit and privacy tests
+        run: node --test integrations/runtime/browser/ckb-browser.test.mjs
+
+      - name: Syntax check
+        run: node --check integrations/runtime/browser/ckb-browser.mjs
