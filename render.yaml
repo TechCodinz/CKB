@@ -45,6 +45,12 @@ services:
       # Optional operator/API-key path. The browser never receives it.
       - key: CKB_API_KEY
         sync: false
+      # CKB -> OmniCode architecture-learning feedback. The sender writes a
+      # retryable local outbox before delivery; OmniCode deduplicates on eventKey.
+      - key: OMNICODE_FEEDBACK_URL
+        value: https://omnicode-pro.vercel.app/api/integrations/learning-feedback
+      - key: OMNICODE_CKB_FEEDBACK_SECRET
+        sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
 
