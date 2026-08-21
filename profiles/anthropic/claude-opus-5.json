@@ -1,0 +1,67 @@
+{
+  "provider": "anthropic",
+  "model": "claude-opus-5",
+  "aliases": [],
+  "availability": "ga",
+  "releasedAt": "2026-07-24T00:00:00Z",
+  "verifiedAt": "2026-08-21T00:00:00Z",
+  "staleAfterDays": 30,
+  "contextWindowTokens": 1000000,
+  "maxOutputTokens": 128000,
+  "knowledgeCutoff": "2026-05",
+  "inputModalities": ["text", "image"],
+  "outputModalities": ["text"],
+  "apiSurfaces": ["messages"],
+  "preferredApiSurface": "messages",
+  "reasoning": {
+    "support": "supported",
+    "modes": ["low", "medium", "high", "xhigh", "max"],
+    "defaultMode": "high",
+    "adaptive": "supported",
+    "alwaysOn": false,
+    "manualBudgetSupported": false
+  },
+  "tools": {
+    "functionCalling": "supported",
+    "structuredOutput": "supported",
+    "parallelFunctionCalling": "unknown",
+    "codeExecution": "supported",
+    "computerUse": "beta",
+    "mcp": "unknown",
+    "namedTools": ["code_execution_20260521", "computer_20251124"]
+  },
+  "requestConstraints": {
+    "deprecatedParameters": [],
+    "rejectedParameters": [],
+    "ignoredParameters": [],
+    "unsupportedParameters": ["thinking.budget_tokens"],
+    "unsupportedTurnPatterns": ["assistant-prefill"],
+    "parameterMigrations": [
+      {
+        "from": "thinking.budget_tokens",
+        "to": "output_config.effort",
+        "action": "review",
+        "note": "Claude Opus 5 does not support manual extended thinking. Use adaptive thinking with output_config.effort instead."
+      }
+    ],
+    "notes": [
+      "Adaptive thinking is on by default for Claude Opus 5.",
+      "Manual extended thinking is not supported.",
+      "Effort defaults to high; supported effort levels are low, medium, high, xhigh, and max.",
+      "thinking.type=disabled is allowed only at effort high or below; xhigh or max with thinking disabled returns a 400 error.",
+      "Non-default temperature, top_p, or top_k values return a 400 error.",
+      "Assistant message prefilling is unsupported.",
+      "Computer use remains beta and uses computer_20251124 with the computer-use-2025-11-24 beta header.",
+      "Anthropic documents structured outputs with output_config.format and code execution support for Claude Opus 5."
+    ]
+  },
+  "tokenizerNotes": [],
+  "declaredSources": [
+    {"kind":"official-release","reference":"https://platform.claude.com/docs/en/release-notes/overview","observedAt":"2026-08-21T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://platform.claude.com/docs/en/about-claude/models/overview","observedAt":"2026-08-21T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://platform.claude.com/docs/en/build-with-claude/effort","observedAt":"2026-08-21T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://platform.claude.com/docs/en/build-with-claude/structured-outputs","observedAt":"2026-08-21T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool","observedAt":"2026-08-21T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://platform.claude.com/docs/en/agents-and-tools/agent-skills/quickstart","observedAt":"2026-08-21T00:00:00Z"}
+  ]
+}
