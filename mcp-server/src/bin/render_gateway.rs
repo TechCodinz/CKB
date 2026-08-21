@@ -19,6 +19,8 @@ use tracing::{error, info, warn};
 mod chatgpt_mcp;
 #[path = "reality_gateway/universal_gateway.rs"]
 mod universal_gateway;
+#[path = "reality_gateway/omnicode_feedback.rs"]
+mod omnicode_feedback;
 
 const MAX_PROXY_BODY: usize = 95 * 1024 * 1024;
 
@@ -198,11 +200,12 @@ async fn proxy(State(state): State<GatewayState>, request: Request<Body>) -> Res
                 .unwrap_or_else(|_| Response::new(Body::empty()));
         }
     };
+    let request_body = body.to_vec();
 
     let mut upstream = state
         .client
         .request(method, format!("{}{}", state.upstream, path_and_query))
-        .body(body.to_vec());
+        .body(request_body.clone());
 
     // Axum 0.7 and Reqwest 0.11 use different `http` crate major versions.
     // Forward textual header names/values instead of passing their concrete
@@ -238,13 +241,26 @@ async fn proxy(State(state): State<GatewayState>, request: Request<Body>) -> Res
         .and_then(|value| value.to_str().ok())
         .map(str::to_string);
     let bytes = upstream.bytes().await.unwrap_or_default();
+    let response_body = bytes.to_vec();
+
+    // CKB remains the authority for architecture evidence. If this was an
+    // OmniCode-attributed scan, persist a durable outbox event before attempting
+    // callback delivery. The callback cannot change the CKB response or make a
+    // truthful scan appear failed.
+    omnicode_feedback::enqueue_from_exchange(
+        state.client.clone(),
+        path_and_query,
+        request_body,
+        status.as_u16(),
+        response_body.clone(),
+    );
 
     let mut builder = Response::builder().status(status);
     if let Some(value) = content_type {
         builder = builder.header(header::CONTENT_TYPE, value);
     }
     builder
-        .body(Body::from(bytes))
+        .body(Body::from(response_body))
         .unwrap_or_else(|_| Response::new(Body::empty()))
 }
 
@@ -302,6 +318,7 @@ async fn main() -> anyhow::Result<()> {
         internal_secret,
         api_key,
     };
+    omnicode_feedback::start_reconciler(state.client.clone());
 
     let app = Router::new()
         .route("/health", get(health))
