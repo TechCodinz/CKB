@@ -13,6 +13,11 @@ use std::{error::Error, fmt};
 const BUILTIN_PROFILE_JSON: &[&str] = &[
     include_str!("../../../profiles/google/gemini-3.7-flash.json"),
     include_str!("../../../profiles/xai/grok-4.6.json"),
+    include_str!("../../../profiles/anthropic/claude-fable-5.json"),
+    include_str!("../../../profiles/anthropic/claude-mythos-5.json"),
+    include_str!("../../../profiles/anthropic/claude-opus-5.json"),
+    include_str!("../../../profiles/anthropic/claude-sonnet-5.json"),
+    include_str!("../../../profiles/anthropic/claude-opus-4-8.json"),
 ];
 
 #[derive(Debug)]
@@ -176,6 +181,18 @@ mod tests {
             .require("xai", "grok-4.6")
             .expect("Grok 4.6 must resolve");
         assert!(grok.reasoning.modes.iter().any(|mode| mode == "xhigh"));
+
+        let opus = registry
+            .require("ANTHROPIC", "claude-opus-5")
+            .expect("Claude Opus 5 must resolve");
+        assert_eq!(opus.context_window_tokens, Some(1_000_000));
+        assert_eq!(opus.max_output_tokens, Some(128_000));
+        assert!(opus.reasoning.modes.iter().any(|mode| mode == "max"));
+
+        let mythos = registry
+            .require("anthropic", "claude-mythos-5")
+            .expect("Claude Mythos 5 must resolve");
+        assert_eq!(mythos.availability, Some(super::super::frontier_model_profile::ModelAvailability::Limited));
     }
 
     #[test]
@@ -210,8 +227,23 @@ mod tests {
     }
 
     #[test]
+    fn anthropic_effort_modes_are_validated_without_family_guessing() {
+        let registry = FrontierModelRegistry::builtin().expect("embedded profiles must parse");
+        let result = registry
+            .adapt_request(
+                "anthropic",
+                "claude-sonnet-5",
+                &json!({"input": "x", "reasoning": {"effort": "ultra"}}),
+            )
+            .expect("profile must exist");
+        assert!(!result.compatible);
+        assert!(result.errors.iter().any(|error| error.contains("ultra")));
+    }
+
+    #[test]
     fn unknown_models_do_not_fall_back_to_family_guesses() {
         let registry = FrontierModelRegistry::builtin().expect("embedded profiles must parse");
         assert!(registry.resolve("google", "gemini-3.7-pro").is_none());
+        assert!(registry.resolve("anthropic", "claude-opus-5.1").is_none());
     }
 }
