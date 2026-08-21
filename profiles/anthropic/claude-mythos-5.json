@@ -1,0 +1,64 @@
+{
+  "provider": "anthropic",
+  "model": "claude-mythos-5",
+  "aliases": [],
+  "availability": "limited",
+  "releasedAt": "2026-06-09T00:00:00Z",
+  "verifiedAt": "2026-08-21T00:00:00Z",
+  "staleAfterDays": 30,
+  "contextWindowTokens": 1000000,
+  "maxOutputTokens": 128000,
+  "knowledgeCutoff": "2026-01",
+  "inputModalities": ["text", "image"],
+  "outputModalities": ["text"],
+  "apiSurfaces": ["messages"],
+  "preferredApiSurface": "messages",
+  "reasoning": {
+    "support": "supported",
+    "modes": ["low", "medium", "high", "xhigh", "max"],
+    "defaultMode": "high",
+    "adaptive": "supported",
+    "alwaysOn": true,
+    "manualBudgetSupported": false
+  },
+  "tools": {
+    "functionCalling": "supported",
+    "structuredOutput": "supported",
+    "parallelFunctionCalling": "unknown",
+    "codeExecution": "supported",
+    "computerUse": "unknown",
+    "mcp": "unknown",
+    "namedTools": ["code_execution_20260521"]
+  },
+  "requestConstraints": {
+    "deprecatedParameters": [],
+    "rejectedParameters": [],
+    "ignoredParameters": [],
+    "unsupportedParameters": ["thinking.budget_tokens"],
+    "unsupportedTurnPatterns": [],
+    "parameterMigrations": [
+      {
+        "from": "thinking.budget_tokens",
+        "to": "output_config.effort",
+        "action": "review",
+        "note": "Claude Mythos 5 uses always-on adaptive thinking. Replace manual thinking budgets with an appropriate effort level."
+      }
+    ],
+    "notes": [
+      "Claude Mythos 5 is limited availability for approved Project Glasswing customers.",
+      "Adaptive thinking is always on for Claude Mythos 5.",
+      "Manual extended thinking is not supported.",
+      "Effort defaults to high; supported effort levels are low, medium, high, xhigh, and max.",
+      "Anthropic documents code_execution_20260521 support for Claude Mythos 5.",
+      "Computer use is left unknown because Anthropic's current computer-use compatibility list does not establish support for Claude Mythos 5."
+    ]
+  },
+  "tokenizerNotes": [],
+  "declaredSources": [
+    {"kind":"official-release","reference":"https://platform.claude.com/docs/en/release-notes/overview","observedAt":"2026-08-21T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://platform.claude.com/docs/en/about-claude/models/overview","observedAt":"2026-08-21T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://platform.claude.com/docs/en/build-with-claude/effort","observedAt":"2026-08-21T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://platform.claude.com/docs/en/build-with-claude/structured-outputs","observedAt":"2026-08-21T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://platform.claude.com/docs/en/agents-and-tools/tool-use/code-execution-tool","observedAt":"2026-08-21T00:00:00Z"}
+  ]
+}

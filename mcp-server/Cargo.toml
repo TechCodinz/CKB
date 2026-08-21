@@ -29,6 +29,10 @@ name = "reality_bridge"
 path = "src/bin/reality_bridge.rs"
 
 [[bin]]
+name = "model_registry_api"
+path = "src/bin/model_registry_api.rs"
+
+[[bin]]
 name = "architecture_memory_mcp"
 path = "src/bin/architecture_memory_mcp_v3.rs"
 
