@@ -153,6 +153,13 @@ async fn persist(event: &FeedbackEvent) -> anyhow::Result<PathBuf> {
 
 async fn deliver(client: &Client, event: &FeedbackEvent) -> anyhow::Result<bool> {
     let Some(secret) = secret() else {
+        // Otherwise-silent: without this, a missing/misconfigured
+        // OMNICODE_CKB_FEEDBACK_SECRET means events pile up in the outbox
+        // forever with no operational signal that delivery is impossible.
+        warn!(
+            "OMNICODE_CKB_FEEDBACK_SECRET is not configured; holding {} in the outbox",
+            event.event_key
+        );
         return Ok(false);
     };
     let response = client
