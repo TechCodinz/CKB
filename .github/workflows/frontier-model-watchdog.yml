@@ -4,6 +4,10 @@ on:
   schedule:
     - cron: '17 10 * * *'
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'profiles/**'
+      - '.github/workflows/frontier-model-watchdog.yml'
   push:
     branches: [main]
     paths:
@@ -26,6 +30,7 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          import os
           import pathlib
           import urllib.parse
           from datetime import datetime, timezone
@@ -38,23 +43,14 @@ jobs:
           missing_watch = sorted(expected - watched)
 
           allowed_hosts = {
-              'developers.openai.com',
-              'help.openai.com',
-              'platform.openai.com',
-              'openai.com',
-              'platform.claude.com',
-              'docs.anthropic.com',
-              'anthropic.com',
-              'ai.google.dev',
-              'developers.googleblog.com',
-              'blog.google',
-              'docs.x.ai',
-              'x.ai',
+              'developers.openai.com', 'help.openai.com', 'platform.openai.com', 'openai.com',
+              'platform.claude.com', 'docs.anthropic.com', 'anthropic.com',
+              'ai.google.dev', 'developers.googleblog.com', 'blog.google',
+              'docs.x.ai', 'x.ai',
           }
 
           now = datetime.now(timezone.utc)
-          stale = []
-          invalid = []
+          stale, invalid = [], []
 
           for path in profiles:
               data = json.loads(path.read_text())
@@ -100,11 +96,9 @@ jobs:
               report = ['All frontier-model profiles are within freshness policy and use approved primary-source hosts.']
 
           pathlib.Path('/tmp/frontier-watchdog-report.md').write_text('\n'.join(report) + '\n')
-          with open(__import__('os').environ['GITHUB_OUTPUT'], 'a') as out:
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
               out.write(f"attention={'true' if stale or invalid else 'false'}\n")
-
-          if invalid:
-              raise SystemExit('\n'.join(invalid))
+              out.write(f"invalid={'true' if invalid else 'false'}\n")
           PY
 
       - name: Check official watch endpoints are reachable
@@ -123,7 +117,7 @@ jobs:
           done < /tmp/frontier-watch-urls.txt
 
       - name: Open or refresh re-verification issue
-        if: steps.audit.outputs.attention == 'true'
+        if: steps.audit.outputs.attention == 'true' && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -140,7 +134,11 @@ jobs:
       - name: Write job summary
         if: always()
         shell: bash
+        run: cat /tmp/frontier-watchdog-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce provenance policy
+        if: steps.audit.outputs.invalid == 'true'
+        shell: bash
         run: |
-          if [ -f /tmp/frontier-watchdog-report.md ]; then
-            cat /tmp/frontier-watchdog-report.md >> "$GITHUB_STEP_SUMMARY"
-          fi
+          echo 'Frontier profile provenance policy failed.' >&2
+          exit 1
