@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct ModelCapabilityRequirements {
     pub min_context_tokens: Option<u64>,
+    #[serde(default)] pub allowed_providers: Vec<String>,
     #[serde(default)] pub required_input_modalities: Vec<String>,
     pub reasoning_mode: Option<String>,
     #[serde(default)] pub require_function_calling: bool,
@@ -54,7 +55,9 @@ fn has_named_tool(profile: &FrontierModelProfileV2, tool: &str) -> bool {
 fn preference_index(requirements: &ModelCapabilityRequirements, profile: &FrontierModelProfileV2) -> usize {
     let exact = format!("{}:{}", profile.provider, profile.model);
     requirements.preference_order.iter()
-        .position(|value| value.eq_ignore_ascii_case(&exact) || value.eq_ignore_ascii_case(&profile.model))
+        .position(|value| value.eq_ignore_ascii_case(&exact)
+            || value.eq_ignore_ascii_case(&profile.model)
+            || value.eq_ignore_ascii_case(&profile.provider))
         .unwrap_or(usize::MAX)
 }
 
@@ -68,6 +71,11 @@ pub fn select_verified_models(
 
     for profile in registry.profiles() {
         let mut reasons = Vec::new();
+        if !requirements.allowed_providers.is_empty()
+            && !requirements.allowed_providers.iter().any(|value| value.eq_ignore_ascii_case(&profile.provider))
+        {
+            reasons.push("provider is outside the caller allow-list".to_string());
+        }
         if matches!(profile.availability, Some(ModelAvailability::Deprecated | ModelAvailability::Retired)) {
             reasons.push("model lifecycle is deprecated or retired".to_string());
         }
@@ -134,7 +142,7 @@ pub fn select_verified_models(
         selected: compatible.first().cloned(),
         compatible,
         rejected,
-        selection_policy: "verified-capabilities-first; explicit preferenceOrder only; otherwise stable provider/model order; no inferred quality ranking".to_string(),
+        selection_policy: "verified hard constraints first; explicit provider/model preference only; otherwise stable provider/model order; no inferred quality ranking".to_string(),
         synthetic: false,
     }
 }
@@ -144,28 +152,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn selector_requires_verified_capabilities_and_context() {
+    fn selector_requires_verified_capabilities_context_and_provider_allowlist() {
         let registry = FrontierModelRegistry::builtin().unwrap();
         let result = select_verified_models(&registry, &ModelCapabilityRequirements {
             min_context_tokens: Some(1_000_000),
+            allowed_providers: vec!["openai".into(), "google".into()],
             require_structured_output: true,
             require_code_execution: true,
             require_mcp: true,
-            preference_order: vec!["openai:gpt-5.6-sol".into()],
+            preference_order: vec!["openai".into()],
             ..Default::default()
         });
-        assert_eq!(result.selected.as_ref().map(|c| c.model.as_str()), Some("gpt-5.6-sol"));
-        assert!(result.compatible.iter().all(|c| c.compatible));
+        assert_eq!(result.selected.as_ref().map(|c| c.provider.as_str()), Some("openai"));
+        assert!(result.compatible.iter().all(|c| c.provider == "openai"));
     }
 
     #[test]
     fn selector_does_not_treat_unknown_as_supported() {
         let registry = FrontierModelRegistry::builtin().unwrap();
         let result = select_verified_models(&registry, &ModelCapabilityRequirements {
+            allowed_providers: vec!["anthropic".into()],
             require_mcp: true,
-            preference_order: vec!["anthropic:claude-opus-5".into()],
             ..Default::default()
         });
         assert!(result.rejected.iter().any(|c| c.model == "claude-opus-5"));
+        assert!(result.compatible.is_empty());
     }
 }
