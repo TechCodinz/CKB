@@ -11,6 +11,9 @@ use serde_json::Value;
 use std::{error::Error, fmt};
 
 const BUILTIN_PROFILE_JSON: &[&str] = &[
+    include_str!("../../../profiles/openai/gpt-5.6-sol.json"),
+    include_str!("../../../profiles/openai/gpt-5.6-terra.json"),
+    include_str!("../../../profiles/openai/gpt-5.6-luna.json"),
     include_str!("../../../profiles/google/gemini-3.7-flash.json"),
     include_str!("../../../profiles/xai/grok-4.6.json"),
     include_str!("../../../profiles/anthropic/claude-fable-5.json"),
@@ -171,6 +174,24 @@ mod tests {
     fn builtin_registry_resolves_new_exact_models() {
         let registry = FrontierModelRegistry::builtin().expect("embedded profiles must parse");
 
+        let sol = registry
+            .require("OPENAI", "gpt-5.6-sol")
+            .expect("GPT-5.6 Sol must resolve");
+        assert_eq!(sol.context_window_tokens, Some(1_050_000));
+        assert_eq!(sol.max_output_tokens, Some(128_000));
+        assert_eq!(sol.reasoning.default_mode.as_deref(), Some("medium"));
+        assert!(sol.reasoning.modes.iter().any(|mode| mode == "max"));
+
+        let terra = registry
+            .require("openai", "gpt-5.6-terra")
+            .expect("GPT-5.6 Terra must resolve");
+        assert_eq!(terra.context_window_tokens, Some(1_050_000));
+
+        let luna = registry
+            .require("openai", "gpt-5.6-luna")
+            .expect("GPT-5.6 Luna must resolve");
+        assert_eq!(luna.max_output_tokens, Some(128_000));
+
         let gemini = registry
             .require("GOOGLE", "gemini-3.7-flash")
             .expect("Gemini 3.7 Flash must resolve");
@@ -193,6 +214,35 @@ mod tests {
             .require("anthropic", "claude-mythos-5")
             .expect("Claude Mythos 5 must resolve");
         assert_eq!(mythos.availability, Some(super::super::frontier_model_profile::ModelAvailability::Limited));
+    }
+
+    #[test]
+    fn openai_alias_and_reasoning_modes_are_guarded() {
+        let registry = FrontierModelRegistry::builtin().expect("embedded profiles must parse");
+
+        let alias = registry
+            .require("openai", "gpt-5.6")
+            .expect("documented GPT-5.6 alias must resolve");
+        assert_eq!(alias.model, "gpt-5.6-sol");
+
+        let accepted = registry
+            .adapt_request(
+                "openai",
+                "gpt-5.6",
+                &json!({"input": "x", "reasoning": {"effort": "max"}}),
+            )
+            .expect("alias profile must exist");
+        assert!(accepted.compatible);
+
+        let rejected = registry
+            .adapt_request(
+                "openai",
+                "gpt-5.6-terra",
+                &json!({"input": "x", "reasoning": {"effort": "ultra"}}),
+            )
+            .expect("Terra profile must exist");
+        assert!(!rejected.compatible);
+        assert!(rejected.errors.iter().any(|error| error.contains("ultra")));
     }
 
     #[test]
@@ -243,6 +293,8 @@ mod tests {
     #[test]
     fn unknown_models_do_not_fall_back_to_family_guesses() {
         let registry = FrontierModelRegistry::builtin().expect("embedded profiles must parse");
+        assert!(registry.resolve("openai", "gpt-5.6-cyber").is_none());
+        assert!(registry.resolve("openai", "gpt-5.6-pro").is_none());
         assert!(registry.resolve("google", "gemini-3.7-pro").is_none());
         assert!(registry.resolve("anthropic", "claude-opus-5.1").is_none());
     }
