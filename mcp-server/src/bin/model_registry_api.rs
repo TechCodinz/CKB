@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use ckb_core::FrontierModelRegistry;
+use ckb_core::{select_verified_models, FrontierModelRegistry, ModelCapabilityRequirements};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{net::SocketAddr, sync::Arc};
@@ -36,13 +36,9 @@ fn configured_api_key() -> Option<Arc<String>> {
 fn secure_eq(left: &str, right: &str) -> bool {
     let left = left.as_bytes();
     let right = right.as_bytes();
-    if left.len() != right.len() {
-        return false;
-    }
+    if left.len() != right.len() { return false; }
     let mut diff = 0u8;
-    for (a, b) in left.iter().zip(right.iter()) {
-        diff |= a ^ b;
-    }
+    for (a, b) in left.iter().zip(right.iter()) { diff |= a ^ b; }
     diff == 0
 }
 
@@ -68,11 +64,9 @@ fn authorize_mutation(state: &AppState, headers: &HeaderMap) -> Result<(), (Stat
             })),
         ));
     };
-
     let valid = presented_api_key(headers)
         .map(|presented| secure_eq(presented, expected.as_str()))
         .unwrap_or(false);
-
     if valid {
         Ok(())
     } else {
@@ -88,6 +82,7 @@ async fn health(State(state): State<AppState>) -> Json<Value> {
         "status": "ok",
         "service": "ckb-frontier-model-registry",
         "profiles": state.registry.profiles().len(),
+        "selection": "verified-capability-filtering",
         "synthetic": false
     }))
 }
@@ -120,8 +115,15 @@ async fn get_model(
             })),
         ));
     };
-
     Ok(Json(json!({"profile": profile, "synthetic": false})))
+}
+
+async fn select_models(
+    State(state): State<AppState>,
+    Json(requirements): Json<ModelCapabilityRequirements>,
+) -> Json<Value> {
+    let selection = select_verified_models(&state.registry, &requirements);
+    Json(json!({"selection": selection, "synthetic": false}))
 }
 
 async fn adapt(
@@ -130,7 +132,6 @@ async fn adapt(
     Json(input): Json<AdaptRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     authorize_mutation(&state, &headers)?;
-
     match state.registry.adapt_request(&input.provider, &input.model, &input.request) {
         Ok(result) => Ok(Json(json!({"compatibility": result, "synthetic": false}))),
         Err(error) => Err((
@@ -143,16 +144,13 @@ async fn adapt(
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
-
     let registry = Arc::new(FrontierModelRegistry::builtin()?);
-    let state = AppState {
-        registry,
-        api_key: configured_api_key(),
-    };
+    let state = AppState { registry, api_key: configured_api_key() };
 
     let app = Router::new()
         .route("/health", get(health))
         .route("/api/v1/models", get(list_models))
+        .route("/api/v1/models/select", post(select_models))
         .route("/api/v1/models/:provider/:model", get(get_model))
         .route("/api/v1/models/adapt", post(adapt))
         .layer(CorsLayer::permissive())
