@@ -1,0 +1,78 @@
+{
+  "provider": "openai",
+  "model": "gpt-5.6-sol",
+  "aliases": ["gpt-5.6"],
+  "availability": "ga",
+  "releasedAt": "2026-07-09T00:00:00Z",
+  "verifiedAt": "2026-08-27T00:00:00Z",
+  "staleAfterDays": 30,
+  "contextWindowTokens": 1050000,
+  "maxOutputTokens": 128000,
+  "knowledgeCutoff": "2026-02-16",
+  "inputModalities": ["text", "image"],
+  "outputModalities": ["text"],
+  "apiSurfaces": ["responses", "chat-completions"],
+  "preferredApiSurface": "responses",
+  "reasoning": {
+    "support": "supported",
+    "modes": ["none", "low", "medium", "high", "xhigh", "max"],
+    "defaultMode": "medium",
+    "adaptive": "unknown",
+    "alwaysOn": false,
+    "manualBudgetSupported": null
+  },
+  "tools": {
+    "functionCalling": "supported",
+    "structuredOutput": "supported",
+    "parallelFunctionCalling": "unknown",
+    "codeExecution": "supported",
+    "computerUse": "supported",
+    "mcp": "supported",
+    "namedTools": [
+      "web-search",
+      "file-search",
+      "image-generation",
+      "code-interpreter",
+      "hosted-shell",
+      "apply-patch",
+      "skills",
+      "computer-use",
+      "mcp",
+      "tool-search"
+    ]
+  },
+  "requestConstraints": {
+    "deprecatedParameters": [],
+    "rejectedParameters": [],
+    "ignoredParameters": [],
+    "unsupportedParameters": [],
+    "unsupportedTurnPatterns": [],
+    "parameterMigrations": [],
+    "notes": [
+      "reasoning.effort supports none, low, medium, high, xhigh, and max; medium is the documented default.",
+      "The gpt-5.6 alias routes to gpt-5.6-sol.",
+      "OpenAI recommends the Responses API for GPT-5.6 reasoning, tool calling, and multi-turn workflows.",
+      "GPT-5.6 supports persisted reasoning through reasoning.context and supports reasoning.mode=pro on the Responses API.",
+      "Code execution capability is grounded in the documented Code Interpreter and hosted shell tools."
+    ]
+  },
+  "tokenizerNotes": [],
+  "declaredSources": [
+    {
+      "kind": "official-release",
+      "reference": "https://openai.com/index/gpt-5-6/",
+      "observedAt": "2026-08-27T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://developers.openai.com/api/docs/models/gpt-5.6-sol",
+      "observedAt": "2026-08-27T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://developers.openai.com/api/docs/guides/latest-model",
+      "observedAt": "2026-08-27T00:00:00Z"
+    }
+  ],
+  "sourceKind": "system-verified-primary-source"
+}
