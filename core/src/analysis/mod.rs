@@ -13,6 +13,7 @@ pub mod incremental;
 pub mod query_language;
 pub mod frontier_model_profile;
 pub mod frontier_model_registry;
+pub mod frontier_model_selector;
 pub mod deep_causality;
 pub mod deep_causality_adapter;
 pub mod deep_causality_extractors;
@@ -36,6 +37,7 @@ pub use incremental::*;
 pub use query_language::*;
 pub use frontier_model_profile::*;
 pub use frontier_model_registry::*;
+pub use frontier_model_selector::*;
 pub use deep_causality::*;
 pub use deep_causality_adapter::*;
 pub use deep_causality_extractors::*;
@@ -52,12 +54,6 @@ use crate::types::*;
 use anyhow::Result;
 use std::collections::HashSet;
 
-// Reality sessions and architecture snapshots need an owned graph while the
-// live graph remains behind an RwLock. DependencyGraph is already fully
-// bincode/serde-persistable, so use that same proven representation for an
-// internal snapshot clone instead of exposing or duplicating its private
-// petgraph/index bookkeeping. This also keeps every clone structurally
-// consistent with the on-disk representation CKB restores later.
 impl Clone for DependencyGraph {
     fn clone(&self) -> Self {
         let bytes = bincode::serialize(self)
@@ -290,13 +286,7 @@ pub trait BoundaryInferencer: Send + Sync {
     fn infer(&self, graph: &DependencyGraph) -> Result<Vec<ArchitectureBoundary>>;
 }
 
-// Stable server bridge API. These methods intentionally return owned snapshots
-// so web/MCP handlers never hold CkbEngine's internal locks while serializing
-// or performing higher-level intelligence work. GraphStorage remains the sole
-// source of persisted architecture snapshot truth.
 impl crate::CkbEngine {
-    /// Create an engine whose sled snapshots live under a caller-selected
-    /// path. The normal constructor remains unchanged for compatibility.
     pub fn new_with_storage_path(path: &str) -> Result<Self> {
         let parser = std::sync::Arc::new(crate::LanguageParser::new());
         let storage = std::sync::Arc::new(crate::GraphStorage::new(path)?);
@@ -305,17 +295,10 @@ impl crate::CkbEngine {
         Ok(Self { parser, graph, analyzer, storage })
     }
 
-    /// Start a full scan from an empty live graph while retaining persisted
-    /// historical snapshots. This prevents unrelated/repeated scans from
-    /// accumulating stale nodes and edges in the active architecture model.
     pub async fn reset_architecture_graph(&self) {
         *self.graph.write().await = DependencyGraph::new();
     }
 
-    /// Restore the latest real persisted architecture snapshot into the live
-    /// graph after a process restart. This restores graph evidence only; it
-    /// deliberately does not reconstruct or fabricate a ScanReport, repo URL,
-    /// runtime trace stream, or history metadata that was not persisted.
     pub async fn restore_latest_architecture_snapshot(&self) -> Result<bool> {
         if let Some(graph) = self.storage.get_latest_snapshot().await? {
             *self.graph.write().await = graph;
@@ -325,9 +308,6 @@ impl crate::CkbEngine {
         }
     }
 
-    /// Lossless OTLP ingestion for Reality consumers. Unlike the older
-    /// compatibility helper, this preserves execution count, latency,
-    /// error-rate and hotpath evidence when merging observations.
     pub async fn ingest_otlp_spans_exact(&self, raw_payload: &str) -> Result<crate::OtlpIngestReport> {
         let metrics = crate::OtlpReceiver::ingest_spans(raw_payload)?;
         let summary = crate::OtlpReceiver::summarize(&metrics);
