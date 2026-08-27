@@ -7,6 +7,7 @@ on:
       - 'schemas/model-capability-profile.schema.json'
       - 'core/src/analysis/frontier_model_profile.rs'
       - 'core/src/analysis/frontier_model_registry.rs'
+      - 'core/src/analysis/frontier_model_selector.rs'
       - 'mcp-server/src/bin/model_registry_api.rs'
       - '.github/workflows/frontier-model-registry.yml'
   push:
@@ -16,6 +17,7 @@ on:
       - 'schemas/model-capability-profile.schema.json'
       - 'core/src/analysis/frontier_model_profile.rs'
       - 'core/src/analysis/frontier_model_registry.rs'
+      - 'core/src/analysis/frontier_model_selector.rs'
       - 'mcp-server/src/bin/model_registry_api.rs'
       - '.github/workflows/frontier-model-registry.yml'
 
@@ -33,7 +35,7 @@ jobs:
       - name: Validate profile JSON parses
         run: |
           python - <<'PY'
-          import json, pathlib, sys
+          import json, pathlib
           files = sorted(pathlib.Path('profiles').glob('*/*.json'))
           if not files:
               raise SystemExit('no frontier model profiles found')
@@ -53,8 +55,8 @@ jobs:
           print(f'validated {len(files)} profile files')
           PY
 
-      - name: Test registry and request guards
-        run: cargo test --locked -p ckb-core frontier_model_registry
+      - name: Test registry, selector and request guards
+        run: cargo test --locked -p ckb-core frontier_model_
 
       - name: Compile model registry API
         run: cargo check --locked -p ckb-mcp-server --bin model_registry_api
