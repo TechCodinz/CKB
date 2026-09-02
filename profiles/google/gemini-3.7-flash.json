@@ -4,7 +4,7 @@
   "aliases": [],
   "availability": "ga",
   "releasedAt": "2026-08-13T00:00:00Z",
-  "verifiedAt": "2026-08-20T00:00:00Z",
+  "verifiedAt": "2026-09-02T00:00:00Z",
   "staleAfterDays": 30,
   "contextWindowTokens": 1048576,
   "maxOutputTokens": 65536,
@@ -57,7 +57,9 @@
       "Remove temperature, top_p, and top_k when migrating to Gemini 3.7 Flash.",
       "Google recommends previous_interaction_id for stateful multi-turn Interactions API conversations.",
       "Prefilled model turns are unsupported.",
-      "GenerateContent function responses must include call_id and name."
+      "GenerateContent function responses must include call_id and name.",
+      "As of 2026-09-01, Google documents agentic video understanding for Gemini 3.7 Flash across the Interactions and GenerateContent APIs. In agentic mode the model dynamically navigates the video timeline and selectively requests transcript, frames, or audio as needed; static video processing remains the default.",
+      "Google states agentic video understanding can use up to 88% fewer tokens for long-form video than static processing; this is a provider claim, not a context-window increase or guaranteed token reduction."
     ]
   },
   "tokenizerNotes": [],
@@ -65,7 +67,7 @@
     {
       "kind": "official-release",
       "reference": "https://ai.google.dev/gemini-api/docs/changelog",
-      "observedAt": "2026-08-20T00:00:00Z"
+      "observedAt": "2026-09-02T00:00:00Z"
     },
     {
       "kind": "official-doc",
@@ -76,6 +78,11 @@
       "kind": "official-doc",
       "reference": "https://ai.google.dev/gemini-api/docs/latest-model",
       "observedAt": "2026-08-20T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/generate-content/video-understanding",
+      "observedAt": "2026-09-02T00:00:00Z"
     }
   ]
 }
