@@ -15,6 +15,8 @@ const BUILTIN_PROFILE_JSON: &[&str] = &[
     include_str!("../../../profiles/openai/gpt-5.6-terra.json"),
     include_str!("../../../profiles/openai/gpt-5.6-luna.json"),
     include_str!("../../../profiles/google/gemini-3.7-flash.json"),
+    include_str!("../../../profiles/google/gemini-3.6-flash.json"),
+    include_str!("../../../profiles/google/gemini-3.5-flash-lite.json"),
     include_str!("../../../profiles/xai/grok-4.6.json"),
     include_str!("../../../profiles/anthropic/claude-fable-5.json"),
     include_str!("../../../profiles/anthropic/claude-mythos-5.json"),
@@ -198,6 +200,22 @@ mod tests {
         assert_eq!(gemini.reasoning.modes, vec!["low", "medium", "high"]);
         assert_eq!(gemini.reasoning.default_mode.as_deref(), Some("medium"));
 
+        let gemini_36 = registry
+            .require("google", "gemini-3.6-flash")
+            .expect("Gemini 3.6 Flash must resolve");
+        assert_eq!(gemini_36.context_window_tokens, Some(1_048_576));
+        assert_eq!(gemini_36.max_output_tokens, Some(65_536));
+        assert_eq!(gemini_36.reasoning.default_mode.as_deref(), Some("medium"));
+        assert!(gemini_36.reasoning.modes.iter().any(|mode| mode == "minimal"));
+
+        let gemini_35_lite = registry
+            .require("google", "gemini-3.5-flash-lite")
+            .expect("Gemini 3.5 Flash-Lite must resolve");
+        assert_eq!(gemini_35_lite.context_window_tokens, Some(1_048_576));
+        assert_eq!(gemini_35_lite.max_output_tokens, Some(65_536));
+        assert_eq!(gemini_35_lite.reasoning.default_mode.as_deref(), Some("minimal"));
+        assert!(gemini_35_lite.reasoning.modes.iter().any(|mode| mode == "high"));
+
         let grok = registry
             .require("xai", "grok-4.6")
             .expect("Grok 4.6 must resolve");
@@ -258,6 +276,21 @@ mod tests {
 
         assert!(!result.compatible);
         assert!(result.errors.iter().any(|error| error.contains("minimal")));
+    }
+
+    #[test]
+    fn gemini_36_and_35_lite_accept_verified_minimal_reasoning() {
+        let registry = FrontierModelRegistry::builtin().expect("embedded profiles must parse");
+        for model in ["gemini-3.6-flash", "gemini-3.5-flash-lite"] {
+            let result = registry
+                .adapt_request(
+                    "google",
+                    model,
+                    &json!({"thinking_level": "minimal", "input": "inspect this change"}),
+                )
+                .expect("profile must exist");
+            assert!(result.compatible, "{model} should accept verified minimal thinking");
+        }
     }
 
     #[test]
