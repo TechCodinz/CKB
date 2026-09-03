@@ -14,6 +14,7 @@ const BUILTIN_PROFILE_JSON: &[&str] = &[
     include_str!("../../../profiles/openai/gpt-5.6-sol.json"),
     include_str!("../../../profiles/openai/gpt-5.6-terra.json"),
     include_str!("../../../profiles/openai/gpt-5.6-luna.json"),
+    include_str!("../../../profiles/google/gemini-3.8-flash.json"),
     include_str!("../../../profiles/google/gemini-3.7-flash.json"),
     include_str!("../../../profiles/xai/grok-4.6.json"),
     include_str!("../../../profiles/anthropic/claude-fable-5.json"),
@@ -192,6 +193,14 @@ mod tests {
             .expect("GPT-5.6 Luna must resolve");
         assert_eq!(luna.max_output_tokens, Some(128_000));
 
+        let gemini38 = registry
+            .require("GOOGLE", "gemini-3.8-flash")
+            .expect("Gemini 3.8 Flash must resolve");
+        assert_eq!(gemini38.context_window_tokens, Some(1_048_576));
+        assert_eq!(gemini38.max_output_tokens, Some(65_536));
+        assert_eq!(gemini38.reasoning.modes, vec!["low", "medium", "high"]);
+        assert_eq!(gemini38.reasoning.default_mode.as_deref(), Some("medium"));
+
         let gemini = registry
             .require("GOOGLE", "gemini-3.7-flash")
             .expect("Gemini 3.7 Flash must resolve");
@@ -248,16 +257,18 @@ mod tests {
     #[test]
     fn gemini_minimal_reasoning_is_rejected_by_runtime_adapter() {
         let registry = FrontierModelRegistry::builtin().expect("embedded profiles must parse");
-        let result = registry
-            .adapt_request(
-                "google",
-                "gemini-3.7-flash",
-                &json!({"thinking_level": "minimal", "input": "inspect this change"}),
-            )
-            .expect("profile must exist");
+        for model in ["gemini-3.8-flash", "gemini-3.7-flash"] {
+            let result = registry
+                .adapt_request(
+                    "google",
+                    model,
+                    &json!({"thinking_level": "minimal", "input": "inspect this change"}),
+                )
+                .expect("profile must exist");
 
-        assert!(!result.compatible);
-        assert!(result.errors.iter().any(|error| error.contains("minimal")));
+            assert!(!result.compatible, "minimal must be rejected for {model}");
+            assert!(result.errors.iter().any(|error| error.contains("minimal")));
+        }
     }
 
     #[test]
@@ -296,6 +307,7 @@ mod tests {
         assert!(registry.resolve("openai", "gpt-5.6-cyber").is_none());
         assert!(registry.resolve("openai", "gpt-5.6-pro").is_none());
         assert!(registry.resolve("google", "gemini-3.7-pro").is_none());
+        assert!(registry.resolve("google", "gemini-3.8-pro").is_none());
         assert!(registry.resolve("anthropic", "claude-opus-5.1").is_none());
     }
 }
