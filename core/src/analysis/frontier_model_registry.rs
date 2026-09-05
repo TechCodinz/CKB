@@ -11,12 +11,15 @@ use serde_json::Value;
 use std::{error::Error, fmt};
 
 const BUILTIN_PROFILE_JSON: &[&str] = &[
+    include_str!("../../../profiles/openai/gpt-6-astra.json"),
     include_str!("../../../profiles/openai/gpt-5.6-sol.json"),
     include_str!("../../../profiles/openai/gpt-5.6-terra.json"),
     include_str!("../../../profiles/openai/gpt-5.6-luna.json"),
     include_str!("../../../profiles/google/gemini-3.8-flash.json"),
     include_str!("../../../profiles/google/gemini-3.7-flash.json"),
     include_str!("../../../profiles/xai/grok-4.6.json"),
+    include_str!("../../../profiles/anthropic/claude-fable-5-1.json"),
+    include_str!("../../../profiles/anthropic/claude-mythos-5-1.json"),
     include_str!("../../../profiles/anthropic/claude-fable-5.json"),
     include_str!("../../../profiles/anthropic/claude-mythos-5.json"),
     include_str!("../../../profiles/anthropic/claude-opus-5.json"),
@@ -175,6 +178,14 @@ mod tests {
     fn builtin_registry_resolves_new_exact_models() {
         let registry = FrontierModelRegistry::builtin().expect("embedded profiles must parse");
 
+        let astra = registry
+            .require("OPENAI", "gpt-6-astra")
+            .expect("GPT-6 Astra must resolve");
+        assert_eq!(astra.context_window_tokens, Some(1_050_000));
+        assert_eq!(astra.max_output_tokens, Some(128_000));
+        assert!(astra.reasoning.modes.iter().any(|mode| mode == "max"));
+        assert!(!astra.reasoning.modes.iter().any(|mode| mode == "none"));
+
         let sol = registry
             .require("OPENAI", "gpt-5.6-sol")
             .expect("GPT-5.6 Sol must resolve");
@@ -211,6 +222,21 @@ mod tests {
             .require("xai", "grok-4.6")
             .expect("Grok 4.6 must resolve");
         assert!(grok.reasoning.modes.iter().any(|mode| mode == "xhigh"));
+
+        let fable51 = registry
+            .require("anthropic", "claude-fable-5-1")
+            .expect("Claude Fable 5.1 must resolve");
+        assert_eq!(fable51.context_window_tokens, Some(1_000_000));
+        assert_eq!(fable51.max_output_tokens, Some(128_000));
+        assert_eq!(fable51.reasoning.default_mode.as_deref(), Some("high"));
+        assert_eq!(fable51.tools.parallel_function_calling, super::super::frontier_model_profile::SupportState::Supported);
+        assert_eq!(fable51.tools.computer_use, super::super::frontier_model_profile::SupportState::Supported);
+
+        let mythos51 = registry
+            .require("anthropic", "claude-mythos-5-1")
+            .expect("Claude Mythos 5.1 must resolve");
+        assert_eq!(mythos51.availability, Some(super::super::frontier_model_profile::ModelAvailability::Limited));
+        assert_eq!(mythos51.context_window_tokens, Some(1_000_000));
 
         let opus = registry
             .require("ANTHROPIC", "claude-opus-5")
@@ -255,6 +281,21 @@ mod tests {
     }
 
     #[test]
+    fn gpt6_astra_none_reasoning_and_sampling_parameters_are_rejected() {
+        let registry = FrontierModelRegistry::builtin().expect("embedded profiles must parse");
+        let result = registry
+            .adapt_request(
+                "openai",
+                "gpt-6-astra",
+                &json!({"input": "x", "temperature": 0.4, "reasoning": {"effort": "none"}}),
+            )
+            .expect("profile must exist");
+        assert!(!result.compatible);
+        assert!(result.errors.iter().any(|error| error.contains("temperature")));
+        assert!(result.errors.iter().any(|error| error.contains("none")));
+    }
+
+    #[test]
     fn gemini_minimal_reasoning_is_rejected_by_runtime_adapter() {
         let registry = FrontierModelRegistry::builtin().expect("embedded profiles must parse");
         for model in ["gemini-3.8-flash", "gemini-3.7-flash"] {
@@ -293,7 +334,7 @@ mod tests {
         let result = registry
             .adapt_request(
                 "anthropic",
-                "claude-sonnet-5",
+                "claude-fable-5-1",
                 &json!({"input": "x", "reasoning": {"effort": "ultra"}}),
             )
             .expect("profile must exist");
@@ -304,10 +345,12 @@ mod tests {
     #[test]
     fn unknown_models_do_not_fall_back_to_family_guesses() {
         let registry = FrontierModelRegistry::builtin().expect("embedded profiles must parse");
+        assert!(registry.resolve("openai", "gpt-6-astra-pro").is_none());
         assert!(registry.resolve("openai", "gpt-5.6-cyber").is_none());
         assert!(registry.resolve("openai", "gpt-5.6-pro").is_none());
         assert!(registry.resolve("google", "gemini-3.7-pro").is_none());
         assert!(registry.resolve("google", "gemini-3.8-pro").is_none());
+        assert!(registry.resolve("anthropic", "claude-fable-5-2").is_none());
         assert!(registry.resolve("anthropic", "claude-opus-5.1").is_none());
     }
 }

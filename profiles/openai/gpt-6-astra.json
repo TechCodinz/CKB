@@ -1,0 +1,82 @@
+{
+  "provider": "openai",
+  "model": "gpt-6-astra",
+  "aliases": [],
+  "availability": "limited",
+  "releasedAt": "2026-09-03T00:00:00Z",
+  "verifiedAt": "2026-09-04T00:00:00Z",
+  "staleAfterDays": 30,
+  "contextWindowTokens": 1050000,
+  "maxOutputTokens": 128000,
+  "knowledgeCutoff": "2026-04-30",
+  "inputModalities": ["text", "image"],
+  "outputModalities": ["text"],
+  "apiSurfaces": ["responses", "chat-completions"],
+  "preferredApiSurface": "responses",
+  "reasoning": {
+    "support": "supported",
+    "modes": ["low", "medium", "high", "xhigh", "max"],
+    "defaultMode": null,
+    "adaptive": "unknown",
+    "alwaysOn": null,
+    "manualBudgetSupported": null
+  },
+  "tools": {
+    "functionCalling": "supported",
+    "structuredOutput": "supported",
+    "parallelFunctionCalling": "unknown",
+    "codeExecution": "supported",
+    "computerUse": "supported",
+    "mcp": "supported",
+    "namedTools": [
+      "web-search",
+      "file-search",
+      "image-generation",
+      "code-interpreter",
+      "hosted-shell",
+      "apply-patch",
+      "skills",
+      "computer-use",
+      "mcp",
+      "tool-search"
+    ]
+  },
+  "requestConstraints": {
+    "deprecatedParameters": [],
+    "rejectedParameters": [],
+    "ignoredParameters": [],
+    "unsupportedParameters": ["temperature", "top_p", "top_logprobs"],
+    "unsupportedTurnPatterns": [],
+    "parameterMigrations": [],
+    "notes": [
+      "reasoning.effort supports low, medium, high, xhigh, and max; none and minimal are unsupported.",
+      "OpenAI does not declare a default reasoning effort in the reviewed GPT-6 Astra model documentation, so defaultMode remains null.",
+      "Tool calling requires the Responses API even though Chat Completions is also supported for non-tool model calls.",
+      "Chat Completions additionally does not support logprobs; Responses requests must remove message.output_text.logprobs from include.",
+      "GPT-6 Astra supports async tool calling on eligible developer-defined tools.",
+      "GPT-6 Astra supports mid-turn steering over Responses API WebSocket connections.",
+      "GPT-6 Astra supports mid-conversation reasoning-effort changes using configuration_update.",
+      "Code execution capability is grounded in documented Code Interpreter and hosted shell support.",
+      "Availability is limited while OpenAI rolls GPT-6 Astra out first to Trusted Access organizations and expands API access over the following days."
+    ]
+  },
+  "tokenizerNotes": [],
+  "declaredSources": [
+    {
+      "kind": "official-release",
+      "reference": "https://openai.com/index/gpt-6-astra/",
+      "observedAt": "2026-09-04T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+      "observedAt": "2026-09-04T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://developers.openai.com/api/docs/guides/latest-model",
+      "observedAt": "2026-09-04T00:00:00Z"
+    }
+  ],
+  "sourceKind": "system-verified-primary-source"
+}
