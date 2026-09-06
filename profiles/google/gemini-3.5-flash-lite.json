@@ -1,0 +1,84 @@
+{
+  "provider": "google",
+  "model": "gemini-3.5-flash-lite",
+  "aliases": [],
+  "availability": "ga",
+  "releasedAt": "2026-07-21T00:00:00Z",
+  "verifiedAt": "2026-09-02T00:00:00Z",
+  "staleAfterDays": 30,
+  "contextWindowTokens": 1048576,
+  "maxOutputTokens": 65536,
+  "knowledgeCutoff": null,
+  "inputModalities": ["text", "image", "video", "audio", "pdf"],
+  "outputModalities": ["text"],
+  "apiSurfaces": ["interactions", "generate-content"],
+  "preferredApiSurface": "interactions",
+  "reasoning": {
+    "support": "supported",
+    "modes": ["minimal", "low", "medium", "high"],
+    "defaultMode": "minimal",
+    "adaptive": "supported",
+    "alwaysOn": true,
+    "manualBudgetSupported": false
+  },
+  "tools": {
+    "functionCalling": "supported",
+    "structuredOutput": "supported",
+    "parallelFunctionCalling": "unknown",
+    "codeExecution": "supported",
+    "computerUse": "preview",
+    "mcp": "unknown",
+    "namedTools": [
+      "code-execution",
+      "computer-use-preview",
+      "file-search",
+      "function-calling",
+      "google-maps-grounding",
+      "search-grounding",
+      "url-context"
+    ]
+  },
+  "requestConstraints": {
+    "deprecatedParameters": ["temperature", "top_p", "top_k"],
+    "rejectedParameters": [],
+    "ignoredParameters": [],
+    "unsupportedParameters": [],
+    "unsupportedTurnPatterns": [],
+    "parameterMigrations": [
+      {
+        "from": "thinking_budget",
+        "to": "thinking_level",
+        "action": "review",
+        "note": "Use thinking_level instead of the legacy numeric thinking_budget parameter for Gemini 3.x models."
+      }
+    ],
+    "notes": [
+      "Google released Gemini 3.5 Flash-Lite as GA on 2026-07-21 for low-latency, high-volume subagent and automation workloads.",
+      "Agentic video understanding was released for Gemini 3.5 Flash-Lite on 2026-09-01 across the Interactions and GenerateContent APIs; the model can dynamically request video transcripts, frames, or audio tracks on demand.",
+      "Google states agentic video understanding can use up to 88% fewer input tokens for long-form video compared with static processing; this is provider-declared and not a context-window increase."
+    ]
+  },
+  "tokenizerNotes": [],
+  "declaredSources": [
+    {
+      "kind": "official-release",
+      "reference": "https://ai.google.dev/gemini-api/docs/changelog",
+      "observedAt": "2026-09-02T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite",
+      "observedAt": "2026-09-02T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/thinking",
+      "observedAt": "2026-09-02T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/interactions-overview",
+      "observedAt": "2026-09-02T00:00:00Z"
+    }
+  ]
+}
