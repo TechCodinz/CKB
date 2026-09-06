@@ -1,0 +1,73 @@
+{
+  "provider": "google",
+  "model": "gemini-omni-1.1-flash",
+  "aliases": [],
+  "availability": "ga",
+  "releasedAt": "2026-08-27T00:00:00Z",
+  "verifiedAt": "2026-09-06T00:00:00Z",
+  "staleAfterDays": 30,
+  "contextWindowTokens": 1048576,
+  "maxOutputTokens": null,
+  "knowledgeCutoff": null,
+  "inputModalities": ["text", "image", "video"],
+  "outputModalities": ["video"],
+  "apiSurfaces": ["interactions"],
+  "preferredApiSurface": "interactions",
+  "reasoning": {
+    "support": "unknown",
+    "modes": [],
+    "defaultMode": null,
+    "adaptive": "unknown",
+    "alwaysOn": null,
+    "manualBudgetSupported": null
+  },
+  "tools": {
+    "functionCalling": "unknown",
+    "structuredOutput": "unknown",
+    "parallelFunctionCalling": "unknown",
+    "codeExecution": "unknown",
+    "computerUse": "unknown",
+    "mcp": "unknown",
+    "namedTools": []
+  },
+  "requestConstraints": {
+    "deprecatedParameters": [],
+    "rejectedParameters": [],
+    "ignoredParameters": [],
+    "unsupportedParameters": [],
+    "unsupportedTurnPatterns": [],
+    "parameterMigrations": [],
+    "notes": [
+      "Google released gemini-omni-1.1-flash as generally available on 2026-08-27 for fast conversational video generation and editing.",
+      "Google's model page declares a 1,048,576-token context window, text/image/video input data types, and video output.",
+      "Documented capabilities include text-to-video, image-to-video, first/last-frame interpolation, reference-driven generation, conversational video editing, video extension, and resolution control through 360p, 720p, 1080p, and 4K outputs.",
+      "Stateful conversational video editing is documented through previous_interaction_id on the Interactions API.",
+      "The Omni guide describes native multimodal processing including audio, but the model page's Supported data types table does not list audio input; CKB therefore does not declare audio as an input modality until Google resolves or explicitly documents that support in the model capability table.",
+      "Google marks gemini-omni-flash-preview for shutdown on 2026-09-30 and recommends gemini-omni-1.1-flash as its replacement.",
+      "Maximum output tokens, general structured-output support, function calling, parallel function calling, code execution, computer use, MCP support, and configurable reasoning controls are not declared for this model in the checked official documentation and remain unknown."
+    ]
+  },
+  "tokenizerNotes": [],
+  "declaredSources": [
+    {
+      "kind": "official-release",
+      "reference": "https://ai.google.dev/gemini-api/docs/changelog",
+      "observedAt": "2026-09-06T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/models/gemini-omni-flash",
+      "observedAt": "2026-09-06T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/omni",
+      "observedAt": "2026-09-06T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/deprecations",
+      "observedAt": "2026-09-06T00:00:00Z"
+    }
+  ]
+}
