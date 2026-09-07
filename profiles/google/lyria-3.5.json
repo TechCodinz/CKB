@@ -1,0 +1,71 @@
+{
+  "provider": "google",
+  "model": "lyria-3.5",
+  "aliases": [],
+  "availability": "preview",
+  "releasedAt": "2026-09-03T00:00:00Z",
+  "verifiedAt": "2026-09-07T00:00:00Z",
+  "staleAfterDays": 30,
+  "contextWindowTokens": 131072,
+  "maxOutputTokens": null,
+  "knowledgeCutoff": null,
+  "inputModalities": ["text", "image"],
+  "outputModalities": ["audio", "text"],
+  "apiSurfaces": ["interactions"],
+  "preferredApiSurface": "interactions",
+  "reasoning": {
+    "support": "unsupported",
+    "modes": [],
+    "defaultMode": null,
+    "adaptive": "unknown",
+    "alwaysOn": false,
+    "manualBudgetSupported": false
+  },
+  "tools": {
+    "functionCalling": "unsupported",
+    "structuredOutput": "unsupported",
+    "parallelFunctionCalling": "unsupported",
+    "codeExecution": "unsupported",
+    "computerUse": "unknown",
+    "mcp": "unknown",
+    "namedTools": []
+  },
+  "requestConstraints": {
+    "deprecatedParameters": [],
+    "rejectedParameters": [],
+    "ignoredParameters": [],
+    "unsupportedParameters": [],
+    "unsupportedTurnPatterns": [],
+    "parameterMigrations": [],
+    "notes": [
+      "Google released lyria-3.5 in public preview on 2026-09-03.",
+      "Google declares a 131,072-token input limit.",
+      "Supported inputs are text and image; outputs are audio and text/lyrics.",
+      "Lyria 3.5 generates full-length structurally coherent songs as 44.1 kHz stereo audio.",
+      "The model is accessed through the Interactions API.",
+      "Image-conditioned generation supports up to 10 images alongside text.",
+      "Default audio output is MP3; WAV can be requested using response_format.",
+      "Audio generation is supported, while caching, code execution, file search, function calling, Live API, search grounding, structured outputs, thinking, and URL context are explicitly unsupported.",
+      "Batch API, Flex inference, and Priority inference are explicitly unsupported.",
+      "Computer-use and MCP support are not declared in the checked model documentation and therefore remain unknown."
+    ]
+  },
+  "tokenizerNotes": [],
+  "declaredSources": [
+    {
+      "kind": "official-release",
+      "reference": "https://ai.google.dev/gemini-api/docs/changelog",
+      "observedAt": "2026-09-07T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/models/lyria-3.5",
+      "observedAt": "2026-09-07T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/music-generation",
+      "observedAt": "2026-09-07T00:00:00Z"
+    }
+  ]
+}
