@@ -1,0 +1,79 @@
+{
+  "provider": "anthropic",
+  "model": "claude-mythos-5-1",
+  "aliases": [],
+  "availability": "limited",
+  "releasedAt": "2026-09-01T00:00:00Z",
+  "verifiedAt": "2026-09-04T00:00:00Z",
+  "staleAfterDays": 30,
+  "contextWindowTokens": 1000000,
+  "maxOutputTokens": 128000,
+  "knowledgeCutoff": "2026-06",
+  "inputModalities": ["text", "image"],
+  "outputModalities": ["text"],
+  "apiSurfaces": ["messages"],
+  "preferredApiSurface": "messages",
+  "reasoning": {
+    "support": "supported",
+    "modes": ["low", "medium", "high", "xhigh", "max"],
+    "defaultMode": "high",
+    "adaptive": "supported",
+    "alwaysOn": true,
+    "manualBudgetSupported": false
+  },
+  "tools": {
+    "functionCalling": "supported",
+    "structuredOutput": "supported",
+    "parallelFunctionCalling": "supported",
+    "codeExecution": "supported",
+    "computerUse": "supported",
+    "mcp": "unknown",
+    "namedTools": [
+      "code_execution_20260521",
+      "computer_toolset_20260801",
+      "computer_20251124",
+      "tool_search_tool_regex_20251119",
+      "tool_search_tool_bm25_20251119"
+    ]
+  },
+  "requestConstraints": {
+    "deprecatedParameters": [],
+    "rejectedParameters": [],
+    "ignoredParameters": [],
+    "unsupportedParameters": ["thinking.budget_tokens"],
+    "unsupportedTurnPatterns": ["assistant-prefill"],
+    "parameterMigrations": [
+      {
+        "from": "thinking.budget_tokens",
+        "to": "output_config.effort",
+        "action": "review",
+        "note": "Claude Mythos 5.1 uses always-on adaptive thinking. Remove manual thinking budgets and control depth with output_config.effort."
+      }
+    ],
+    "notes": [
+      "Claude Mythos 5.1 is limited to approved Project Glasswing / trusted-access customers.",
+      "Anthropic documents the same specifications and general capabilities as Claude Fable 5.1.",
+      "tool_choice types any and tool are unsupported and return HTTP 400; auto and none remain supported.",
+      "thinking type disabled is unsupported; adaptive thinking is always on.",
+      "Non-default temperature, top_p, and top_k values return HTTP 400.",
+      "Per-message effort is beta and can change effort mid-conversation without invalidating prompt caching.",
+      "Turn-scoped system messages and thinking.display=updates are beta.",
+      "Thinking blocks produced by Claude Mythos 5.1 cannot be consumed by earlier Claude models.",
+      "Unlike Claude Fable 5.1, Claude Mythos 5.1 does not run the preserved-thinking prefix-binding validation described for Fable 5.1.",
+      "Parallel tool use is supported, although Anthropic notes that 5.1 models may issue fewer parallel calls in long agent loops unless independent work is explicit.",
+      "Computer use is supported, including computer_toolset_20260801 and the earlier computer_20251124 compatibility path."
+    ]
+  },
+  "tokenizerNotes": [
+    "Uses the same tokenizer as Claude Fable 5, introduced with Claude Opus 4.7."
+  ],
+  "declaredSources": [
+    {"kind":"official-release","reference":"https://www.anthropic.com/claude/mythos","observedAt":"2026-09-04T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://platform.claude.com/docs/en/models/fable-5-1/overview","observedAt":"2026-09-04T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://platform.claude.com/docs/en/models/fable-5-1/whats-new-fable-5-1","observedAt":"2026-09-04T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://platform.claude.com/docs/en/build-with-claude/effort","observedAt":"2026-09-04T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool","observedAt":"2026-09-04T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://platform.claude.com/docs/en/build-with-claude/structured-outputs","observedAt":"2026-09-04T00:00:00Z"}
+  ],
+  "sourceKind": "system-verified-primary-source"
+}
