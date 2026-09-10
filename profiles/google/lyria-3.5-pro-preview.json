@@ -1,0 +1,70 @@
+{
+  "provider": "google",
+  "model": "lyria-3.5-pro-preview",
+  "aliases": [],
+  "availability": "preview",
+  "releasedAt": "2026-09-03T00:00:00Z",
+  "verifiedAt": "2026-09-10T00:00:00Z",
+  "staleAfterDays": 30,
+  "contextWindowTokens": 131072,
+  "maxOutputTokens": null,
+  "knowledgeCutoff": null,
+  "inputModalities": ["text", "image"],
+  "outputModalities": ["audio", "text"],
+  "apiSurfaces": ["interactions"],
+  "preferredApiSurface": "interactions",
+  "reasoning": {
+    "support": "unsupported",
+    "modes": [],
+    "defaultMode": null,
+    "adaptive": "unknown",
+    "alwaysOn": false,
+    "manualBudgetSupported": false
+  },
+  "tools": {
+    "functionCalling": "unsupported",
+    "structuredOutput": "unsupported",
+    "parallelFunctionCalling": "unsupported",
+    "codeExecution": "unsupported",
+    "computerUse": "unknown",
+    "mcp": "unknown",
+    "namedTools": []
+  },
+  "requestConstraints": {
+    "deprecatedParameters": [],
+    "rejectedParameters": [],
+    "ignoredParameters": [],
+    "unsupportedParameters": [],
+    "unsupportedTurnPatterns": [],
+    "parameterMigrations": [],
+    "notes": [
+      "Google released lyria-3.5-pro-preview in public preview on 2026-09-03.",
+      "Google declares a 131,072-token input limit.",
+      "Supported inputs are text and image; outputs are MP3 audio and text lyrics.",
+      "Lyria 3.5 Pro Preview is optimized for full-length songs with complex structural coherence, including multiple verses, choruses, and bridges.",
+      "Google documents 44.1 kHz stereo audio generation from text prompts or image inputs.",
+      "The model is accessed through the Interactions API.",
+      "Audio generation is supported; caching, code execution, file search, function calling, Google Maps grounding, image generation, Live API, search grounding, structured outputs, thinking, and URL context are explicitly unsupported.",
+      "Batch API, Flex inference, and Priority inference are explicitly unsupported.",
+      "Computer-use and MCP support are not declared in the checked model documentation and remain unknown."
+    ]
+  },
+  "tokenizerNotes": [],
+  "declaredSources": [
+    {
+      "kind": "official-release",
+      "reference": "https://ai.google.dev/gemini-api/docs/deprecations",
+      "observedAt": "2026-09-10T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/models/lyria-3.5-pro-preview",
+      "observedAt": "2026-09-10T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/music-generation",
+      "observedAt": "2026-09-10T00:00:00Z"
+    }
+  ]
+}
