@@ -1,0 +1,79 @@
+{
+  "provider": "google",
+  "model": "gemini-robotics-er-2-preview",
+  "aliases": [],
+  "availability": "preview",
+  "releasedAt": "2026-07-30T00:00:00Z",
+  "verifiedAt": "2026-09-10T00:00:00Z",
+  "staleAfterDays": 30,
+  "contextWindowTokens": 131072,
+  "maxOutputTokens": 65536,
+  "knowledgeCutoff": null,
+  "inputModalities": ["text", "image", "video", "audio"],
+  "outputModalities": ["text"],
+  "apiSurfaces": ["interactions"],
+  "preferredApiSurface": "interactions",
+  "reasoning": {
+    "support": "supported",
+    "modes": ["medium", "high"],
+    "defaultMode": null,
+    "adaptive": "unknown",
+    "alwaysOn": null,
+    "manualBudgetSupported": null
+  },
+  "tools": {
+    "functionCalling": "supported",
+    "structuredOutput": "supported",
+    "parallelFunctionCalling": "unknown",
+    "codeExecution": "supported",
+    "computerUse": "supported",
+    "mcp": "unknown",
+    "namedTools": [
+      "code-execution",
+      "computer-use-preview",
+      "file-search",
+      "function-calling",
+      "google-maps-grounding",
+      "search-grounding",
+      "url-context"
+    ]
+  },
+  "requestConstraints": {
+    "deprecatedParameters": [],
+    "rejectedParameters": [],
+    "ignoredParameters": [],
+    "unsupportedParameters": [],
+    "unsupportedTurnPatterns": [],
+    "parameterMigrations": [],
+    "notes": [
+      "Google documents Gemini Robotics ER 2 Preview as the standard ER 2 endpoint for embodied reasoning and robotics.",
+      "The model accepts text, image, video, and audio input and returns text output.",
+      "Google declares a 131,072-token input limit and a 65,536-token output limit.",
+      "The current robotics guide uses the Interactions API for gemini-robotics-er-2-preview.",
+      "Thinking is supported; Google examples explicitly use thinking_level=high and recommend medium as a latency/performance balance. No undocumented thinking modes are declared here.",
+      "Code execution, computer use, file search, function calling, Google Maps grounding, search grounding, structured outputs, URL context, caching, and Batch API are supported.",
+      "Audio generation, image generation, and Live API are explicitly unsupported.",
+      "Flex inference and Priority inference are explicitly unsupported.",
+      "Parallel function calling and MCP support are not declared in the checked model documentation and remain unknown.",
+      "Google identifies gemini-robotics-er-2-preview as the replacement for gemini-robotics-er-1.6-preview, which shut down on 2026-08-31."
+    ]
+  },
+  "tokenizerNotes": [],
+  "declaredSources": [
+    {
+      "kind": "official-release",
+      "reference": "https://ai.google.dev/gemini-api/docs/deprecations",
+      "observedAt": "2026-09-10T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/models/gemini-robotics-er-2-preview",
+      "observedAt": "2026-09-10T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/robotics-overview",
+      "observedAt": "2026-09-10T00:00:00Z"
+    }
+  ]
+}
