@@ -1,0 +1,73 @@
+{
+  "provider": "google",
+  "model": "gemini-robotics-er-2-streaming-preview",
+  "aliases": [],
+  "availability": "preview",
+  "releasedAt": "2026-07-30T00:00:00Z",
+  "verifiedAt": "2026-09-10T00:00:00Z",
+  "staleAfterDays": 30,
+  "contextWindowTokens": 131072,
+  "maxOutputTokens": 65536,
+  "knowledgeCutoff": null,
+  "inputModalities": ["text", "image", "video", "audio"],
+  "outputModalities": ["text"],
+  "apiSurfaces": ["live-api"],
+  "preferredApiSurface": "live-api",
+  "reasoning": {
+    "support": "supported",
+    "modes": [],
+    "defaultMode": null,
+    "adaptive": "unknown",
+    "alwaysOn": null,
+    "manualBudgetSupported": null
+  },
+  "tools": {
+    "functionCalling": "supported",
+    "structuredOutput": "unsupported",
+    "parallelFunctionCalling": "unknown",
+    "codeExecution": "unsupported",
+    "computerUse": "unsupported",
+    "mcp": "unknown",
+    "namedTools": [
+      "function-calling",
+      "search-grounding"
+    ]
+  },
+  "requestConstraints": {
+    "deprecatedParameters": [],
+    "rejectedParameters": [],
+    "ignoredParameters": [],
+    "unsupportedParameters": [],
+    "unsupportedTurnPatterns": [],
+    "parameterMigrations": [],
+    "notes": [
+      "Google documents Gemini Robotics ER 2 Streaming Preview as the low-latency robotics endpoint for real-time bidirectional interaction through the Live API.",
+      "The model accepts text, image, video, and audio input and returns text output.",
+      "Google declares a 131,072-token input limit and a 65,536-token output limit.",
+      "The dedicated streaming endpoint uses a stateful WebSocket connection integrated with the Live API.",
+      "Function calling, Live API, search grounding, and thinking are supported.",
+      "Caching, code execution, computer use, file search, Google Maps grounding, image generation, structured outputs, URL context, and Batch API are explicitly unsupported.",
+      "Audio generation, Flex inference, and Priority inference are explicitly unsupported.",
+      "Google's robotics streaming guide states that only blocking function calls are supported for robotics Live API tool execution.",
+      "Parallel function calling and MCP support are not declared in the checked model documentation and remain unknown."
+    ]
+  },
+  "tokenizerNotes": [],
+  "declaredSources": [
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/models/gemini-robotics-er-2-streaming-preview",
+      "observedAt": "2026-09-10T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/robotics-overview",
+      "observedAt": "2026-09-10T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/robotics-streaming",
+      "observedAt": "2026-09-10T00:00:00Z"
+    }
+  ]
+}
