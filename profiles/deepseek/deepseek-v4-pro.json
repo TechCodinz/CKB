@@ -1,0 +1,95 @@
+{
+  "provider": "deepseek",
+  "model": "deepseek-v4-pro",
+  "aliases": [],
+  "availability": "ga",
+  "releasedAt": "2026-08-13T00:00:00Z",
+  "verifiedAt": "2026-09-14T00:00:00Z",
+  "staleAfterDays": 30,
+  "contextWindowTokens": 1000000,
+  "maxOutputTokens": 384000,
+  "knowledgeCutoff": null,
+  "inputModalities": ["text"],
+  "outputModalities": ["text"],
+  "apiSurfaces": [
+    "chat-completions",
+    "responses",
+    "anthropic-messages"
+  ],
+  "preferredApiSurface": "responses",
+  "reasoning": {
+    "support": "supported",
+    "modes": ["low", "high", "max"],
+    "defaultMode": "high",
+    "adaptive": "unknown",
+    "alwaysOn": false,
+    "manualBudgetSupported": false
+  },
+  "tools": {
+    "functionCalling": "supported",
+    "structuredOutput": "supported",
+    "parallelFunctionCalling": "unknown",
+    "codeExecution": "unsupported",
+    "computerUse": "unsupported",
+    "mcp": "unsupported",
+    "namedTools": [
+      "function-calling",
+      "web-search",
+      "apply-patch"
+    ]
+  },
+  "requestConstraints": {
+    "deprecatedParameters": [],
+    "rejectedParameters": [],
+    "ignoredParameters": [
+      "temperature-in-thinking-mode",
+      "top_p-in-thinking-mode",
+      "presence_penalty-in-thinking-mode",
+      "frequency_penalty-in-thinking-mode"
+    ],
+    "unsupportedParameters": [],
+    "unsupportedTurnPatterns": [],
+    "parameterMigrations": [],
+    "notes": [
+      "DeepSeek-V4-Pro-0813 reached GA on 2026-08-13 and is exposed through the deepseek-v4-pro API model ID.",
+      "DeepSeek currently lists deepseek-v4-pro as an active API model; no retirement date is recorded in this profile because the checked current primary documentation does not declare one.",
+      "The model has a 1,000,000-token context window and a maximum 384,000-token output.",
+      "Thinking and non-thinking modes are supported. reasoning_effort supports low, high, and max; high is the documented default.",
+      "In thinking mode, temperature, top_p, presence_penalty, and frequency_penalty are accepted for compatibility but documented as having no effect.",
+      "JSON Output and JSON-schema response formatting are supported.",
+      "Function calling is supported.",
+      "The Responses API supports server-side web_search and the apply_patch custom tool.",
+      "Responses API file_search, code_interpreter, computer_use, MCP, and other unsupported built-in tool types are ignored; CKB therefore records built-in code execution, computer use, and MCP as unsupported for this provider/model surface.",
+      "Native OpenAI Responses API, OpenAI Chat Completions-compatible API, and Anthropic-compatible API surfaces are supported.",
+      "No knowledge cutoff is declared in the checked primary documentation."
+    ]
+  },
+  "tokenizerNotes": [],
+  "declaredSources": [
+    {
+      "kind": "official-release",
+      "reference": "https://api-docs.deepseek.com/updates/",
+      "observedAt": "2026-09-14T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "observedAt": "2026-09-14T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://api-docs.deepseek.com/guides/thinking_mode/",
+      "observedAt": "2026-09-14T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://api-docs.deepseek.com/guides/responses_api/",
+      "observedAt": "2026-09-14T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://api-docs.deepseek.com/api/create-response/",
+      "observedAt": "2026-09-14T00:00:00Z"
+    }
+  ]
+}
