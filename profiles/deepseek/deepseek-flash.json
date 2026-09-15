@@ -1,0 +1,104 @@
+{
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "aliases": [
+    "deepseek-v4-flash",
+    "deepseek-v4-flash-vision-exp"
+  ],
+  "availability": null,
+  "releasedAt": "2026-09-10T00:00:00Z",
+  "verifiedAt": "2026-09-15T00:00:00Z",
+  "staleAfterDays": 30,
+  "contextWindowTokens": 1048576,
+  "maxOutputTokens": 393216,
+  "knowledgeCutoff": null,
+  "inputModalities": ["text", "image"],
+  "outputModalities": ["text"],
+  "apiSurfaces": [
+    "chat-completions",
+    "responses",
+    "anthropic-messages"
+  ],
+  "preferredApiSurface": "responses",
+  "reasoning": {
+    "support": "supported",
+    "modes": ["low", "high", "max"],
+    "defaultMode": "high",
+    "adaptive": "unknown",
+    "alwaysOn": false,
+    "manualBudgetSupported": false
+  },
+  "tools": {
+    "functionCalling": "supported",
+    "structuredOutput": "supported",
+    "parallelFunctionCalling": "supported",
+    "codeExecution": "unsupported",
+    "computerUse": "unsupported",
+    "mcp": "unsupported",
+    "namedTools": [
+      "function-calling",
+      "apply-patch"
+    ]
+  },
+  "requestConstraints": {
+    "deprecatedParameters": [],
+    "rejectedParameters": [],
+    "ignoredParameters": [
+      "temperature-in-thinking-mode",
+      "presence_penalty-in-thinking-mode",
+      "frequency_penalty-in-thinking-mode",
+      "parallel_tool_calls-parameter"
+    ],
+    "unsupportedParameters": [],
+    "unsupportedTurnPatterns": [
+      "image-input-in-system-or-assistant-message"
+    ],
+    "parameterMigrations": [],
+    "notes": [
+      "DeepSeek officially released DeepSeek-V4.1-Flash on 2026-09-10 under the API model ID deepseek-flash.",
+      "Legacy API model names deepseek-v4-flash and deepseek-v4-flash-vision-exp are accepted temporarily but are routed to DeepSeek-V4.1-Flash; the corresponding older models are retired.",
+      "DeepSeek's official Codex integration declares a 1,048,576-token context window for deepseek-flash, and the API reference allows a maximum output of 393,216 tokens (384K).",
+      "Supported inputs are text and image; output is text. On the Responses API, images are accepted in user/developer messages and tool outputs, while images in system/assistant messages return a 400 error.",
+      "Thinking and non-thinking modes are supported. reasoning_effort supports low, high, and max; high is the documented default. minimal maps to low, while medium and xhigh map to high for compatibility.",
+      "In thinking mode, temperature, presence_penalty, and frequency_penalty are accepted for compatibility but have no effect. top_p is effective with a lower bound of 0.95; in non-thinking mode top_p is fixed at 1.0.",
+      "JSON object output and JSON-schema structured output are supported.",
+      "Function calling is supported, and DeepSeek's official Codex model catalog declares supports_parallel_tool_calls=true. On the Responses API the parallel_tool_calls request parameter itself is ignored because parallel tool calling is always enabled.",
+      "The Responses API supports the apply_patch custom tool. Its current compatibility table marks web_search, file_search, code_interpreter, computer_use, MCP, and other built-in tool types as ignored; CKB therefore does not advertise those as generally supported tools for this profile.",
+      "DeepSeek's Anthropic/Claude integration separately documents provider-side web search behavior, so web-search availability is API-surface-specific and is not promoted to a global named-tool capability in this profile.",
+      "No knowledge cutoff is declared in the checked primary documentation."
+    ]
+  },
+  "tokenizerNotes": [],
+  "declaredSources": [
+    {
+      "kind": "official-release",
+      "reference": "https://api-docs.deepseek.com/news/news260910/",
+      "observedAt": "2026-09-15T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "observedAt": "2026-09-15T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://api-docs.deepseek.com/quick_start/agent_integrations/codex/",
+      "observedAt": "2026-09-15T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://api-docs.deepseek.com/guides/thinking_mode/",
+      "observedAt": "2026-09-15T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://api-docs.deepseek.com/guides/responses_api/",
+      "observedAt": "2026-09-15T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://api-docs.deepseek.com/api/create-chat-completion/",
+      "observedAt": "2026-09-15T00:00:00Z"
+    }
+  ]
+}
