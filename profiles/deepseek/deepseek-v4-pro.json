@@ -2,12 +2,12 @@
   "provider": "deepseek",
   "model": "deepseek-v4-pro",
   "aliases": [],
-  "availability": "ga",
+  "availability": "deprecated",
   "releasedAt": "2026-08-13T00:00:00Z",
-  "verifiedAt": "2026-09-14T00:00:00Z",
+  "verifiedAt": "2026-09-15T00:00:00Z",
   "staleAfterDays": 30,
-  "contextWindowTokens": 1000000,
-  "maxOutputTokens": 384000,
+  "contextWindowTokens": 1048576,
+  "maxOutputTokens": 393216,
   "knowledgeCutoff": null,
   "inputModalities": ["text"],
   "outputModalities": ["text"],
@@ -28,13 +28,12 @@
   "tools": {
     "functionCalling": "supported",
     "structuredOutput": "supported",
-    "parallelFunctionCalling": "unknown",
+    "parallelFunctionCalling": "supported",
     "codeExecution": "unsupported",
     "computerUse": "unsupported",
     "mcp": "unsupported",
     "namedTools": [
       "function-calling",
-      "web-search",
       "apply-patch"
     ]
   },
@@ -43,24 +42,26 @@
     "rejectedParameters": [],
     "ignoredParameters": [
       "temperature-in-thinking-mode",
-      "top_p-in-thinking-mode",
       "presence_penalty-in-thinking-mode",
-      "frequency_penalty-in-thinking-mode"
+      "frequency_penalty-in-thinking-mode",
+      "top_p-in-non-thinking-mode",
+      "parallel_tool_calls-parameter"
     ],
     "unsupportedParameters": [],
     "unsupportedTurnPatterns": [],
     "parameterMigrations": [],
     "notes": [
-      "DeepSeek-V4-Pro-0813 reached GA on 2026-08-13 and is exposed through the deepseek-v4-pro API model ID.",
-      "DeepSeek currently lists deepseek-v4-pro as an active API model; no retirement date is recorded in this profile because the checked current primary documentation does not declare one.",
-      "The model has a 1,000,000-token context window and a maximum 384,000-token output.",
-      "Thinking and non-thinking modes are supported. reasoning_effort supports low, high, and max; high is the documented default.",
-      "In thinking mode, temperature, top_p, presence_penalty, and frequency_penalty are accepted for compatibility but documented as having no effect.",
-      "JSON Output and JSON-schema response formatting are supported.",
-      "Function calling is supported.",
-      "The Responses API supports server-side web_search and the apply_patch custom tool.",
-      "Responses API file_search, code_interpreter, computer_use, MCP, and other unsupported built-in tool types are ignored; CKB therefore records built-in code execution, computer use, and MCP as unsupported for this provider/model surface.",
-      "Native OpenAI Responses API, OpenAI Chat Completions-compatible API, and Anthropic-compatible API surfaces are supported.",
+      "DeepSeek-V4-Pro-0813 reached GA on 2026-08-13 under the deepseek-v4-pro API model ID; this profile retains the model's documented capability metadata for provenance.",
+      "Beginning 2026-09-14T04:00:00Z, DeepSeek routes all requests made with the deepseek-v4-pro model ID to DeepSeek-V4.1-Flash and bills them at V4.1-Flash rates until V4.1 Pro launches. DeepSeek states that V4 Pro is being phased out in an orderly manner.",
+      "CKB therefore marks deepseek-v4-pro as deprecated rather than retired: the slug remains accepted by the provider, but new work should select deepseek-flash explicitly.",
+      "DeepSeek's current model table continues to mark Vision as unsupported for the deepseek-v4-pro entry, so this profile remains text-input-only and does not infer image support from the backend routing behavior.",
+      "DeepSeek's official Codex integration declares a 1,048,576-token context window for deepseek-v4-pro, and the API reference allows a maximum output of 393,216 tokens (384K).",
+      "Thinking and non-thinking modes are supported. reasoning_effort supports low, high, and max; high is the documented default. minimal maps to low, while medium and xhigh map to high for compatibility.",
+      "In thinking mode, temperature, presence_penalty, and frequency_penalty are accepted for compatibility but have no effect. top_p is effective with a lower bound of 0.95; in non-thinking mode top_p is fixed at 1.0.",
+      "JSON object output and JSON-schema structured output are supported.",
+      "Function calling is supported, and DeepSeek's official Codex model catalog declares supports_parallel_tool_calls=true. On the Responses API the parallel_tool_calls request parameter itself is ignored because parallel tool calling is always enabled.",
+      "The Responses API supports the apply_patch custom tool. Its current compatibility table marks web_search, file_search, code_interpreter, computer_use, MCP, and other built-in tool types as ignored; CKB therefore does not advertise those as generally supported tools for this profile.",
+      "DeepSeek's Anthropic/Claude integration separately documents provider-side web search behavior, so web-search availability is API-surface-specific and is not promoted to a global named-tool capability in this profile.",
       "No knowledge cutoff is declared in the checked primary documentation."
     ]
   },
@@ -68,28 +69,38 @@
   "declaredSources": [
     {
       "kind": "official-release",
+      "reference": "https://api-docs.deepseek.com/news/news260910/",
+      "observedAt": "2026-09-15T00:00:00Z"
+    },
+    {
+      "kind": "official-release",
       "reference": "https://api-docs.deepseek.com/updates/",
-      "observedAt": "2026-09-14T00:00:00Z"
+      "observedAt": "2026-09-15T00:00:00Z"
     },
     {
       "kind": "official-doc",
       "reference": "https://api-docs.deepseek.com/quick_start/pricing/",
-      "observedAt": "2026-09-14T00:00:00Z"
+      "observedAt": "2026-09-15T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://api-docs.deepseek.com/quick_start/agent_integrations/codex/",
+      "observedAt": "2026-09-15T00:00:00Z"
     },
     {
       "kind": "official-doc",
       "reference": "https://api-docs.deepseek.com/guides/thinking_mode/",
-      "observedAt": "2026-09-14T00:00:00Z"
+      "observedAt": "2026-09-15T00:00:00Z"
     },
     {
       "kind": "official-doc",
       "reference": "https://api-docs.deepseek.com/guides/responses_api/",
-      "observedAt": "2026-09-14T00:00:00Z"
+      "observedAt": "2026-09-15T00:00:00Z"
     },
     {
       "kind": "official-doc",
-      "reference": "https://api-docs.deepseek.com/api/create-response/",
-      "observedAt": "2026-09-14T00:00:00Z"
+      "reference": "https://api-docs.deepseek.com/api/create-chat-completion/",
+      "observedAt": "2026-09-15T00:00:00Z"
     }
   ]
 }
