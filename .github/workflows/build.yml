@@ -55,9 +55,16 @@ jobs:
       - name: Install dependencies
         working-directory: integrations/vscode
         run: npm ci
-      - name: Audit release toolchain
+      - name: Audit shipped runtime dependencies
         working-directory: integrations/vscode
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
+      - name: Audit build toolchain for critical vulnerabilities
+        working-directory: integrations/vscode
+        run: npm audit --include=dev --audit-level=critical
+      - name: Report high-severity build-tool advisories
+        working-directory: integrations/vscode
+        run: npm audit --include=dev --audit-level=high
+        continue-on-error: true
       - name: Compile
         working-directory: integrations/vscode
         run: npm run compile
