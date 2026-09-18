@@ -1,0 +1,89 @@
+{
+  "provider": "google",
+  "model": "antigravity-preview-09-2026",
+  "aliases": [],
+  "availability": "preview",
+  "releasedAt": "2026-09-17T00:00:00Z",
+  "verifiedAt": "2026-09-18T00:00:00Z",
+  "staleAfterDays": 30,
+  "contextWindowTokens": null,
+  "maxOutputTokens": null,
+  "knowledgeCutoff": null,
+  "inputModalities": ["text", "image"],
+  "outputModalities": ["text"],
+  "apiSurfaces": ["interactions", "triggers"],
+  "preferredApiSurface": "interactions",
+  "reasoning": {
+    "support": "supported",
+    "modes": [],
+    "defaultMode": null,
+    "adaptive": "unknown",
+    "alwaysOn": null,
+    "manualBudgetSupported": false
+  },
+  "tools": {
+    "functionCalling": "supported",
+    "structuredOutput": "unsupported",
+    "parallelFunctionCalling": "unknown",
+    "codeExecution": "supported",
+    "computerUse": "unsupported",
+    "mcp": "supported",
+    "namedTools": [
+      "code_execution",
+      "google_search",
+      "url_context",
+      "write_to_file",
+      "replace_file_content",
+      "view_file",
+      "list_dir",
+      "find_by_name",
+      "grep_search"
+    ]
+  },
+  "requestConstraints": {
+    "deprecatedParameters": [],
+    "rejectedParameters": [],
+    "ignoredParameters": [],
+    "unsupportedParameters": [
+      "temperature",
+      "top_p",
+      "top_k",
+      "stop_sequences",
+      "max_output_tokens"
+    ],
+    "unsupportedTurnPatterns": [
+      "stateless-function-calling-history-reconstruction"
+    ],
+    "parameterMigrations": [],
+    "notes": [
+      "Google released antigravity-preview-09-2026 on 2026-09-17 in public preview, replacing antigravity-preview-05-2026.",
+      "The managed agent uses the Interactions API, plans and reasons, can execute code, manage files in its environment, browse the web, call custom functions, and connect to remote MCP servers.",
+      "Only text and image inputs are currently supported; audio, video, and document inputs are unsupported.",
+      "Structured output is explicitly unsupported. file_search, computer_use, and google_maps are currently unavailable.",
+      "Remote MCP supports Streamable HTTP; SSE transport is unsupported.",
+      "Function calling is stateful-only and must continue with previous_interaction_id rather than manually reconstructed stateless history.",
+      "background=true requires store=true.",
+      "For local tool execution or function_call parsing, the September 2026 built-in tool schemas use PascalCase parameters and line-range file replacement.",
+      "The filesystem is provided by the environment rather than a standalone filesystem tool.",
+      "Google documents automatic context compaction and a configurable max_total_tokens run budget, but does not declare those values as the model context window or max output tokens; CKB therefore leaves those fields unknown."
+    ]
+  },
+  "tokenizerNotes": [],
+  "declaredSources": [
+    {
+      "kind": "official-release",
+      "reference": "https://ai.google.dev/gemini-api/docs/changelog",
+      "observedAt": "2026-09-18T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/antigravity-agent",
+      "observedAt": "2026-09-18T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/deprecations",
+      "observedAt": "2026-09-18T00:00:00Z"
+    }
+  ]
+}
