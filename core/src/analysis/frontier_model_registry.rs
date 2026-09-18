@@ -302,6 +302,45 @@ mod tests {
     }
 
     #[test]
+    fn builtin_registry_embeds_every_source_controlled_profile() {
+        use std::collections::BTreeSet;
+        use std::fs;
+        use std::path::Path;
+
+        let registry = FrontierModelRegistry::builtin().expect("embedded profiles must parse");
+        let profiles_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../profiles");
+        let mut source_controlled = BTreeSet::new();
+
+        for provider_dir in fs::read_dir(&profiles_root).expect("profiles directory must exist") {
+            let provider_dir = provider_dir.expect("provider directory must be readable");
+            if !provider_dir.file_type().expect("provider entry type").is_dir() {
+                continue;
+            }
+            for entry in fs::read_dir(provider_dir.path()).expect("provider profiles must be readable") {
+                let entry = entry.expect("profile entry must be readable");
+                if entry.path().extension().and_then(|value| value.to_str()) != Some("json") {
+                    continue;
+                }
+                let raw = fs::read_to_string(entry.path()).expect("profile JSON must be readable");
+                let profile: FrontierModelProfileV2 =
+                    serde_json::from_str(&raw).expect("source-controlled profile must parse");
+                source_controlled.insert((profile.provider.to_lowercase(), profile.model.to_lowercase()));
+            }
+        }
+
+        let embedded = registry
+            .profiles()
+            .iter()
+            .map(|profile| (profile.provider.to_lowercase(), profile.model.to_lowercase()))
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(
+            embedded, source_controlled,
+            "every source-controlled frontier model profile must be embedded in the runtime registry"
+        );
+    }
+
+    #[test]
     fn unknown_models_do_not_fall_back_to_family_guesses() {
         let registry = FrontierModelRegistry::builtin().expect("embedded profiles must parse");
         assert!(registry.resolve("openai", "gpt-5.6-cyber").is_none());
