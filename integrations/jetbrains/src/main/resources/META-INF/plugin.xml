@@ -2,8 +2,19 @@
     <id>dev.ckb.jetbrains</id>
     <name>CKB - Invisible Reality Architecture Intelligence</name>
     <vendor email="support@ckb.dev" url="https://ckb.dev">CKB</vendor>
-    <version>1.9.1</version>
+    <version>1.9.2</version>
     <idea-version since-build="243"/>
+
+    <change-notes><![CDATA[
+        <h3>1.9.2 — Frontier intelligence and IDE parity</h3>
+        <ul>
+            <li>Added V13/V13.1 architecture-context and Deep Software Causality workflows across data flow, taint, concurrency, schema/infrastructure/config impact, distributed flow, temporal reasoning and cross-repository analysis.</li>
+            <li>Added the primary-source-verified frontier-model capability/lifecycle catalog and model-request compatibility inspection.</li>
+            <li>Connected JetBrains to the same live Cloud frontier catalog used by the other CKB IDE clients, including the September 2026 Google Antigravity capability/lifecycle update.</li>
+            <li>Added cursor-to-Cloud continuity, contextual Raiziom investigation, observed-model registry and Architecture Constitution actions.</li>
+            <li>Hardened evidence boundaries: static relationships are never shown as observed execution, and predictions stay explicitly predicted until validated.</li>
+        </ul>
+    ]]></change-notes>
 
     <description><![CDATA[
         <b>CKB – Invisible Reality Architecture Intelligence</b><br><br>
