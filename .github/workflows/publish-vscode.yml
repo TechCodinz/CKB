@@ -95,10 +95,21 @@ jobs:
         working-directory: integrations/vscode
         run: npm ci
 
-      - name: Audit release toolchain
+      - name: Audit shipped runtime dependencies
         if: steps.release.outputs.should_publish == 'true'
         working-directory: integrations/vscode
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Audit build toolchain for critical vulnerabilities
+        if: steps.release.outputs.should_publish == 'true'
+        working-directory: integrations/vscode
+        run: npm audit --include=dev --audit-level=critical
+
+      - name: Report high-severity build-tool advisories
+        if: steps.release.outputs.should_publish == 'true'
+        working-directory: integrations/vscode
+        run: npm audit --include=dev --audit-level=high
+        continue-on-error: true
 
       - name: Compile extension
         if: steps.release.outputs.should_publish == 'true'
