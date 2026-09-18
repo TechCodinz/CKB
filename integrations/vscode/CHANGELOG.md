@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.10.3
+
+Frontier-model intelligence now follows the live CKB verified registry end to end.
+
+- **Fixed:** every source-controlled frontier capability profile is now required to be embedded by the runtime registry; CI fails if a verified JSON profile cannot reach the registry API.
+- **Fixed:** the Cloud catalog route used by VS Code and JetBrains is part of the production extension bridge instead of existing only as unreachable source.
+- **Added:** Google Antigravity September 2026 and May 2026 lifecycle/tool-contract intelligence, including the breaking local-tool migration.
+- **Hardened:** Marketplace CI audits shipped runtime dependencies separately from development-only packaging tools; critical build-tool vulnerabilities remain blocking while high-severity dev-tool advisories stay visible.
+- **Changed:** verified model updates continue to arrive through the live Cloud catalog, so normal provider metadata refreshes do not require a new editor binary.
+
+
 ## 1.10.2
 
 First-run and connectivity failures now explain themselves instead of surfacing raw Node error codes.

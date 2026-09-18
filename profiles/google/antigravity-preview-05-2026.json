@@ -1,0 +1,73 @@
+{
+  "provider": "google",
+  "model": "antigravity-preview-05-2026",
+  "aliases": [],
+  "availability": "deprecated",
+  "releasedAt": "2026-05-19T00:00:00Z",
+  "verifiedAt": "2026-09-18T00:00:00Z",
+  "staleAfterDays": 30,
+  "contextWindowTokens": null,
+  "maxOutputTokens": null,
+  "knowledgeCutoff": null,
+  "inputModalities": ["text"],
+  "outputModalities": ["text"],
+  "apiSurfaces": ["interactions"],
+  "preferredApiSurface": "interactions",
+  "reasoning": {
+    "support": "supported",
+    "modes": [],
+    "defaultMode": null,
+    "adaptive": "unknown",
+    "alwaysOn": null,
+    "manualBudgetSupported": null
+  },
+  "tools": {
+    "functionCalling": "unknown",
+    "structuredOutput": "unknown",
+    "parallelFunctionCalling": "unknown",
+    "codeExecution": "supported",
+    "computerUse": "unknown",
+    "mcp": "unknown",
+    "namedTools": [
+      "write_file",
+      "read_file",
+      "list_files",
+      "code_execution",
+      "google_search"
+    ]
+  },
+  "requestConstraints": {
+    "deprecatedParameters": [],
+    "rejectedParameters": [],
+    "ignoredParameters": [],
+    "unsupportedParameters": [],
+    "unsupportedTurnPatterns": [],
+    "parameterMigrations": [
+      {
+        "from": "antigravity-preview-05-2026",
+        "to": "antigravity-preview-09-2026",
+        "action": "rename",
+        "note": "Google deprecates the May 2026 Antigravity agent and recommends antigravity-preview-09-2026. Remote-sandbox consumers that read only final model output can change the agent ID directly; local tool/function-call consumers must also migrate the built-in tool schemas."
+      }
+    ],
+    "notes": [
+      "Google released antigravity-preview-05-2026 on 2026-05-19 in public preview.",
+      "Google deprecated this agent on 2026-09-17 and lists 2026-10-05 as its shutdown date.",
+      "The September replacement changes local built-in file tools from snake_case parameters/full-file writes to PascalCase parameters and line-range editing.",
+      "Historical capability fields remain conservative where Google did not provide old-agent-specific declarations in the checked migration documentation."
+    ]
+  },
+  "tokenizerNotes": [],
+  "declaredSources": [
+    {
+      "kind": "official-release",
+      "reference": "https://ai.google.dev/gemini-api/docs/changelog",
+      "observedAt": "2026-09-18T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://ai.google.dev/gemini-api/docs/deprecations",
+      "observedAt": "2026-09-18T00:00:00Z"
+    }
+  ]
+}

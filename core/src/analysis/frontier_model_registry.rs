@@ -16,12 +16,21 @@ const BUILTIN_PROFILE_JSON: &[&str] = &[
     include_str!("../../../profiles/openai/gpt-5.6-luna.json"),
     include_str!("../../../profiles/google/gemini-3.8-flash.json"),
     include_str!("../../../profiles/google/gemini-3.7-flash.json"),
+    include_str!("../../../profiles/google/gemini-omni-1.1-flash.json"),
+    include_str!("../../../profiles/google/gemini-robotics-er-2-preview.json"),
+    include_str!("../../../profiles/google/gemini-robotics-er-2-streaming-preview.json"),
+    include_str!("../../../profiles/google/lyria-3.5-clip-preview.json"),
+    include_str!("../../../profiles/google/lyria-3.5-pro-preview.json"),
+    include_str!("../../../profiles/google/antigravity-preview-09-2026.json"),
+    include_str!("../../../profiles/google/antigravity-preview-05-2026.json"),
     include_str!("../../../profiles/xai/grok-4.6.json"),
     include_str!("../../../profiles/anthropic/claude-fable-5.json"),
     include_str!("../../../profiles/anthropic/claude-mythos-5.json"),
     include_str!("../../../profiles/anthropic/claude-opus-5.json"),
     include_str!("../../../profiles/anthropic/claude-sonnet-5.json"),
     include_str!("../../../profiles/anthropic/claude-opus-4-8.json"),
+    include_str!("../../../profiles/deepseek/deepseek-flash.json"),
+    include_str!("../../../profiles/deepseek/deepseek-v4-pro.json"),
 ];
 
 #[derive(Debug)]
@@ -299,6 +308,45 @@ mod tests {
             .expect("profile must exist");
         assert!(!result.compatible);
         assert!(result.errors.iter().any(|error| error.contains("ultra")));
+    }
+
+    #[test]
+    fn builtin_registry_embeds_every_source_controlled_profile() {
+        use std::collections::BTreeSet;
+        use std::fs;
+        use std::path::Path;
+
+        let registry = FrontierModelRegistry::builtin().expect("embedded profiles must parse");
+        let profiles_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../profiles");
+        let mut source_controlled = BTreeSet::new();
+
+        for provider_dir in fs::read_dir(&profiles_root).expect("profiles directory must exist") {
+            let provider_dir = provider_dir.expect("provider directory must be readable");
+            if !provider_dir.file_type().expect("provider entry type").is_dir() {
+                continue;
+            }
+            for entry in fs::read_dir(provider_dir.path()).expect("provider profiles must be readable") {
+                let entry = entry.expect("profile entry must be readable");
+                if entry.path().extension().and_then(|value| value.to_str()) != Some("json") {
+                    continue;
+                }
+                let raw = fs::read_to_string(entry.path()).expect("profile JSON must be readable");
+                let profile: FrontierModelProfileV2 =
+                    serde_json::from_str(&raw).expect("source-controlled profile must parse");
+                source_controlled.insert((profile.provider.to_lowercase(), profile.model.to_lowercase()));
+            }
+        }
+
+        let embedded = registry
+            .profiles()
+            .iter()
+            .map(|profile| (profile.provider.to_lowercase(), profile.model.to_lowercase()))
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(
+            embedded, source_controlled,
+            "every source-controlled frontier model profile must be embedded in the runtime registry"
+        );
     }
 
     #[test]
