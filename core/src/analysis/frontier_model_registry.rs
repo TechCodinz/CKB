@@ -16,12 +16,21 @@ const BUILTIN_PROFILE_JSON: &[&str] = &[
     include_str!("../../../profiles/openai/gpt-5.6-luna.json"),
     include_str!("../../../profiles/google/gemini-3.8-flash.json"),
     include_str!("../../../profiles/google/gemini-3.7-flash.json"),
+    include_str!("../../../profiles/google/gemini-omni-1.1-flash.json"),
+    include_str!("../../../profiles/google/gemini-robotics-er-2-preview.json"),
+    include_str!("../../../profiles/google/gemini-robotics-er-2-streaming-preview.json"),
+    include_str!("../../../profiles/google/lyria-3.5-clip-preview.json"),
+    include_str!("../../../profiles/google/lyria-3.5-pro-preview.json"),
+    include_str!("../../../profiles/google/antigravity-preview-09-2026.json"),
+    include_str!("../../../profiles/google/antigravity-preview-05-2026.json"),
     include_str!("../../../profiles/xai/grok-4.6.json"),
     include_str!("../../../profiles/anthropic/claude-fable-5.json"),
     include_str!("../../../profiles/anthropic/claude-mythos-5.json"),
     include_str!("../../../profiles/anthropic/claude-opus-5.json"),
     include_str!("../../../profiles/anthropic/claude-sonnet-5.json"),
     include_str!("../../../profiles/anthropic/claude-opus-4-8.json"),
+    include_str!("../../../profiles/deepseek/deepseek-flash.json"),
+    include_str!("../../../profiles/deepseek/deepseek-v4-pro.json"),
 ];
 
 #[derive(Debug)]
