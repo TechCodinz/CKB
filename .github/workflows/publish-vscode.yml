@@ -148,7 +148,7 @@ jobs:
           else
             echo "VSCE_TOKEN is not configured; attempting VS Code Marketplace trusted publishing (OIDC)."
             echo "The TechCodinz publisher must contain a trusted-publishing policy for this exact repository/workflow."
-            npx --no-install vsce publish "${FLAGS[@]}" --oidc
+            npx --yes @vscode/vsce@4.0.0 publish "${FLAGS[@]}" --oidc
           fi
 
       - name: Publish summary
