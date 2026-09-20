@@ -1,0 +1,14 @@
+{
+  "provider":"xai","model":"grok-voice-transcribe-2.0","aliases":[],"availability":"ga",
+  "releasedAt":"2026-09-17T00:00:00Z","verifiedAt":"2026-09-20T00:00:00Z","staleAfterDays":30,
+  "contextWindowTokens":null,"maxOutputTokens":null,"knowledgeCutoff":null,
+  "inputModalities":["audio"],"outputModalities":["text"],
+  "apiSurfaces":["speech-to-text-rest","speech-to-text-websocket"],"preferredApiSurface":"speech-to-text-rest",
+  "reasoning":{"support":"unknown","modes":[],"defaultMode":null,"adaptive":"unknown","alwaysOn":null,"manualBudgetSupported":null},
+  "tools":{"functionCalling":"unknown","structuredOutput":"unknown","parallelFunctionCalling":"unknown","codeExecution":"unknown","computerUse":"unknown","mcp":"unknown","namedTools":[]},
+  "requestConstraints":{"deprecatedParameters":[],"rejectedParameters":[],"ignoredParameters":[],"unsupportedParameters":[],"unsupportedTurnPatterns":[],"parameterMigrations":[],"notes":["xAI documents batch/file transcription and WebSocket streaming transcription.","The model supports language-aware formatting, speaker diarization, multichannel transcription, keyterm biasing, VAD controls, and Smart Turn endpointing.","No general LLM context-window, structured-output, function-calling, code-execution, computer-use, or MCP capability is inferred for this speech-to-text model."]},
+  "tokenizerNotes":[],"declaredSources":[
+    {"kind":"official-release","reference":"https://docs.x.ai/developers/release-notes","observedAt":"2026-09-20T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://docs.x.ai/developers/model-capabilities/audio/speech-to-text","observedAt":"2026-09-20T00:00:00Z"}
+  ]
+}
