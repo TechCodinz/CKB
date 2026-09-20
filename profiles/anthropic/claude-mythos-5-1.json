@@ -1,0 +1,15 @@
+{
+  "provider":"anthropic","model":"claude-mythos-5-1","aliases":[],"availability":"limited",
+  "releasedAt":"2026-09-01T00:00:00Z","verifiedAt":"2026-09-20T00:00:00Z","staleAfterDays":30,
+  "contextWindowTokens":1000000,"maxOutputTokens":128000,"knowledgeCutoff":"2026-06",
+  "inputModalities":["text","image"],"outputModalities":["text"],
+  "apiSurfaces":["messages","amazon-bedrock","google-cloud","microsoft-foundry"],"preferredApiSurface":"messages",
+  "reasoning":{"support":"supported","modes":["low","medium","high","xhigh","max"],"defaultMode":"high","adaptive":"supported","alwaysOn":true,"manualBudgetSupported":false},
+  "tools":{"functionCalling":"supported","structuredOutput":"unknown","parallelFunctionCalling":"unknown","codeExecution":"unknown","computerUse":"unknown","mcp":"unknown","namedTools":[]},
+  "requestConstraints":{"deprecatedParameters":[],"rejectedParameters":[],"ignoredParameters":[],"unsupportedParameters":["forced-tool-use"],"unsupportedTurnPatterns":[],"parameterMigrations":[],"notes":["Claude Mythos 5.1 is invite-only under Project Glasswing.","Anthropic states Claude Mythos 5.1 shares Claude Fable 5.1 specifications and capabilities.","Forced tool use returns an error as part of the shared 5.1 behavior."]},
+  "tokenizerNotes":[],"declaredSources":[
+    {"kind":"official-release","reference":"https://www.anthropic.com/claude/mythos","observedAt":"2026-09-20T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://platform.claude.com/docs/en/models/mythos-5-1/overview","observedAt":"2026-09-20T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://platform.claude.com/docs/en/models/fable-5-1/overview","observedAt":"2026-09-20T00:00:00Z"}
+  ]
+}
