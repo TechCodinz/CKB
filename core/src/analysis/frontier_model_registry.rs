@@ -11,9 +11,12 @@ use serde_json::Value;
 use std::{error::Error, fmt};
 
 const BUILTIN_PROFILE_JSON: &[&str] = &[
+    include_str!("../../../profiles/openai/gpt-6-astra.json"),
     include_str!("../../../profiles/openai/gpt-5.6-sol.json"),
     include_str!("../../../profiles/openai/gpt-5.6-terra.json"),
     include_str!("../../../profiles/openai/gpt-5.6-luna.json"),
+    include_str!("../../../profiles/google/gemini-3.8-live.json"),
+    include_str!("../../../profiles/google/gemini-3.8-live-extended-thinking.json"),
     include_str!("../../../profiles/google/gemini-3.8-flash.json"),
     include_str!("../../../profiles/google/gemini-3.7-flash.json"),
     include_str!("../../../profiles/google/gemini-omni-1.1-flash.json"),
@@ -24,7 +27,10 @@ const BUILTIN_PROFILE_JSON: &[&str] = &[
     include_str!("../../../profiles/google/antigravity-preview-09-2026.json"),
     include_str!("../../../profiles/google/antigravity-preview-05-2026.json"),
     include_str!("../../../profiles/xai/grok-4.6.json"),
+    include_str!("../../../profiles/xai/grok-voice-transcribe-2.0.json"),
+    include_str!("../../../profiles/anthropic/claude-fable-5-1.json"),
     include_str!("../../../profiles/anthropic/claude-fable-5.json"),
+    include_str!("../../../profiles/anthropic/claude-mythos-5-1.json"),
     include_str!("../../../profiles/anthropic/claude-mythos-5.json"),
     include_str!("../../../profiles/anthropic/claude-opus-5.json"),
     include_str!("../../../profiles/anthropic/claude-sonnet-5.json"),
