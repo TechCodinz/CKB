@@ -1,0 +1,15 @@
+{
+  "provider":"google","model":"gemini-3.8-live-extended-thinking","aliases":[],"availability":"ga",
+  "releasedAt":"2026-09-15T00:00:00Z","verifiedAt":"2026-09-20T00:00:00Z","staleAfterDays":30,
+  "contextWindowTokens":131072,"maxOutputTokens":65536,"knowledgeCutoff":null,
+  "inputModalities":["text","image","audio","video"],"outputModalities":["text","audio"],
+  "apiSurfaces":["live"],"preferredApiSurface":"live",
+  "reasoning":{"support":"supported","modes":["low","medium","high"],"defaultMode":null,"adaptive":"supported","alwaysOn":true,"manualBudgetSupported":false},
+  "tools":{"functionCalling":"supported","structuredOutput":"unsupported","parallelFunctionCalling":"unknown","codeExecution":"unsupported","computerUse":"unknown","mcp":"unknown","namedTools":["async-function-calling","search-grounding","audio-generation"]},
+  "requestConstraints":{"deprecatedParameters":[],"rejectedParameters":["thinking_level:minimal","function.behavior:BLOCKING","proactive_audio:false"],"ignoredParameters":[],"unsupportedParameters":[],"unsupportedTurnPatterns":[],"parameterMigrations":[],"notes":["Only asynchronous NON_BLOCKING function calling is supported.","Track interaction_status and wait for IDLE; turnComplete does not mean background reasoning or tool work is finished.","Function scheduling configurations are not supported.","File search and URL context are not supported.","Structured outputs and code execution are not supported."]},
+  "tokenizerNotes":[],"declaredSources":[
+    {"kind":"official-release","reference":"https://ai.google.dev/gemini-api/docs/changelog","observedAt":"2026-09-20T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://ai.google.dev/gemini-api/docs/models/gemini-3.8-live-extended-thinking","observedAt":"2026-09-20T00:00:00Z"},
+    {"kind":"official-doc","reference":"https://ai.google.dev/gemini-api/docs/live-api/thinking","observedAt":"2026-09-20T00:00:00Z"}
+  ]
+}
