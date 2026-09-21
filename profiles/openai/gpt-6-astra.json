@@ -1,14 +1,88 @@
 {
-  "provider":"openai","model":"gpt-6-astra","aliases":[],"availability":"ga",
-  "releasedAt":"2026-09-03T00:00:00Z","verifiedAt":"2026-09-20T00:00:00Z","staleAfterDays":30,
-  "contextWindowTokens":1050000,"maxOutputTokens":128000,"knowledgeCutoff":"2026-04-30",
-  "inputModalities":["text","image"],"outputModalities":["text"],
-  "apiSurfaces":["responses"],"preferredApiSurface":"responses",
-  "reasoning":{"support":"supported","modes":["low","medium","high","xhigh","max"],"defaultMode":null,"adaptive":"unknown","alwaysOn":true,"manualBudgetSupported":null},
-  "tools":{"functionCalling":"supported","structuredOutput":"supported","parallelFunctionCalling":"unknown","codeExecution":"unknown","computerUse":"supported","mcp":"unknown","namedTools":["async-function-calling","computer-use","programmatic-tool-calling"]},
-  "requestConstraints":{"deprecatedParameters":[],"rejectedParameters":[],"ignoredParameters":[],"unsupportedParameters":["reasoning.effort:none"],"unsupportedTurnPatterns":[],"parameterMigrations":[],"notes":["GPT-6 Astra does not support reasoning effort none.","OpenAI documents asynchronous tool calling and mid-turn steering for GPT-6 Astra.","OpenAI states GPT-6 Astra supports Structured Outputs, computer use, Programmatic Tool Calling, multi-agent orchestration, prompt caching, persisted reasoning, compaction, and pro mode."]},
-  "tokenizerNotes":[],"declaredSources":[
-    {"kind":"official-doc","reference":"https://developers.openai.com/api/docs/models/gpt-6-astra","observedAt":"2026-09-20T00:00:00Z"},
-    {"kind":"official-doc","reference":"https://developers.openai.com/api/docs/guides/latest-model","observedAt":"2026-09-20T00:00:00Z"}
+  "provider": "openai",
+  "model": "gpt-6-astra",
+  "aliases": [],
+  "availability": "ga",
+  "releasedAt": "2026-09-03T00:00:00Z",
+  "verifiedAt": "2026-09-21T00:00:00Z",
+  "staleAfterDays": 30,
+  "contextWindowTokens": 1050000,
+  "maxOutputTokens": 128000,
+  "knowledgeCutoff": "2026-04-30",
+  "inputModalities": [
+    "text",
+    "image"
+  ],
+  "outputModalities": [
+    "text"
+  ],
+  "apiSurfaces": [
+    "responses"
+  ],
+  "preferredApiSurface": "responses",
+  "reasoning": {
+    "support": "supported",
+    "modes": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "defaultMode": null,
+    "adaptive": "unknown",
+    "alwaysOn": true,
+    "manualBudgetSupported": null
+  },
+  "tools": {
+    "functionCalling": "supported",
+    "structuredOutput": "supported",
+    "parallelFunctionCalling": "unknown",
+    "codeExecution": "supported",
+    "computerUse": "supported",
+    "mcp": "supported",
+    "namedTools": [
+      "async-function-calling",
+      "computer-use",
+      "programmatic-tool-calling",
+      "web-search",
+      "file-search",
+      "image-generation",
+      "code-interpreter",
+      "hosted-shell",
+      "apply-patch",
+      "skills",
+      "mcp",
+      "tool-search"
+    ]
+  },
+  "requestConstraints": {
+    "deprecatedParameters": [],
+    "rejectedParameters": [],
+    "ignoredParameters": [],
+    "unsupportedParameters": [
+      "reasoning.effort:none"
+    ],
+    "unsupportedTurnPatterns": [],
+    "parameterMigrations": [],
+    "notes": [
+      "GPT-6 Astra does not support reasoning effort none.",
+      "OpenAI documents asynchronous tool calling and mid-turn steering for GPT-6 Astra.",
+      "OpenAI documents a 1,050,000-token context window and 128,000 max output tokens.",
+      "OpenAI documents Structured Outputs, computer use, web search, file search, image generation, Code Interpreter, hosted shell, apply patch, skills, MCP, tool search, Programmatic Tool Calling, multi-agent orchestration, prompt caching, persisted reasoning, compaction, and pro mode."
+    ]
+  },
+  "tokenizerNotes": [],
+  "declaredSources": [
+    {
+      "kind": "official-doc",
+      "reference": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+      "observedAt": "2026-09-21T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://developers.openai.com/api/docs/guides/latest-model",
+      "observedAt": "2026-09-21T00:00:00Z"
+    }
   ]
 }
