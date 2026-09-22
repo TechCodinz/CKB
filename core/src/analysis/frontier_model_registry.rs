@@ -230,9 +230,9 @@ mod tests {
         assert_eq!(grok47.max_output_tokens, None);
         assert_eq!(grok47.reasoning.default_mode.as_deref(), Some("high"));
         assert!(grok47.reasoning.modes.iter().any(|mode| mode == "xhigh"));
-        assert_eq!(grok47.tools.function_calling, super::super::frontier_model_profile::CapabilitySupport::Supported);
-        assert_eq!(grok47.tools.structured_output, super::super::frontier_model_profile::CapabilitySupport::Supported);
-        assert_eq!(grok47.tools.code_execution, super::super::frontier_model_profile::CapabilitySupport::Unknown);
+        assert_eq!(grok47.tools.function_calling, super::super::frontier_model_profile::SupportState::Supported);
+        assert_eq!(grok47.tools.structured_output, super::super::frontier_model_profile::SupportState::Supported);
+        assert_eq!(grok47.tools.code_execution, super::super::frontier_model_profile::SupportState::Unknown);
 
         let grok = registry
             .require("xai", "grok-4.6")
@@ -304,7 +304,7 @@ mod tests {
         let result = registry
             .adapt_request(
                 "xai",
-                "grok-4.7",
+                "grok-4.6",
                 &json!({"input": "x", "stop": ["END"], "reasoning": {"effort": "xhigh"}}),
             )
             .expect("profile must exist");
@@ -312,6 +312,30 @@ mod tests {
         assert!(!result.compatible);
         assert!(result.errors.iter().any(|error| error.contains("stop")));
         assert!(!result.errors.iter().any(|error| error.contains("xhigh")));
+    }
+
+    #[test]
+    fn grok_47_reasoning_modes_are_guarded_without_invented_parameter_rules() {
+        let registry = FrontierModelRegistry::builtin().expect("embedded profiles must parse");
+
+        let accepted = registry
+            .adapt_request(
+                "xai",
+                "grok-4.7",
+                &json!({"input": "x", "reasoning": {"effort": "xhigh"}}),
+            )
+            .expect("Grok 4.7 profile must exist");
+        assert!(accepted.compatible);
+
+        let rejected = registry
+            .adapt_request(
+                "xai",
+                "grok-4.7",
+                &json!({"input": "x", "reasoning": {"effort": "ultra"}}),
+            )
+            .expect("Grok 4.7 profile must exist");
+        assert!(!rejected.compatible);
+        assert!(rejected.errors.iter().any(|error| error.contains("ultra")));
     }
 
     #[test]
