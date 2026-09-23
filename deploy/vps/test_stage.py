@@ -35,10 +35,30 @@ class ImportTests(unittest.TestCase):
 
     def test_sensitive_never_fetched_or_accepted(self):
         fetch = Mock()
-        with self.assertRaisesRegex(stage.Stop, 'non-exportable sensitive'):
+        with self.assertRaisesRegex(stage.Stop, 'original sensitive value required'):
             stage.production_values([{'id':'env1','key':'KEY','target':['production'],
                                      'type':'sensitive','value':'hidden','decrypted':True}], fetch)
         fetch.assert_not_called()
+
+    def test_original_sensitive_value_supplied_without_api_read(self):
+        fetch = Mock()
+        supply = Mock(return_value='original$secret ')
+        self.assertEqual(stage.production_values([
+            {'id':'env1','key':'KEY','target':['production'],'type':'sensitive','value':'mask'}
+        ], fetch, supply), {'KEY':'original$secret '})
+        supply.assert_called_once_with('KEY')
+        fetch.assert_not_called()
+
+    def test_empty_original_does_not_import_mask(self):
+        with self.assertRaises(stage.Stop):
+            stage.production_values([
+                {'key':'KEY','target':['production'],'type':'sensitive','value':'mask'}
+            ], supply_sensitive=lambda key: '')
+
+    def test_hidden_prompt_stops_on_empty_input(self):
+        with patch.object(stage.getpass, 'getpass', return_value=''), patch('builtins.print'):
+            with self.assertRaisesRegex(stage.Stop, 'no services started'):
+                stage.original_sensitive_value('KEY')
 
     def test_preview_not_fetched(self):
         fetch = Mock()

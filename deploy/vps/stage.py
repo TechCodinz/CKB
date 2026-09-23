@@ -28,7 +28,7 @@ class Stop(Exception):
 def compose_env(values):
     return {k: v.replace('$', '$$') for k, v in values.items()}
 
-def production_values(rows, retrieve=None):
+def production_values(rows, retrieve=None, supply_sensitive=None):
     result = {}
     unavailable = []
     seen = set()
@@ -43,7 +43,13 @@ def production_values(rows, retrieve=None):
             raise Stop('Duplicate production setting: ' + key)
         seen.add(key)
         if row.get('type') == 'sensitive':
-            unavailable.append(key + ' (non-exportable sensitive value)')
+            # Vercel intentionally cannot reveal these. Accept only an original
+            # value explicitly supplied by the operator, never the API mask.
+            value = supply_sensitive(key) if supply_sensitive else None
+            if isinstance(value, str) and value.strip():
+                result[key] = value
+            else:
+                unavailable.append(key + ' (original sensitive value required)')
             continue
         readable = isinstance(row.get('value'), str) and (
             row.get('type') in ('plain', 'system') or row.get('decrypted') is True
@@ -101,6 +107,13 @@ def render_values(service, token):
             raise Stop('Render pagination incomplete')
         seen.add(cursor)
 
+def original_sensitive_value(key):
+    print(key + ': Vercel cannot export this value. Use the original saved setting.', flush=True)
+    value = getpass.getpass('Original ' + key + ' (hidden; Enter stops): ')
+    if not value.strip():
+        raise Stop('Original value required for ' + key + '; no services started')
+    return value
+
 def vercel_values(token):
     query = urlencode({'teamId':TEAM})
     data = get_json('https://api.vercel.com/v10/projects/' + PROJECT + '/env?' + query, token)
@@ -110,7 +123,7 @@ def vercel_values(token):
     def retrieve(env_id):
         return get_json('https://api.vercel.com/v1/projects/' + PROJECT +
                         '/env/' + quote(str(env_id), safe='') + '?' + query, token)
-    return production_values(rows, retrieve)
+    return production_values(rows, retrieve, original_sensitive_value)
 
 def private_write(path, content):
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
