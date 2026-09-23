@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Stage CKB Rust services and OmniCode on the existing VPS; no public cutover."""
+import base64
 import getpass
 import json
 import os
@@ -108,7 +109,22 @@ def source(repo, ref, path, log):
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ, GIT_TERMINAL_PROMPT='0')
-    command(['git','clone','--no-checkout','https://github.com/TechCodinz/' + repo + '.git',str(path)], log, env=env)
+    clone = ['git','clone','--no-checkout','https://github.com/TechCodinz/' + repo + '.git',str(path)]
+    try:
+        command(clone, log, env=env)
+    except Stop:
+        if repo != 'OmniCode' or path.exists():
+            raise
+        print('OmniCode is private. Existing VPS GitHub authentication did not clone it.',flush=True)
+        token = getpass.getpass('GitHub token with OmniCode Contents read access (hidden): ').strip()
+        if not token:
+            raise Stop('Private OmniCode source access is required; no services started')
+        encoded = base64.b64encode(('x-access-token:' + token).encode()).decode()
+        env.update(GIT_CONFIG_COUNT='1',
+                   GIT_CONFIG_KEY_0='http.https://github.com/.extraheader',
+                   GIT_CONFIG_VALUE_0='AUTHORIZATION: basic ' + encoded)
+        command(clone, log, env=env)
+        token = encoded = None
     command(['git','-C',str(path),'checkout','--detach',ref], log, env=env)
 
 CKB_DOCKER = '''FROM rust:1-bookworm AS build
