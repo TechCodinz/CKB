@@ -13,7 +13,7 @@ import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.request import Request, urlopen
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote
 from urllib.error import HTTPError
 
 BASE = Path('/opt/app-platform')
@@ -28,9 +28,10 @@ class Stop(Exception):
 def compose_env(values):
     return {k: v.replace('$', '$$') for k, v in values.items()}
 
-def production_values(rows):
+def production_values(rows, retrieve=None):
     result = {}
     unavailable = []
+    seen = set()
     for row in rows:
         target = row.get('target', [])
         if 'production' not in ([target] if isinstance(target, str) else target):
@@ -38,14 +39,36 @@ def production_values(rows):
         key = row['key']
         if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', key):
             raise Stop('Invalid environment variable name')
-        if key in result:
+        if key in seen:
             raise Stop('Duplicate production setting: ' + key)
-        if not isinstance(row.get('value'), str) or (
-            row.get('type') not in ('plain', 'system') and row.get('decrypted') is not True
-        ):
-            unavailable.append(key)
-        else:
-            result[key] = row['value']
+        seen.add(key)
+        if row.get('type') == 'sensitive':
+            unavailable.append(key + ' (non-exportable sensitive value)')
+            continue
+        readable = isinstance(row.get('value'), str) and (
+            row.get('type') in ('plain', 'system') or row.get('decrypted') is True
+        )
+        if not readable and retrieve is not None and row.get('id'):
+            # The list endpoint's bulk decrypt option is deprecated. Fetch the
+            # authorized plaintext through the dedicated per-variable endpoint.
+            try:
+                item = retrieve(row['id'])
+            except Stop as error:
+                unavailable.append(key + ' (' + str(error) + ')')
+                continue
+            if not isinstance(item, dict) or item.get('key') != key or (
+                item.get('id') is not None and item['id'] != row['id']
+            ):
+                raise Stop('Vercel environment identity mismatch: ' + key)
+            readable = (item.get('type') != 'sensitive'
+                        and item.get('decrypted') is True
+                        and isinstance(item.get('value'), str))
+            if readable:
+                row = item
+        if not readable:
+            unavailable.append(key + ' (no verified plaintext returned)')
+            continue
+        result[key] = row['value']
     if unavailable:
         raise Stop('Vercel could not export these production settings: ' + ', '.join(unavailable))
     return result
@@ -79,12 +102,15 @@ def render_values(service, token):
         seen.add(cursor)
 
 def vercel_values(token):
-    query = urlencode({'teamId':TEAM, 'decrypt':'true'})
+    query = urlencode({'teamId':TEAM})
     data = get_json('https://api.vercel.com/v10/projects/' + PROJECT + '/env?' + query, token)
     rows = data if isinstance(data, list) else data.get('envs')
     if not isinstance(rows, list):
         raise Stop('Unexpected Vercel environment response')
-    return production_values(rows)
+    def retrieve(env_id):
+        return get_json('https://api.vercel.com/v1/projects/' + PROJECT +
+                        '/env/' + quote(str(env_id), safe='') + '?' + query, token)
+    return production_values(rows, retrieve)
 
 def private_write(path, content):
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)

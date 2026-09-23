@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import Mock, patch
 import stage
 
 class ImportTests(unittest.TestCase):
@@ -23,6 +24,51 @@ class ImportTests(unittest.TestCase):
 
     def test_preserve_dollars_in_compose(self):
         self.assertEqual(stage.compose_env({'KEY':'a${B}$c'}), {'KEY':'a$${B}$$c'})
+
+    def test_encrypted_list_value_resolved_by_id(self):
+        fetch = Mock(return_value={'id':'env1','key':'JWT_SECRET','type':'encrypted',
+                                  'decrypted':True,'value':'original$secret'})
+        rows = [{'id':'env1','key':'JWT_SECRET','target':['production'],
+                 'type':'encrypted','value':'ciphertext'}]
+        self.assertEqual(stage.production_values(rows, fetch), {'JWT_SECRET':'original$secret'})
+        fetch.assert_called_once_with('env1')
+
+    def test_sensitive_never_fetched_or_accepted(self):
+        fetch = Mock()
+        with self.assertRaisesRegex(stage.Stop, 'non-exportable sensitive'):
+            stage.production_values([{'id':'env1','key':'KEY','target':['production'],
+                                     'type':'sensitive','value':'hidden','decrypted':True}], fetch)
+        fetch.assert_not_called()
+
+    def test_preview_not_fetched(self):
+        fetch = Mock()
+        self.assertEqual(stage.production_values([{'id':'env1','key':'KEY',
+                                                  'target':['preview'],'type':'encrypted'}], fetch), {})
+        fetch.assert_not_called()
+
+    def test_mismatched_identity_rejected(self):
+        fetch = Mock(return_value={'id':'env1','key':'OTHER','decrypted':True,'value':'secret'})
+        with self.assertRaisesRegex(stage.Stop, 'identity mismatch'):
+            stage.production_values([{'id':'env1','key':'KEY','target':['production']}], fetch)
+
+    def test_per_variable_ciphertext_rejected(self):
+        fetch = Mock(return_value={'key':'KEY','decrypted':False,'value':'ciphertext'})
+        with self.assertRaisesRegex(stage.Stop, 'no verified plaintext'):
+            stage.production_values([{'id':'env1','key':'KEY','target':['production']}], fetch)
+
+    def test_permission_error_names_key_without_value(self):
+        fetch = Mock(side_effect=stage.Stop('Provider request failed: HTTP 403'))
+        with self.assertRaisesRegex(stage.Stop, 'KEY.*HTTP 403'):
+            stage.production_values([{'id':'env1','key':'KEY','target':['production']}], fetch)
+
+    def test_vercel_uses_dedicated_endpoint(self):
+        with patch.object(stage, 'get_json', side_effect=[
+            {'envs':[{'id':'env1','key':'KEY','target':['production'],'type':'encrypted'}]},
+            {'id':'env1','key':'KEY','type':'encrypted','decrypted':True,'value':'original'},
+        ]) as fetch:
+            self.assertEqual(stage.vercel_values('token'), {'KEY':'original'})
+        self.assertIn('/v1/projects/' + stage.PROJECT + '/env/env1?', fetch.call_args_list[1].args[0])
+        self.assertNotIn('decrypt=', fetch.call_args_list[0].args[0])
 
 if __name__ == '__main__':
     unittest.main()
