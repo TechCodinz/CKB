@@ -25,7 +25,7 @@ class CkbOnlyTests(unittest.TestCase):
             stack.enter_context(patch.object(stage_ckb.socket,'socket'))
             stack.enter_context(patch.object(stage_ckb.shutil,'disk_usage',return_value=Mock(free=20*1024**3)))
             prompt = stack.enter_context(patch.object(s.getpass,'getpass',return_value='render-token'))
-            stack.enter_context(patch.object(s,'render_values',side_effect=[{}, {'CKB_API_KEY':'registry-key'}]))
+            stack.enter_context(patch.object(s,'render_values',side_effect=[{}, {}]))
             vercel = stack.enter_context(patch.object(s,'vercel_values',side_effect=AssertionError('Unexpected Vercel request')))
             stack.enter_context(patch.object(s,'command',return_value=json.dumps({'services':{'api':{'environment':{'INTERNAL_API_SECRET':'original-key'}}}})))
             stack.enter_context(patch.object(s,'source'))
@@ -38,6 +38,7 @@ class CkbOnlyTests(unittest.TestCase):
             vercel.assert_not_called()
             self.assertEqual(deploy.call_args.args[0],'ckb-runtime')
             self.assertEqual(deploy.call_args.args[4]['mcp']['CKB_INTERNAL_SECRET'],'original-key')
+            self.assertNotIn('CKB_API_KEY',deploy.call_args.args[4]['registry'])
 
 
 if __name__ == '__main__':

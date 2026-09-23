@@ -254,7 +254,6 @@ def main():
         mcp['CKB_INTERNAL_SECRET'] = cloud.get('INTERNAL_API_SECRET','')
     for label, values, keys in (
         ('CKB MCP',mcp,['CKB_INTERNAL_SECRET']),
-        ('CKB registry',registry,['CKB_API_KEY']),
         ('OmniCode',omni,['DATABASE_URL','JWT_SECRET','ENCRYPTION_KEY']),
     ):
         missing = [k for k in keys if not values.get(k)]
@@ -270,6 +269,8 @@ def main():
                CKB_REALITY_V5_BIN='/app/target/release/reality_server_v5',
                CKB_ALLOW_LOCAL_SCAN='0',CKB_MAX_CONCURRENT_SCANS='1')
     registry['PORT'] = '10000'
+    if not registry.get('CKB_API_KEY', '').strip():
+        print('CKB registry: public model listing/selection enabled; authenticated adaptation remains disabled (no existing CKB_API_KEY).', flush=True)
     omni.update(NODE_ENV='production',PORT='3000',OMNICODE_RUN_PRODUCTION_SCHEMA_GUARDS='0')
     omni.pop('VERCEL_OIDC_TOKEN',None)
     for label, values in [('ckb-mcp',mcp),('ckb-registry',registry),('omnicode',omni)]:

@@ -52,14 +52,15 @@ def main():
     cloud = json.loads(shared.command(cloud_cmd,log,True))['services']['api']['environment']
     if not mcp.get('CKB_INTERNAL_SECRET'):
         mcp['CKB_INTERNAL_SECRET'] = cloud.get('INTERNAL_API_SECRET','')
-    for label,values,key in [('CKB MCP',mcp,'CKB_INTERNAL_SECRET'),
-                             ('CKB registry',registry,'CKB_API_KEY')]:
+    for label,values,key in [('CKB MCP',mcp,'CKB_INTERNAL_SECRET')]:
         if not values.get(key): raise shared.Stop(label + ': missing existing setting ' + key)
     mcp.update(PORT='10000',CKB_REALITY_DATA_DIR='/app/ckb_reality_data',
                CKB_REALITY_GATEWAY_BIN='/app/target/release/reality_gateway',
                CKB_REALITY_V5_BIN='/app/target/release/reality_server_v5',
                CKB_ALLOW_LOCAL_SCAN='0',CKB_MAX_CONCURRENT_SCANS='1')
     registry['PORT'] = '10000'
+    if not registry.get('CKB_API_KEY', '').strip():
+        print('CKB registry: public model listing/selection enabled; authenticated adaptation remains disabled (no existing CKB_API_KEY).', flush=True)
     for label,values in [('ckb-mcp',mcp),('ckb-registry',registry)]:
         shared.private_write(backup/(label+'-environment.json'),json.dumps(values))
         print(label + ': existing settings recovered (values hidden)',flush=True)
