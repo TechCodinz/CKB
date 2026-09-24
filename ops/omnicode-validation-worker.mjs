@@ -245,7 +245,7 @@ async function execute(job) {
 async function main() {
   console.log('[validation-worker] started', { base, workerId, reconcileSeconds: reconcileMs / 1000 })
 
-  await reconcilePlatform().catch(error => {
+  reconcilePlatform().catch(error => {
     console.error('[validation-worker] initial reconcile:', error instanceof Error ? error.message : String(error))
   })
   const reconcileTimer = setInterval(() => {
