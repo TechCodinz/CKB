@@ -32,6 +32,7 @@ struct GatewayState {
     child_base_url: Arc<String>,
     internal_secret: Option<Arc<String>>,
     api_key: Option<Arc<String>>,
+    omnicode_validation_secret: Option<Arc<String>>,
 }
 
 fn secret_value(name: &str) -> Option<Arc<String>> {
@@ -73,7 +74,7 @@ fn presented_api_key(headers: &HeaderMap) -> Option<&str> {
 /// an unconfigured deployment fails closed per request with 503 instead of
 /// refusing to start.
 fn authorized(state: &GatewayState, headers: &HeaderMap) -> Result<(), (StatusCode, String)> {
-    if state.internal_secret.is_none() && state.api_key.is_none() {
+    if state.internal_secret.is_none() && state.api_key.is_none() && state.omnicode_validation_secret.is_none() {
         return Err((
             StatusCode::SERVICE_UNAVAILABLE,
             "CKB MCP authentication is not configured on this deployment".into(),
@@ -96,7 +97,16 @@ fn authorized(state: &GatewayState, headers: &HeaderMap) -> Result<(), (StatusCo
         })
         .unwrap_or(false);
 
-    if internal_ok || api_ok {
+    let omnicode_ok = state
+        .omnicode_validation_secret
+        .as_ref()
+        .and_then(|expected| {
+            header_text(headers, "x-omnicode-validation-secret")
+                .map(|presented| secure_eq(presented, expected.as_str()))
+        })
+        .unwrap_or(false);
+
+    if internal_ok || api_ok || omnicode_ok {
         Ok(())
     } else {
         Err((
@@ -301,6 +311,7 @@ async fn main() -> anyhow::Result<()> {
     let upstream = Arc::new(format!("http://127.0.0.1:{gateway_port}"));
     let internal_secret = secret_value("CKB_INTERNAL_SECRET");
     let api_key = secret_value("CKB_API_KEY");
+    let omnicode_validation_secret = secret_value("OMNICODE_CKB_FEEDBACK_SECRET");
 
     if internal_secret.is_none() {
         warn!("CKB_INTERNAL_SECRET is not configured. OAuth token introspection and trusted gateway authentication will fail closed.");
@@ -317,6 +328,7 @@ async fn main() -> anyhow::Result<()> {
         child_base_url: upstream,
         internal_secret,
         api_key,
+        omnicode_validation_secret,
     };
     omnicode_feedback::start_reconciler(state.client.clone());
 
