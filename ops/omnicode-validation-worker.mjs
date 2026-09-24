@@ -37,13 +37,15 @@ async function reconcilePlatform() {
   if (reconcileInFlight) return
   reconcileInFlight = true
   try {
-    const response = await fetch(`${base}/api/system/autonomous-release?limit=12`, {
-      method: 'GET',
+    const response = await fetch(`${base}/api/system/autonomous-release`, {
+      method: 'POST',
       headers: {
         accept: 'application/json',
+        'content-type': 'application/json',
         'x-omnicode-release-secret': releaseReconcilerSecret,
       },
-      signal: AbortSignal.timeout(300_000),
+      body: JSON.stringify({ limit: 1 }),
+      signal: AbortSignal.timeout(90_000),
     })
     const text = await response.text()
     let payload = {}
