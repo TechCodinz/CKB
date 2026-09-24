@@ -18,6 +18,12 @@ const runnerSecret = createHmac('sha256', rootSecret)
   .update('omnicode-validation-runner-v1')
   .digest('hex')
 
+const releaseReconcilerSecret = createHmac('sha256', rootSecret)
+  .update('omnicode-autonomous-release-reconciler-v1')
+  .digest('hex')
+const reconcileMs = Math.max(60, Number(process.env.OMNICODE_RECONCILE_SECONDS || 120)) * 1000
+let reconcileInFlight = false
+
 const headers = {
   'content-type': 'application/json',
   'x-omnicode-validation-runner-secret': runnerSecret,
@@ -25,6 +31,36 @@ const headers = {
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function reconcilePlatform() {
+  if (reconcileInFlight) return
+  reconcileInFlight = true
+  try {
+    const response = await fetch(`${base}/api/system/autonomous-release?limit=12`, {
+      method: 'GET',
+      headers: {
+        accept: 'application/json',
+        'x-omnicode-release-secret': releaseReconcilerSecret,
+      },
+      signal: AbortSignal.timeout(300_000),
+    })
+    const text = await response.text()
+    let payload = {}
+    try { payload = text ? JSON.parse(text) : {} } catch { payload = { raw: text.slice(0, 300) } }
+    if (!response.ok) {
+      throw new Error(`autonomous reconcile returned ${response.status}: ${JSON.stringify(payload).slice(0, 500)}`)
+    }
+    console.log('[validation-worker] autonomous reconcile', JSON.stringify({
+      ok: payload.ok === true,
+      examined: payload.examined,
+      processed: payload.processed,
+      externalQaBefore: payload.externalQa?.beforeRelease?.processed,
+      externalQaAfter: payload.externalQa?.afterRelease?.processed,
+    }))
+  } finally {
+    reconcileInFlight = false
+  }
 }
 
 async function post(route, body) {
@@ -207,7 +243,18 @@ async function execute(job) {
 }
 
 async function main() {
-  console.log('[validation-worker] started', { base, workerId })
+  console.log('[validation-worker] started', { base, workerId, reconcileSeconds: reconcileMs / 1000 })
+
+  await reconcilePlatform().catch(error => {
+    console.error('[validation-worker] initial reconcile:', error instanceof Error ? error.message : String(error))
+  })
+  const reconcileTimer = setInterval(() => {
+    reconcilePlatform().catch(error => {
+      console.error('[validation-worker] reconcile:', error instanceof Error ? error.message : String(error))
+    })
+  }, reconcileMs)
+  reconcileTimer.unref()
+
   for (;;) {
     try {
       const payload = await post('/api/integrations/validation-runner/jobs/claim', {
