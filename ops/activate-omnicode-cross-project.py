@@ -75,6 +75,20 @@ def http_status(url: str, *, method="GET", body=None, timeout=20):
         return handle.status, payload[:1200]
 
 
+def ada_handoff_active():
+    health_status, _ = http_status("https://api.adascannerpro.com/health")
+    route_status, _ = http_status(
+        "https://api.adascannerpro.com/integrations/omnicode/scans",
+        method="POST",
+        body={
+            "buildId": "deployment-route-probe",
+            "projectId": "deployment-route-probe",
+            "url": "https://example.com",
+        },
+    )
+    return health_status == 200 and route_status == 401
+
+
 def activate_ada():
     if not ADA_REPO.is_dir():
         raise RuntimeError(f"ADA source repository missing: {ADA_REPO}")
@@ -118,14 +132,20 @@ def activate_worker():
     backup = backup_dir / target.name
     shutil.copy2(target, backup)
 
-    temp = target.with_name(target.name + ".new")
+    # Preserve the .mjs extension during syntax checking. A temporary filename
+    # ending in ".mjs.new" is treated as an unknown/CommonJS-like input by some
+    # Node versions and can reject valid ESM imports.
+    temp = target.with_name(target.stem + ".new" + target.suffix)
     temp.write_text(source)
     os.chmod(temp, target.stat().st_mode & 0o777)
 
     syntax = run(["node", "--check", str(temp)], check=False)
     if syntax.returncode:
+        detail = (syntax.stderr or syntax.stdout or "").strip()
         temp.unlink(missing_ok=True)
-        raise RuntimeError("Updated validation worker failed node --check.")
+        raise RuntimeError(
+            "Updated validation worker failed node --check: " + detail[-1200:]
+        )
 
     temp.replace(target)
 
@@ -212,7 +232,11 @@ def show_worker_evidence():
 
 def main():
     os.umask(0o077)
-    activate_ada()
+    if ada_handoff_active():
+        print("===== ADA OMNICODE HANDOFF =====", flush=True)
+        print("ADA handoff already active and fail-closed; skipping overlay.", flush=True)
+    else:
+        activate_ada()
     activate_worker()
     verify_public()
     show_worker_evidence()
