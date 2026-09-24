@@ -53,6 +53,7 @@ struct GatewayState {
     child_base_url: Arc<String>,
     internal_secret: Option<Arc<String>>,
     api_key: Option<Arc<String>>,
+    omnicode_validation_secret: Option<Arc<String>>,
     scan_gate: Arc<Semaphore>,
     max_concurrent_scans: usize,
     allow_local_scan: bool,
@@ -103,8 +104,9 @@ fn presented_api_key(headers: &HeaderMap) -> Option<&str> {
 fn authorized(state: &GatewayState, headers: &HeaderMap) -> Result<(), (StatusCode, String)> {
     let internal_configured = state.internal_secret.is_some();
     let api_key_configured = state.api_key.is_some();
+    let omnicode_configured = state.omnicode_validation_secret.is_some();
 
-    if !internal_configured && !api_key_configured {
+    if !internal_configured && !api_key_configured && !omnicode_configured {
         return Err((
             StatusCode::SERVICE_UNAVAILABLE,
             "CKB Reality authentication is not configured on this deployment".into(),
@@ -129,7 +131,16 @@ fn authorized(state: &GatewayState, headers: &HeaderMap) -> Result<(), (StatusCo
         })
         .unwrap_or(false);
 
-    if internal_ok || api_ok {
+    let omnicode_ok = state
+        .omnicode_validation_secret
+        .as_ref()
+        .and_then(|expected| {
+            header_text(headers, "x-omnicode-validation-secret")
+                .map(|presented| secure_eq(presented, expected.as_str()))
+        })
+        .unwrap_or(false);
+
+    if internal_ok || api_ok || omnicode_ok {
         Ok(())
     } else {
         Err((
@@ -873,6 +884,7 @@ async fn main() -> anyhow::Result<()> {
         child_base_url: Arc::new(child_base_url),
         internal_secret: secret_value("CKB_INTERNAL_SECRET"),
         api_key: secret_value("CKB_API_KEY"),
+        omnicode_validation_secret: secret_value("OMNICODE_CKB_FEEDBACK_SECRET"),
         scan_gate: Arc::new(Semaphore::new(max_concurrent_scans)),
         max_concurrent_scans,
         allow_local_scan: env_flag("CKB_ALLOW_LOCAL_SCAN", false),
