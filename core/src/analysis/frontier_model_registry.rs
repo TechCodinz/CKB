@@ -26,6 +26,7 @@ const BUILTIN_PROFILE_JSON: &[&str] = &[
     include_str!("../../../profiles/google/lyria-3.5-pro-preview.json"),
     include_str!("../../../profiles/google/antigravity-preview-09-2026.json"),
     include_str!("../../../profiles/google/antigravity-preview-05-2026.json"),
+    include_str!("../../../profiles/xai/grok-4.7.json"),
     include_str!("../../../profiles/xai/grok-4.6.json"),
     include_str!("../../../profiles/xai/grok-voice-transcribe-2.0.json"),
     include_str!("../../../profiles/anthropic/claude-fable-5-1.json"),
@@ -222,6 +223,17 @@ mod tests {
         assert_eq!(gemini.reasoning.modes, vec!["low", "medium", "high"]);
         assert_eq!(gemini.reasoning.default_mode.as_deref(), Some("medium"));
 
+        let grok47 = registry
+            .require("xai", "grok-4.7")
+            .expect("Grok 4.7 must resolve");
+        assert_eq!(grok47.context_window_tokens, Some(500_000));
+        assert_eq!(grok47.max_output_tokens, None);
+        assert_eq!(grok47.reasoning.default_mode.as_deref(), Some("high"));
+        assert!(grok47.reasoning.modes.iter().any(|mode| mode == "xhigh"));
+        assert_eq!(grok47.tools.function_calling, super::super::frontier_model_profile::SupportState::Supported);
+        assert_eq!(grok47.tools.structured_output, super::super::frontier_model_profile::SupportState::Supported);
+        assert_eq!(grok47.tools.code_execution, super::super::frontier_model_profile::SupportState::Unknown);
+
         let grok = registry
             .require("xai", "grok-4.6")
             .expect("Grok 4.6 must resolve");
@@ -300,6 +312,30 @@ mod tests {
         assert!(!result.compatible);
         assert!(result.errors.iter().any(|error| error.contains("stop")));
         assert!(!result.errors.iter().any(|error| error.contains("xhigh")));
+    }
+
+    #[test]
+    fn grok_47_reasoning_modes_are_guarded_without_invented_parameter_rules() {
+        let registry = FrontierModelRegistry::builtin().expect("embedded profiles must parse");
+
+        let accepted = registry
+            .adapt_request(
+                "xai",
+                "grok-4.7",
+                &json!({"input": "x", "reasoning": {"effort": "xhigh"}}),
+            )
+            .expect("Grok 4.7 profile must exist");
+        assert!(accepted.compatible);
+
+        let rejected = registry
+            .adapt_request(
+                "xai",
+                "grok-4.7",
+                &json!({"input": "x", "reasoning": {"effort": "ultra"}}),
+            )
+            .expect("Grok 4.7 profile must exist");
+        assert!(!rejected.compatible);
+        assert!(rejected.errors.iter().any(|error| error.contains("ultra")));
     }
 
     #[test]
