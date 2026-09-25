@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "policy": {
+    "primarySourcesOnly": true,
+    "autoModifyProfiles": false,
+    "materialChangesOnly": [
+      "new-model-family",
+      "new-model-version",
+      "tool-capability-change",
+      "context-window-change",
+      "structured-output-change",
+      "code-execution-change",
+      "reasoning-mode-change",
+      "api-surface-change",
+      "deprecation-or-retirement"
+    ]
+  },
+  "providers": [
+    {
+      "provider": "openai",
+      "releaseNotes": "https://developers.openai.com/api/docs/changelog",
+      "models": "https://developers.openai.com/api/docs/models",
+      "deprecations": "https://developers.openai.com/api/docs/deprecations"
+    },
+    {
+      "provider": "anthropic",
+      "releaseNotes": "https://platform.claude.com/docs/en/release-notes/overview",
+      "models": "https://platform.claude.com/docs/en/about-claude/models/overview"
+    },
+    {
+      "provider": "google",
+      "releaseNotes": "https://ai.google.dev/gemini-api/docs/changelog",
+      "models": "https://ai.google.dev/gemini-api/docs/models"
+    },
+    {
+      "provider": "xai",
+      "releaseNotes": "https://docs.x.ai/developers/release-notes",
+      "models": "https://docs.x.ai/developers/models"
+    }
+  ]
+}

@@ -1,0 +1,144 @@
+name: Frontier Model Watchdog
+
+on:
+  schedule:
+    - cron: '17 10 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'profiles/**'
+      - '.github/workflows/frontier-model-watchdog.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'profiles/**'
+      - '.github/workflows/frontier-model-watchdog.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Audit profile freshness and primary-source provenance
+        id: audit
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import pathlib
+          import urllib.parse
+          from datetime import datetime, timezone
+
+          profiles = sorted(pathlib.Path('profiles').glob('*/*.json'))
+          manifest = json.loads(pathlib.Path('profiles/frontier-source-watch.json').read_text())
+
+          expected = {'openai', 'anthropic', 'google', 'xai'}
+          watched = {row['provider'] for row in manifest['providers']}
+          missing_watch = sorted(expected - watched)
+
+          allowed_hosts = {
+              'developers.openai.com', 'help.openai.com', 'platform.openai.com', 'openai.com',
+              'platform.claude.com', 'docs.anthropic.com', 'anthropic.com',
+              'ai.google.dev', 'developers.googleblog.com', 'blog.google',
+              'docs.x.ai', 'x.ai',
+          }
+
+          now = datetime.now(timezone.utc)
+          stale, invalid = [], []
+
+          for path in profiles:
+              data = json.loads(path.read_text())
+              provider = str(data.get('provider', '')).lower()
+              model = str(data.get('model', ''))
+              verified = data.get('verifiedAt')
+              stale_days = data.get('staleAfterDays')
+              sources = data.get('declaredSources') or []
+
+              if not verified or not isinstance(stale_days, int) or stale_days <= 0:
+                  invalid.append(f'{path}: verifiedAt and positive staleAfterDays are required')
+              else:
+                  try:
+                      dt = datetime.fromisoformat(verified.replace('Z', '+00:00'))
+                      age = (now - dt).total_seconds() / 86400
+                      if age > stale_days:
+                          stale.append(f'{provider}/{model}: {age:.1f}d old > {stale_days}d policy')
+                  except Exception as exc:
+                      invalid.append(f'{path}: invalid verifiedAt ({exc})')
+
+              if data.get('sourceKind') != 'system-verified-primary-source':
+                  invalid.append(f'{path}: sourceKind must be system-verified-primary-source')
+              if not sources:
+                  invalid.append(f'{path}: declaredSources must not be empty')
+
+              for source in sources:
+                  ref = str(source.get('reference', ''))
+                  parsed = urllib.parse.urlparse(ref)
+                  if parsed.scheme != 'https' or parsed.hostname not in allowed_hosts:
+                      invalid.append(f'{path}: non-primary or unapproved source host: {ref}')
+
+          if missing_watch:
+              invalid.append('watch manifest missing providers: ' + ', '.join(missing_watch))
+
+          report = []
+          if stale:
+              report.append('## Stale frontier-model profiles')
+              report += [f'- {item}' for item in stale]
+          if invalid:
+              report.append('## Provenance / policy failures')
+              report += [f'- {item}' for item in invalid]
+          if not report:
+              report = ['All frontier-model profiles are within freshness policy and use approved primary-source hosts.']
+
+          pathlib.Path('/tmp/frontier-watchdog-report.md').write_text('\n'.join(report) + '\n')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              out.write(f"attention={'true' if stale or invalid else 'false'}\n")
+              out.write(f"invalid={'true' if invalid else 'false'}\n")
+          PY
+
+      - name: Check official watch endpoints are reachable
+        shell: bash
+        run: |
+          python - <<'PY' > /tmp/frontier-watch-urls.txt
+          import json
+          data=json.load(open('profiles/frontier-source-watch.json'))
+          for row in data['providers']:
+              for key in ('releaseNotes','models','deprecations'):
+                  if row.get(key): print(row[key])
+          PY
+          while IFS= read -r url; do
+            echo "Checking $url"
+            curl --fail --silent --show-error --location --retry 2 --max-time 30 --output /dev/null "$url" || echo "::warning::Official watch endpoint temporarily unreachable: $url"
+          done < /tmp/frontier-watch-urls.txt
+
+      - name: Open or refresh re-verification issue
+        if: steps.audit.outputs.attention == 'true' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          title='Frontier model profiles require re-verification'
+          body="$(cat /tmp/frontier-watchdog-report.md)\n\nThis watchdog never modifies capability metadata automatically. Re-verify only against official primary sources, update exact model profiles conservatively, and close this issue after the registry CI passes."
+          number="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$title in:title" --json number,title --jq '.[] | select(.title == "'"$title"'") | .number' | head -1)"
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi
+
+      - name: Write job summary
+        if: always()
+        shell: bash
+        run: cat /tmp/frontier-watchdog-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce provenance policy
+        if: steps.audit.outputs.invalid == 'true'
+        shell: bash
+        run: |
+          echo 'Frontier profile provenance policy failed.' >&2
+          exit 1
