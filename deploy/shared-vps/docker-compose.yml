@@ -1,0 +1,49 @@
+services:
+  ckb-mcp:
+    build:
+      context: ../..
+      dockerfile: deploy/shared-vps/Dockerfile.mcp
+    container_name: ckb-mcp
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      PORT: 3000
+      # The Rust server defaults to loopback for safety. Inside Docker it must
+      # bind all interfaces so ckb-api can reach it over the private ckb_mesh.
+      CKB_BIND_ALL: "1"
+      CKB_BACKEND_URL: ${CKB_BACKEND_URL:-http://ckb-api:3000}
+      CKB_INTERNAL_SECRET: ${CKB_INTERNAL_SECRET:?set CKB_INTERNAL_SECRET}
+      CKB_ALLOWED_ORIGIN: ${CKB_ALLOWED_ORIGIN:-https://ckb-nu.vercel.app}
+    ports:
+      # Localhost-only diagnostic access. It is not a public edge port.
+      - "127.0.0.1:${CKB_MCP_HOST_PORT:-8320}:3000"
+    volumes:
+      - ckb_mcp_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --show-error http://127.0.0.1:3000/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    mem_limit: ${CKB_MCP_MEMORY_LIMIT:-768m}
+    cpus: ${CKB_MCP_CPUS:-1.0}
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    stop_grace_period: 30s
+    networks:
+      - ckb_mesh
+
+volumes:
+  ckb_mcp_data:
+
+networks:
+  ckb_mesh:
+    external: true
+    name: ${CKB_MESH_NETWORK:-ckb_mesh}

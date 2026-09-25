@@ -1,0 +1,68 @@
+name: Verify Shared VPS MCP Profile
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'deploy/shared-vps/**'
+      - 'mcp-server/**'
+      - 'core/**'
+      - '.github/workflows/shared-vps-mcp-verify.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  shared-vps-mcp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare non-secret CI environment
+        shell: bash
+        run: |
+          cp deploy/shared-vps/.env.example deploy/shared-vps/.env
+
+      - name: Validate Compose contract
+        shell: bash
+        run: |
+          docker network create ckb_mesh >/dev/null
+          docker compose --env-file deploy/shared-vps/.env \
+            -f deploy/shared-vps/docker-compose.yml config >/tmp/ckb-mcp-shared-vps.yml
+          if grep -Eq '(^|[^0-9])80:80|(^|[^0-9])443:443' /tmp/ckb-mcp-shared-vps.yml; then
+            echo 'CKB MCP shared VPS profile must never bind public host ports 80/443.' >&2
+            exit 1
+          fi
+          grep -q '127.0.0.1' /tmp/ckb-mcp-shared-vps.yml
+          grep -q 'CKB_BIND_ALL' /tmp/ckb-mcp-shared-vps.yml
+          grep -q 'ckb_mesh' /tmp/ckb-mcp-shared-vps.yml
+
+      - name: Build production MCP image
+        shell: bash
+        run: |
+          docker compose --env-file deploy/shared-vps/.env \
+            -f deploy/shared-vps/docker-compose.yml build ckb-mcp
+
+      - name: Start MCP and prove health port
+        shell: bash
+        run: |
+          docker compose --env-file deploy/shared-vps/.env \
+            -f deploy/shared-vps/docker-compose.yml up -d ckb-mcp
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8320/health >/dev/null; then
+              echo 'CKB MCP health endpoint is reachable through localhost-only host binding.'
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose --env-file deploy/shared-vps/.env \
+            -f deploy/shared-vps/docker-compose.yml logs ckb-mcp
+          exit 1
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: |
+          docker compose --env-file deploy/shared-vps/.env \
+            -f deploy/shared-vps/docker-compose.yml down -v || true
