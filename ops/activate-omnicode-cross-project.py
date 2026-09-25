@@ -211,7 +211,7 @@ def verify_public():
 
 def show_worker_evidence():
     print("===== WORKER EVIDENCE =====", flush=True)
-    # Give the worker a brief chance to start its immediate reconciliation call.
+    # Give the worker a brief chance to establish its validation heartbeat.
     time.sleep(5)
     logs = run(
         ["journalctl", "-u", SERVICE, "--since", "2 minutes ago", "--no-pager", "-n", "80"],
@@ -221,8 +221,7 @@ def show_worker_evidence():
         line for line in logs.splitlines()
         if (
             "[validation-worker] started" in line
-            or "autonomous reconcile" in line
-            or "initial reconcile" in line
+            or "reconcile scheduled by OmniCode" in line
             or "completed" in line
         )
     ]
