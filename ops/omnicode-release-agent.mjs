@@ -4,6 +4,7 @@ import { createServer } from 'node:http'
 import { spawn } from 'node:child_process'
 import { mkdir, readFile, rename, rm, writeFile, copyFile } from 'node:fs/promises'
 import path from 'node:path'
+import { recoverExistingRoute } from './omnicode-release-recovery.mjs'
 
 const listenHost = process.env.OMNICODE_RELEASE_HOST || '127.0.0.1'
 const listenPort = Number(process.env.OMNICODE_RELEASE_PORT || 18085)
@@ -424,6 +425,29 @@ async function queueDeployment(payload) {
   return record
 }
 
+async function recoverRoute(payload) {
+  const deployId = String(payload.deployId || '')
+  const record = (await loadState())[deployId]
+  const patch = await recoverExistingRoute(record, String(payload.artifactHash || ''), {
+    inspect: async (container, image) => {
+      const actual = JSON.parse((await run('docker', ['inspect', container], { timeoutMs: 15_000 })).stdout)[0]
+      const expectedImageId = (await run('docker', ['image', 'inspect', image, '--format', '{{.Id}}'], { timeoutMs: 15_000 })).stdout.trim()
+      return { running: actual.State.Running, image: actual.Config.Image, imageId: actual.Image,
+        expectedImageId, bindings: actual.NetworkSettings.Ports['3000/tcp'] || [] }
+    },
+    checkLocal: port => checkRecoveryHttp(`http://127.0.0.1:${port}/`),
+    installRoute: installCaddyRoute,
+    checkPublic: checkRecoveryHttp,
+  })
+  return updateJob(deployId, patch)
+}
+
+async function checkRecoveryHttp(url) {
+  const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(15_000) })
+  await response.body?.cancel()
+  if (response.status !== 200) throw new Error(`recovery_health_http_${response.status}`)
+}
+
 const server = createServer(async (req, res) => {
   try {
     if (req.url === '/health' && req.method === 'GET') {
@@ -433,6 +457,17 @@ const server = createServer(async (req, res) => {
 
     if (!authorized(req)) {
       json(res, 401, { ok: false, error: 'unauthorized' })
+      return
+    }
+
+    if (req.url === '/recover-route' && req.method === 'POST') {
+      const payload = await bodyJson(req, 4096)
+      // Serialize with deployment writes; recovery cannot race a new artifact.
+      const recovery = deploymentChain.catch(() => undefined).then(() => recoverRoute(payload))
+      deploymentChain = recovery.catch(() => undefined)
+      const record = await recovery
+      json(res, 200, { ok: true, deployId: record.deployId, status: record.status,
+        artifactHash: record.artifactHash, url: record.url, routeRecovery: record.routeRecovery })
       return
     }
 
