@@ -11,10 +11,12 @@ use serde_json::Value;
 use std::{error::Error, fmt};
 
 const BUILTIN_PROFILE_JSON: &[&str] = &[
+    include_str!("../../../profiles/openai/gpt-6.1-sol.json"),
     include_str!("../../../profiles/openai/gpt-6-astra.json"),
     include_str!("../../../profiles/openai/gpt-5.6-sol.json"),
     include_str!("../../../profiles/openai/gpt-5.6-terra.json"),
     include_str!("../../../profiles/openai/gpt-5.6-luna.json"),
+    include_str!("../../../profiles/google/gemini-4-argon.json"),
     include_str!("../../../profiles/google/gemini-3.8-live.json"),
     include_str!("../../../profiles/google/gemini-3.8-live-extended-thinking.json"),
     include_str!("../../../profiles/google/gemini-3.8-flash.json"),
@@ -26,6 +28,7 @@ const BUILTIN_PROFILE_JSON: &[&str] = &[
     include_str!("../../../profiles/google/lyria-3.5-pro-preview.json"),
     include_str!("../../../profiles/google/antigravity-preview-09-2026.json"),
     include_str!("../../../profiles/google/antigravity-preview-05-2026.json"),
+    include_str!("../../../profiles/xai/grok-4.7.json"),
     include_str!("../../../profiles/xai/grok-4.6.json"),
     include_str!("../../../profiles/xai/grok-voice-transcribe-2.0.json"),
     include_str!("../../../profiles/anthropic/claude-fable-5-1.json"),
@@ -190,6 +193,27 @@ mod tests {
     fn builtin_registry_resolves_new_exact_models() {
         let registry = FrontierModelRegistry::builtin().expect("embedded profiles must parse");
 
+        let sol61 = registry
+            .require("OPENAI", "gpt-6.1-sol")
+            .expect("GPT-6.1 Sol must resolve");
+        assert_eq!(sol61.context_window_tokens, Some(1_050_000));
+        assert_eq!(sol61.max_output_tokens, Some(128_000));
+        assert_eq!(sol61.reasoning.default_mode.as_deref(), Some("medium"));
+        assert_eq!(sol61.tools.structured_output, super::super::frontier_model_profile::SupportState::Supported);
+        assert_eq!(sol61.tools.code_execution, super::super::frontier_model_profile::SupportState::Supported);
+        assert_eq!(sol61.tools.computer_use, super::super::frontier_model_profile::SupportState::Supported);
+        assert_eq!(sol61.tools.mcp, super::super::frontier_model_profile::SupportState::Supported);
+
+        let argon = registry
+            .require("google", "gemini-4-argon")
+            .expect("Gemini 4 Argon must resolve");
+        assert_eq!(argon.availability, Some(super::super::frontier_model_profile::ModelAvailability::Limited));
+        assert_eq!(argon.context_window_tokens, None);
+        assert_eq!(argon.max_output_tokens, Some(1_000_000));
+        assert!(argon.api_surfaces.is_empty());
+        assert_eq!(argon.tools.function_calling, super::super::frontier_model_profile::SupportState::Unknown);
+        assert_eq!(argon.tools.structured_output, super::super::frontier_model_profile::SupportState::Unknown);
+
         let sol = registry
             .require("OPENAI", "gpt-5.6-sol")
             .expect("GPT-5.6 Sol must resolve");
@@ -221,6 +245,17 @@ mod tests {
             .expect("Gemini 3.7 Flash must resolve");
         assert_eq!(gemini.reasoning.modes, vec!["low", "medium", "high"]);
         assert_eq!(gemini.reasoning.default_mode.as_deref(), Some("medium"));
+
+        let grok47 = registry
+            .require("xai", "grok-4.7")
+            .expect("Grok 4.7 must resolve");
+        assert_eq!(grok47.context_window_tokens, Some(500_000));
+        assert_eq!(grok47.max_output_tokens, None);
+        assert_eq!(grok47.reasoning.default_mode.as_deref(), Some("high"));
+        assert!(grok47.reasoning.modes.iter().any(|mode| mode == "xhigh"));
+        assert_eq!(grok47.tools.function_calling, super::super::frontier_model_profile::SupportState::Supported);
+        assert_eq!(grok47.tools.structured_output, super::super::frontier_model_profile::SupportState::Supported);
+        assert_eq!(grok47.tools.code_execution, super::super::frontier_model_profile::SupportState::Unknown);
 
         let grok = registry
             .require("xai", "grok-4.6")
@@ -270,6 +305,30 @@ mod tests {
     }
 
     #[test]
+    fn gpt_61_sol_reasoning_modes_are_guarded() {
+        let registry = FrontierModelRegistry::builtin().expect("embedded profiles must parse");
+
+        let accepted = registry
+            .adapt_request(
+                "openai",
+                "gpt-6.1-sol",
+                &json!({"input": "x", "reasoning": {"effort": "max"}}),
+            )
+            .expect("GPT-6.1 Sol profile must exist");
+        assert!(accepted.compatible);
+
+        let rejected = registry
+            .adapt_request(
+                "openai",
+                "gpt-6.1-sol",
+                &json!({"input": "x", "reasoning": {"effort": "minimal"}}),
+            )
+            .expect("GPT-6.1 Sol profile must exist");
+        assert!(!rejected.compatible);
+        assert!(rejected.errors.iter().any(|error| error.contains("minimal")));
+    }
+
+    #[test]
     fn gemini_minimal_reasoning_is_rejected_by_runtime_adapter() {
         let registry = FrontierModelRegistry::builtin().expect("embedded profiles must parse");
         for model in ["gemini-3.8-flash", "gemini-3.7-flash"] {
@@ -300,6 +359,30 @@ mod tests {
         assert!(!result.compatible);
         assert!(result.errors.iter().any(|error| error.contains("stop")));
         assert!(!result.errors.iter().any(|error| error.contains("xhigh")));
+    }
+
+    #[test]
+    fn grok_47_reasoning_modes_are_guarded_without_invented_parameter_rules() {
+        let registry = FrontierModelRegistry::builtin().expect("embedded profiles must parse");
+
+        let accepted = registry
+            .adapt_request(
+                "xai",
+                "grok-4.7",
+                &json!({"input": "x", "reasoning": {"effort": "xhigh"}}),
+            )
+            .expect("Grok 4.7 profile must exist");
+        assert!(accepted.compatible);
+
+        let rejected = registry
+            .adapt_request(
+                "xai",
+                "grok-4.7",
+                &json!({"input": "x", "reasoning": {"effort": "ultra"}}),
+            )
+            .expect("Grok 4.7 profile must exist");
+        assert!(!rejected.compatible);
+        assert!(rejected.errors.iter().any(|error| error.contains("ultra")));
     }
 
     #[test]

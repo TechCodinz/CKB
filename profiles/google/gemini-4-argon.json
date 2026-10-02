@@ -1,0 +1,67 @@
+{
+  "provider": "google",
+  "model": "gemini-4-argon",
+  "aliases": [],
+  "availability": "limited",
+  "releasedAt": "2026-09-30T00:00:00Z",
+  "verifiedAt": "2026-10-02T00:00:00Z",
+  "staleAfterDays": 30,
+  "contextWindowTokens": null,
+  "maxOutputTokens": 1000000,
+  "knowledgeCutoff": null,
+  "inputModalities": [
+    "text",
+    "image",
+    "video"
+  ],
+  "outputModalities": [
+    "text"
+  ],
+  "apiSurfaces": [],
+  "preferredApiSurface": null,
+  "reasoning": {
+    "support": "supported",
+    "modes": [],
+    "defaultMode": null,
+    "adaptive": "unknown",
+    "alwaysOn": null,
+    "manualBudgetSupported": null
+  },
+  "tools": {
+    "functionCalling": "unknown",
+    "structuredOutput": "unknown",
+    "parallelFunctionCalling": "unknown",
+    "codeExecution": "unknown",
+    "computerUse": "unknown",
+    "mcp": "unknown",
+    "namedTools": []
+  },
+  "requestConstraints": {
+    "deprecatedParameters": [],
+    "rejectedParameters": [],
+    "ignoredParameters": [],
+    "unsupportedParameters": [],
+    "unsupportedTurnPatterns": [],
+    "parameterMigrations": [],
+    "notes": [
+      "Initial access is limited to approved trusted cyber defenders through Google's Fairwind Program.",
+      "Google has not published a generally available Gemini API model identifier for Argon.",
+      "Google documents a 1,000,000-token maximum output limit; this is not an input/context-window claim.",
+      "Google documents long-horizon software engineering, enterprise knowledge work, vulnerability discovery, validation, and automated patching for defensive-security use.",
+      "Fairwind partners can use Gemini 4 Argon standalone or with CodeMender; direct managed-model access on Gemini Enterprise supports zero data retention."
+    ]
+  },
+  "tokenizerNotes": [],
+  "declaredSources": [
+    {
+      "kind": "official-release",
+      "reference": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/",
+      "observedAt": "2026-10-02T00:00:00Z"
+    },
+    {
+      "kind": "official-doc",
+      "reference": "https://deepmind.google/fairwind-program/",
+      "observedAt": "2026-10-02T00:00:00Z"
+    }
+  ]
+}

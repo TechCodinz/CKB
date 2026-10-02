@@ -1,10 +1,10 @@
 {
   "provider": "openai",
-  "model": "gpt-6-astra",
+  "model": "gpt-6.1-sol",
   "aliases": [],
   "availability": "ga",
-  "releasedAt": "2026-09-03T00:00:00Z",
-  "verifiedAt": "2026-09-21T00:00:00Z",
+  "releasedAt": "2026-09-29T00:00:00Z",
+  "verifiedAt": "2026-10-02T00:00:00Z",
   "staleAfterDays": 30,
   "contextWindowTokens": 1050000,
   "maxOutputTokens": 128000,
@@ -17,7 +17,8 @@
     "text"
   ],
   "apiSurfaces": [
-    "responses"
+    "responses",
+    "chat-completions"
   ],
   "preferredApiSurface": "responses",
   "reasoning": {
@@ -29,7 +30,7 @@
       "xhigh",
       "max"
     ],
-    "defaultMode": null,
+    "defaultMode": "medium",
     "adaptive": "unknown",
     "alwaysOn": true,
     "manualBudgetSupported": null
@@ -42,9 +43,6 @@
     "computerUse": "supported",
     "mcp": "supported",
     "namedTools": [
-      "async-function-calling",
-      "computer-use",
-      "programmatic-tool-calling",
       "web-search",
       "file-search",
       "image-generation",
@@ -52,8 +50,10 @@
       "hosted-shell",
       "apply-patch",
       "skills",
+      "computer-use",
       "mcp",
-      "tool-search"
+      "tool-search",
+      "multi-agent-beta"
     ]
   },
   "requestConstraints": {
@@ -61,28 +61,34 @@
     "rejectedParameters": [],
     "ignoredParameters": [],
     "unsupportedParameters": [
-      "reasoning.effort:none"
+      "reasoning.effort:none",
+      "reasoning.effort:minimal"
     ],
     "unsupportedTurnPatterns": [],
     "parameterMigrations": [],
     "notes": [
-      "GPT-6 Astra does not support reasoning effort none.",
-      "OpenAI documents asynchronous tool calling and mid-turn steering for GPT-6 Astra.",
-      "OpenAI documents a 1,050,000-token context window and 128,000 max output tokens.",
-      "OpenAI documents Structured Outputs, computer use, web search, file search, image generation, Code Interpreter, hosted shell, apply patch, skills, MCP, tool search, Programmatic Tool Calling, multi-agent orchestration, prompt caching, persisted reasoning, compaction, and pro mode."
+      "GPT-6.1 Sol supports a 1,050,000-token context window and 128,000 max output tokens.",
+      "reasoning.effort supports low, medium, high, xhigh, and max; medium is the default. none and minimal are unsupported.",
+      "Use the Responses API for tool calling. Chat Completions is supported without tool calling.",
+      "OpenAI documents Multi-agent support in beta for Responses API requests."
     ]
   },
   "tokenizerNotes": [],
   "declaredSources": [
     {
-      "kind": "official-doc",
-      "reference": "https://developers.openai.com/api/docs/models/gpt-6-astra",
-      "observedAt": "2026-09-21T00:00:00Z"
+      "kind": "official-release",
+      "reference": "https://openai.com/index/introducing-gpt-6-1-sol/",
+      "observedAt": "2026-10-02T00:00:00Z"
     },
     {
       "kind": "official-doc",
-      "reference": "https://developers.openai.com/api/docs/guides/latest-model",
-      "observedAt": "2026-09-21T00:00:00Z"
+      "reference": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+      "observedAt": "2026-10-02T00:00:00Z"
+    },
+    {
+      "kind": "official-release",
+      "reference": "https://developers.openai.com/api/docs/changelog",
+      "observedAt": "2026-10-02T00:00:00Z"
     }
   ]
 }
