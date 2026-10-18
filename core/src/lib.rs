@@ -184,8 +184,15 @@ impl CkbEngine {
             }
         }
         
-        // Build graph
+        // Build graph. A full scan REPLACES the previous graph: callers
+        // (the MCP server, the REST API) hold one engine for many scans,
+        // and adding to the old graph made every later report describe
+        // the union of all projects scanned so far — counts inflated and
+        // violations from earlier projects reappeared in later ones.
+        // Incremental updates have their own entry point
+        // (`scan_incremental`), which deliberately merges.
         let mut graph = self.graph.write().await;
+        *graph = DependencyGraph::new();
         for analysis in &file_analyses {
             graph.add_file(analysis)?;
         }
