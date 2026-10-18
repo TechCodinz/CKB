@@ -291,20 +291,52 @@ async fn persist_session(state: &AppState, session: &Session) -> anyhow::Result<
     Ok(())
 }
 
-async fn persist_snapshot(state: &AppState, session: &Session) -> anyhow::Result<Option<String>> {
-    let graph = session.graph.read().await.clone();
-    let report = session.report.read().await.clone();
-    let (Some(graph), Some(report)) = (graph, report) else {
-        return Ok(None);
-    };
+/// Rewrite a scan report copy for snapshot storage: drift endpoints
+/// are node IDs and rule messages quote file paths, so the same
+/// scan-root prefix the graph relativization strips has to come out of
+/// them too — otherwise the stored snapshot's report disagrees with its
+/// own graph about node identity. Only the `<root>/` prefix is removed;
+/// the remainder of every message is the engine's own text, identical
+/// to what a CLI scan invoked at the project root produces.
+fn relativize_report(report: &mut ScanReport, root: &str) {
+    let root = root.trim_end_matches('/');
+    if root.is_empty() || root == "/" {
+        return;
+    }
+    let prefix = format!("{root}/");
+    let strip = |value: &str| value.replace(&prefix, "");
+    for violation in &mut report.drift {
+        violation.from.0 = strip(&violation.from.0);
+        violation.to.0 = strip(&violation.to.0);
+        violation.message = strip(&violation.message);
+        if let Some(fix) = &mut violation.suggested_fix {
+            *fix = strip(fix);
+        }
+    }
+}
 
+/// Persist a snapshot of a completed scan. The caller passes the
+/// project-relative copies (`DependencyGraph::relative_to` + the
+/// relativized report): snapshots are the durable cross-scan identity,
+/// so they must not carry the per-scan extraction root
+/// (`/tmp/ckb-zip-<uuid>/…`, `ckb-reality-<uuid>/…`) in their node IDs —
+/// with the root baked in, two scans of the same tree share no node
+/// identity and every diff degenerates to all-added/all-removed. The
+/// live session keeps the rooted graph (in-flight endpoints resolve
+/// real files with it); only the stored snapshot is relativized.
+async fn persist_snapshot(
+    state: &AppState,
+    session: &Session,
+    graph: &DependencyGraph,
+    report: &ScanReport,
+) -> anyhow::Result<Option<String>> {
     let id = report.snapshot_id.clone();
     let snapshot = ArchitectureSnapshot {
         id: id.clone(),
         project_key: session.project_key.clone(),
         created_at: chrono::Utc::now().to_rfc3339(),
-        report,
-        graph,
+        report: report.clone(),
+        graph: graph.clone(),
     };
 
     let directory = snapshot_dir(state, &session.project_key);
@@ -606,8 +638,14 @@ async fn save_scan(
     report: ScanReport,
     repo_path: Option<String>,
     repo_url: Option<String>,
+    scan_root: &str,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     let session = load_session(state, &key).await;
+    // The persisted snapshot stores project-relative identity (see
+    // persist_snapshot); the live session keeps the rooted graph.
+    let snapshot_graph = graph.relative_to(Path::new(scan_root));
+    let mut snapshot_report = report.clone();
+    relativize_report(&mut snapshot_report, scan_root);
     *session.graph.write().await = Some(graph);
     *session.report.write().await = Some(report.clone());
     *session.repo_path.write().await = repo_path;
@@ -615,7 +653,9 @@ async fn save_scan(
     session.runtime_nodes.write().await.clear();
     session.runtime_edges.write().await.clear();
     persist_session(state, &session).await.map_err(internal)?;
-    let snapshot_id = persist_snapshot(state, &session).await.map_err(internal)?;
+    let snapshot_id = persist_snapshot(state, &session, &snapshot_graph, &snapshot_report)
+        .await
+        .map_err(internal)?;
 
     Ok(Json(json!({
         "status":"success",
@@ -649,7 +689,17 @@ async fn scan(
 ) -> Result<Json<Value>, (StatusCode, String)> {
     let key = project_key(request.repo_name.as_deref(), request.project_id.as_deref());
     let (graph, report) = build_graph(&request.path).await.map_err(internal)?;
-    save_scan(&state, key, graph, report, Some(request.path), None).await
+    let scan_root = request.path.clone();
+    save_scan(
+        &state,
+        key,
+        graph,
+        report,
+        Some(request.path),
+        None,
+        &scan_root,
+    )
+    .await
 }
 
 async fn scan_github(
@@ -709,6 +759,7 @@ async fn scan_github(
         report,
         None,
         Some(format!("https://github.com/{owner}/{repo}")),
+        &repo_root.to_string_lossy(),
     )
     .await
 }
@@ -728,7 +779,16 @@ async fn scan_zip(
         request.repo_name.as_deref().or(request.file_name.as_deref()),
         request.project_id.as_deref(),
     );
-    save_scan(&state, key, graph, report, None, request.file_name).await
+    save_scan(
+        &state,
+        key,
+        graph,
+        report,
+        None,
+        request.file_name,
+        &repo_root.to_string_lossy(),
+    )
+    .await
 }
 
 async fn report(
@@ -1501,8 +1561,190 @@ async fn snapshot_graph(
     })))
 }
 
-fn edge_identity(edge: &ckb_core::Edge) -> String {
-    format!("{}->{}/{:?}", edge.from.0, edge.to.0, edge.kind).to_ascii_lowercase()
+/// The node-identity normalization the snapshot diff applies to BOTH
+/// sides before comparing. Snapshots persisted before the
+/// project-relative fix carry this server's extraction scaffolding in
+/// every node ID (`/tmp/ckb-zip-<uuid>/src/…`,
+/// `/tmp/ckb-reality-<uuid>/<zipball wrapper>/src/…`); stored files are
+/// never rewritten, so old snapshots are identified by stripping
+/// everything up to and including the last extraction-directory
+/// segment. New snapshots are already project-relative and pass
+/// through unchanged.
+fn diff_identity(id: &str) -> String {
+    let (path, symbol) = match id.split_once("::") {
+        Some((path, symbol)) => (path, Some(symbol)),
+        None => (id, None),
+    };
+    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    let cut = segments
+        .iter()
+        .rposition(|s| s.starts_with("ckb-zip-") || s.starts_with("ckb-reality-"))
+        .map(|index| index + 1)
+        .unwrap_or(0);
+    let relative = segments[cut..].join("/");
+    match symbol {
+        Some(symbol) => format!("{relative}::{symbol}"),
+        None => relative,
+    }
+}
+
+/// Split a node ID into path segments and symbol suffix.
+fn split_node_id(id: &str) -> (Vec<&str>, &str) {
+    let (path, symbol) = id.split_once("::").unwrap_or((id, ""));
+    (
+        path.split('/').filter(|s| !s.is_empty()).collect(),
+        symbol,
+    )
+}
+
+/// Segment overlap when two IDs denote the same project node under
+/// different scan roots: same symbol, and the shorter path is a
+/// whole-segment suffix of the longer (the difference is exactly the
+/// root/wrapper prefix one scan had and the other did not). Returns
+/// the overlap length so callers can prefer the most specific match.
+fn suffix_overlap(a: &str, b: &str) -> Option<usize> {
+    let (path_a, symbol_a) = split_node_id(a);
+    let (path_b, symbol_b) = split_node_id(b);
+    if symbol_a != symbol_b || path_a.is_empty() || path_b.is_empty() {
+        return None;
+    }
+    let (short, long) = if path_a.len() <= path_b.len() {
+        (path_a, path_b)
+    } else {
+        (path_b, path_a)
+    };
+    if long[long.len() - short.len()..] == short[..] {
+        Some(short.len())
+    } else {
+        None
+    }
+}
+
+/// Map both sides' (already `diff_identity`-normalized) node IDs to a
+/// shared canonical identity: exact matches map to themselves; IDs
+/// that only differ by a root/wrapper prefix pair up by longest
+/// segment-suffix overlap and map to the shorter — project-relative —
+/// form. Unpaired IDs map to themselves, so a genuinely added or
+/// removed node keeps its own identity in the diff output.
+fn canonical_id_map(
+    from_ids: &HashSet<String>,
+    to_ids: &HashSet<String>,
+) -> HashMap<String, String> {
+    let mut map: HashMap<String, String> = HashMap::new();
+    let mut paired_to: HashSet<&str> = HashSet::new();
+
+    // Most specific (longest-path) IDs claim their partners first.
+    let mut from_sorted: Vec<&String> = from_ids.iter().collect();
+    from_sorted.sort_by(|a, b| {
+        split_node_id(b)
+            .0
+            .len()
+            .cmp(&split_node_id(a).0.len())
+            .then_with(|| a.cmp(b))
+    });
+
+    for from_id in from_sorted {
+        if to_ids.contains(from_id) {
+            map.insert(from_id.clone(), from_id.clone());
+            paired_to.insert(from_id.as_str());
+            continue;
+        }
+        let best = to_ids
+            .iter()
+            .filter(|candidate| !paired_to.contains(candidate.as_str()))
+            .filter_map(|candidate| {
+                suffix_overlap(from_id, candidate).map(|overlap| (overlap, candidate))
+            })
+            .max_by(|a, b| a.0.cmp(&b.0).then_with(|| b.1.cmp(a.1)));
+        if let Some((_, partner)) = best {
+            let canonical = if split_node_id(from_id).0.len() <= split_node_id(partner).0.len() {
+                from_id.clone()
+            } else {
+                partner.clone()
+            };
+            map.insert(from_id.clone(), canonical.clone());
+            map.insert(partner.clone(), canonical);
+            paired_to.insert(partner.as_str());
+        }
+    }
+    for to_id in to_ids {
+        map.entry(to_id.clone()).or_insert_with(|| to_id.clone());
+    }
+    map
+}
+
+struct SnapshotDiff {
+    added_nodes: Vec<String>,
+    removed_nodes: Vec<String>,
+    added_edges: Vec<String>,
+    removed_edges: Vec<String>,
+    node_delta: i64,
+    edge_delta: i64,
+    from_violations: usize,
+    to_violations: usize,
+}
+
+/// Structural diff between two persisted snapshots. Identity is
+/// matched on project-relative node IDs: new snapshots store them
+/// directly; legacy snapshots are normalized at compare time (see
+/// `diff_identity` / `canonical_id_map`), so a legacy snapshot and a
+/// new snapshot of the same tree diff to zero — stored files are
+/// never migrated or rewritten.
+fn compute_snapshot_diff(from: &ArchitectureSnapshot, to: &ArchitectureSnapshot) -> SnapshotDiff {
+    let from_raw: HashSet<String> = from
+        .graph
+        .nodes()
+        .into_iter()
+        .map(|node| diff_identity(&node.id.0))
+        .collect();
+    let to_raw: HashSet<String> = to
+        .graph
+        .nodes()
+        .into_iter()
+        .map(|node| diff_identity(&node.id.0))
+        .collect();
+    let canonical = canonical_id_map(&from_raw, &to_raw);
+    let canon = |id: &str| -> String {
+        let normalized = diff_identity(id);
+        canonical
+            .get(&normalized)
+            .cloned()
+            .unwrap_or(normalized)
+    };
+    let from_nodes: HashSet<String> = from_raw.iter().map(|id| canon(id)).collect();
+    let to_nodes: HashSet<String> = to_raw.iter().map(|id| canon(id)).collect();
+
+    let edge_key = |edge: &ckb_core::Edge| -> String {
+        format!(
+            "{}->{}/{:?}",
+            canon(&edge.from.0),
+            canon(&edge.to.0),
+            edge.kind
+        )
+        .to_ascii_lowercase()
+    };
+    let from_edges: HashSet<String> = from.graph.edges().into_iter().map(edge_key).collect();
+    let to_edges: HashSet<String> = to.graph.edges().into_iter().map(edge_key).collect();
+
+    let mut added_nodes = to_nodes.difference(&from_nodes).cloned().collect::<Vec<_>>();
+    let mut removed_nodes = from_nodes.difference(&to_nodes).cloned().collect::<Vec<_>>();
+    let mut added_edges = to_edges.difference(&from_edges).cloned().collect::<Vec<_>>();
+    let mut removed_edges = from_edges.difference(&to_edges).cloned().collect::<Vec<_>>();
+    added_nodes.sort();
+    removed_nodes.sort();
+    added_edges.sort();
+    removed_edges.sort();
+
+    SnapshotDiff {
+        node_delta: to_nodes.len() as i64 - from_nodes.len() as i64,
+        edge_delta: to_edges.len() as i64 - from_edges.len() as i64,
+        added_nodes,
+        removed_nodes,
+        added_edges,
+        removed_edges,
+        from_violations: from.report.drift.len(),
+        to_violations: to.report.drift.len(),
+    }
 }
 
 async fn diff(
@@ -1517,44 +1759,22 @@ async fn diff(
         .await
         .map_err(internal)?;
 
-    let from_nodes: HashSet<String> = from
-        .graph
-        .nodes()
-        .into_iter()
-        .map(|node| node.id.0.clone())
-        .collect();
-    let to_nodes: HashSet<String> = to
-        .graph
-        .nodes()
-        .into_iter()
-        .map(|node| node.id.0.clone())
-        .collect();
-    let from_edges: HashSet<String> = from.graph.edges().into_iter().map(edge_identity).collect();
-    let to_edges: HashSet<String> = to.graph.edges().into_iter().map(edge_identity).collect();
-
-    let mut added_nodes = to_nodes.difference(&from_nodes).cloned().collect::<Vec<_>>();
-    let mut removed_nodes = from_nodes.difference(&to_nodes).cloned().collect::<Vec<_>>();
-    let mut added_edges = to_edges.difference(&from_edges).cloned().collect::<Vec<_>>();
-    let mut removed_edges = from_edges.difference(&to_edges).cloned().collect::<Vec<_>>();
-    added_nodes.sort();
-    removed_nodes.sort();
-    added_edges.sort();
-    removed_edges.sort();
+    let delta = compute_snapshot_diff(&from, &to);
 
     Ok(Json(json!({
         "kind":"static",
         "source":"persistent-snapshot-diff",
         "from":request.from_snapshot,
         "to":request.to_snapshot,
-        "addedNodes":added_nodes,
-        "removedNodes":removed_nodes,
-        "addedEdges":added_edges,
-        "removedEdges":removed_edges,
+        "addedNodes":delta.added_nodes,
+        "removedNodes":delta.removed_nodes,
+        "addedEdges":delta.added_edges,
+        "removedEdges":delta.removed_edges,
         "summary":{
-            "nodeDelta":to_nodes.len() as i64 - from_nodes.len() as i64,
-            "edgeDelta":to_edges.len() as i64 - from_edges.len() as i64,
-            "fromViolations":from.report.drift.len(),
-            "toViolations":to.report.drift.len()
+            "nodeDelta":delta.node_delta,
+            "edgeDelta":delta.edge_delta,
+            "fromViolations":delta.from_violations,
+            "toViolations":delta.to_violations
         },
         "evidence":[
             {"source":"ckb-snapshot","ref":from.id},
@@ -1758,4 +1978,380 @@ async fn main() -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(address).await?;
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixture(name: &str) -> String {
+        format!("{}/tests/fixtures/{}", env!("CARGO_MANIFEST_DIR"), name)
+    }
+
+    fn test_state() -> (AppState, PathBuf) {
+        let data_dir =
+            std::env::temp_dir().join(format!("ckb-v5-test-{}", uuid::Uuid::new_v4()));
+        let state = AppState {
+            sessions: Arc::new(RwLock::new(HashMap::new())),
+            api_key: None,
+            data_dir: Arc::new(data_dir.clone()),
+            http: reqwest::Client::new(),
+        };
+        (state, data_dir)
+    }
+
+    fn copy_dir(source: &Path, target: &Path) {
+        std::fs::create_dir_all(target).unwrap();
+        for entry in std::fs::read_dir(source).unwrap() {
+            let entry = entry.unwrap();
+            let destination = target.join(entry.file_name());
+            if entry.path().is_dir() {
+                copy_dir(&entry.path(), &destination);
+            } else {
+                std::fs::copy(entry.path(), &destination).unwrap();
+            }
+        }
+    }
+
+    /// Copy a fixture into a fake per-scan extraction dir, mirroring
+    /// what `scan_zip` extracts into (`temp_dir()/ckb-zip-<uuid>`).
+    fn extracted_copy(fixture_name: &str) -> PathBuf {
+        let temp = std::env::temp_dir().join(format!("ckb-zip-{}", uuid::Uuid::new_v4()));
+        copy_dir(Path::new(&fixture(fixture_name)), &temp);
+        temp
+    }
+
+    fn kind_of(violation: &ckb_core::DriftViolation) -> String {
+        format!("{:?}", violation.kind)
+    }
+
+    #[tokio::test]
+    async fn fixture_c_scan_enforces_project_rules() {
+        let (_graph, report) = build_graph(&fixture("fixture-c")).await.unwrap();
+        assert_eq!(report.files_processed, 10);
+        assert_eq!(report.nodes, 24);
+        assert_eq!(report.edges, 31);
+        assert_eq!(
+            report.drift.len(),
+            2,
+            "drift: {:?}",
+            report.drift.iter().map(kind_of).collect::<Vec<_>>()
+        );
+        let kinds: Vec<String> = report.drift.iter().map(kind_of).collect();
+        assert!(kinds.contains(&"CircularDependency".to_string()));
+        let forbidden = report
+            .drift
+            .iter()
+            .find(|v| kind_of(v) == "ForbiddenDependency")
+            .expect("fixture-c must produce a ForbiddenDependency violation");
+        assert_eq!(forbidden.boundary, "ui-must-not-import-db");
+        assert_eq!(format!("{:?}", forbidden.severity), "Error");
+        assert!(forbidden.from.0.ends_with("src/ui/panel.ts::file"), "{}", forbidden.from.0);
+        assert!(forbidden.to.0.ends_with("src/db/store.ts::file"), "{}", forbidden.to.0);
+        assert!(forbidden.message.contains("ui-must-not-import-db"));
+        // The sanctioned service -> db import is scoped out by the rule's `from`.
+        assert!(
+            !report
+                .drift
+                .iter()
+                .any(|v| v.from.0.ends_with("src/service/api.ts::file")),
+            "service->db must not be flagged"
+        );
+    }
+
+    #[tokio::test]
+    async fn fixture_a_scan_has_exactly_the_cycle() {
+        let (_graph, report) = build_graph(&fixture("fixture-a")).await.unwrap();
+        assert_eq!(report.files_processed, 10);
+        assert_eq!(report.nodes, 24);
+        assert_eq!(report.edges, 31);
+        assert_eq!(report.drift.len(), 1);
+        assert_eq!(kind_of(&report.drift[0]), "CircularDependency");
+    }
+
+    #[tokio::test]
+    async fn fixture_b_scan_is_clean() {
+        let (_graph, report) = build_graph(&fixture("fixture-b")).await.unwrap();
+        assert_eq!(report.files_processed, 11);
+        assert_eq!(report.nodes, 26);
+        assert_eq!(report.edges, 33);
+        assert!(report.drift.is_empty());
+    }
+
+    #[tokio::test]
+    async fn malformed_rules_file_fails_the_scan_loudly() {
+        let root = std::env::temp_dir().join(format!("ckb-v5-badrules-{}", uuid::Uuid::new_v4()));
+        let src = root.join("src");
+        std::fs::create_dir_all(root.join(".ckb")).unwrap();
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("a.ts"), "import { b } from \"./b\";\nexport const a = b;\n").unwrap();
+        std::fs::write(src.join("b.ts"), "export const b = 1;\n").unwrap();
+        std::fs::write(root.join(".ckb").join("rules.json"), "[{ not json").unwrap();
+
+        let error = build_graph(&root.to_string_lossy()).await.unwrap_err();
+        let text = format!("{error:?}");
+        assert!(text.contains("rules.json"), "error must name the rules file: {text}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn persisted_snapshot_stores_project_relative_ids() {
+        let extracted = extracted_copy("fixture-a");
+        let root = extracted.to_string_lossy().to_string();
+        let (graph, report) = build_graph(&root).await.unwrap();
+        assert!(
+            graph.nodes().iter().any(|n| n.id.0.contains("ckb-zip-")),
+            "the live graph is rooted at the extraction dir"
+        );
+
+        let (state, data_dir) = test_state();
+        let response = save_scan(
+            &state,
+            "test-project".to_string(),
+            graph,
+            report,
+            None,
+            Some("fixture-a.zip".to_string()),
+            &root,
+        )
+        .await
+        .unwrap();
+        let snapshot_id = response.0["snapshotId"].as_str().unwrap().to_string();
+        let snapshot = read_snapshot(&state, "test-project", &snapshot_id)
+            .await
+            .unwrap();
+
+        assert_eq!(snapshot.graph.node_count(), 24);
+        assert_eq!(snapshot.graph.edge_count(), 31);
+        assert!(snapshot
+            .graph
+            .nodes()
+            .iter()
+            .all(|n| !n.id.0.contains("ckb-zip-") && !n.path.to_string_lossy().contains("ckb-zip-")));
+        let ids: HashSet<&str> = snapshot.graph.nodes().iter().map(|n| n.id.0.as_str()).collect();
+        assert!(ids.contains("src/core/util.ts::file"), "ids: {ids:?}");
+        assert!(ids.contains("src/ui/panel.ts::file"), "ids: {ids:?}");
+        for edge in snapshot.graph.edges() {
+            assert!(
+                !edge.from.0.contains("ckb-zip-") && !edge.to.0.contains("ckb-zip-"),
+                "edge {} -> {}",
+                edge.from.0,
+                edge.to.0
+            );
+        }
+        assert_eq!(snapshot.report.drift.len(), 1);
+        assert_eq!(snapshot.report.drift[0].from.0, "src/core/a.ts::file");
+        assert_eq!(snapshot.report.drift[0].to.0, "src/core/b.ts::file");
+
+        let _ = std::fs::remove_dir_all(&extracted);
+        let _ = std::fs::remove_dir_all(&data_dir);
+    }
+
+    #[tokio::test]
+    async fn snapshot_diff_a_to_b_matches_ground_truth() {
+        let (state, data_dir) = test_state();
+        let mut snapshot_ids = Vec::new();
+        for name in ["fixture-a", "fixture-b"] {
+            let extracted = extracted_copy(name);
+            let root = extracted.to_string_lossy().to_string();
+            let (graph, report) = build_graph(&root).await.unwrap();
+            let response = save_scan(
+                &state,
+                "proj".to_string(),
+                graph,
+                report,
+                None,
+                Some(format!("{name}.zip")),
+                &root,
+            )
+            .await
+            .unwrap();
+            snapshot_ids.push(response.0["snapshotId"].as_str().unwrap().to_string());
+            let _ = std::fs::remove_dir_all(&extracted);
+        }
+        let snap_a = read_snapshot(&state, "proj", &snapshot_ids[0]).await.unwrap();
+        let snap_b = read_snapshot(&state, "proj", &snapshot_ids[1]).await.unwrap();
+
+        let delta = compute_snapshot_diff(&snap_a, &snap_b);
+        assert_eq!(delta.node_delta, 2);
+        assert_eq!(delta.edge_delta, 2);
+        assert_eq!(delta.from_violations, 1);
+        assert_eq!(delta.to_violations, 0);
+        assert_eq!(
+            delta.added_nodes,
+            vec![
+                "src/service/report.ts::buildReport".to_string(),
+                "src/service/report.ts::file".to_string()
+            ]
+        );
+        assert!(delta.removed_nodes.is_empty(), "removed: {:?}", delta.removed_nodes);
+        assert!(delta
+            .removed_edges
+            .contains(&"src/core/b.ts::file->src/core/a.ts::file/import".to_string()));
+        assert!(delta
+            .added_edges
+            .contains(&"src/service/report.ts::file->src/core/util.ts::file/import".to_string()));
+
+        let _ = std::fs::remove_dir_all(&data_dir);
+    }
+
+    #[tokio::test]
+    async fn snapshot_diff_legacy_vs_new_same_tree_is_zero() {
+        let extracted = extracted_copy("fixture-a");
+        let root = extracted.to_string_lossy().to_string();
+        let (graph, report) = build_graph(&root).await.unwrap();
+        // A pre-fix persisted snapshot: identities rooted at the
+        // extraction dir, exactly as the old persist path stored them.
+        let legacy = ArchitectureSnapshot {
+            id: "legacy".to_string(),
+            project_key: "proj".to_string(),
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            report: report.clone(),
+            graph: graph.clone(),
+        };
+
+        let (state, data_dir) = test_state();
+        let response = save_scan(
+            &state,
+            "proj".to_string(),
+            graph,
+            report,
+            None,
+            Some("fixture-a.zip".to_string()),
+            &root,
+        )
+        .await
+        .unwrap();
+        let snapshot_id = response.0["snapshotId"].as_str().unwrap().to_string();
+        let new = read_snapshot(&state, "proj", &snapshot_id).await.unwrap();
+
+        for delta in [
+            compute_snapshot_diff(&legacy, &new),
+            compute_snapshot_diff(&new, &legacy),
+        ] {
+            assert!(delta.added_nodes.is_empty(), "added: {:?}", delta.added_nodes);
+            assert!(delta.removed_nodes.is_empty(), "removed: {:?}", delta.removed_nodes);
+            assert!(delta.added_edges.is_empty(), "added: {:?}", delta.added_edges);
+            assert!(delta.removed_edges.is_empty(), "removed: {:?}", delta.removed_edges);
+            assert_eq!(delta.node_delta, 0);
+            assert_eq!(delta.edge_delta, 0);
+        }
+
+        let _ = std::fs::remove_dir_all(&extracted);
+        let _ = std::fs::remove_dir_all(&data_dir);
+    }
+
+    #[tokio::test]
+    async fn snapshot_diff_two_legacy_extractions_of_same_tree_is_zero() {
+        let mut legacy_snapshots = Vec::new();
+        for _ in 0..2 {
+            let extracted = extracted_copy("fixture-a");
+            let (graph, report) = build_graph(&extracted.to_string_lossy())
+                .await
+                .unwrap();
+            legacy_snapshots.push(ArchitectureSnapshot {
+                id: uuid::Uuid::new_v4().to_string(),
+                project_key: "proj".to_string(),
+                created_at: "2026-01-01T00:00:00Z".to_string(),
+                report,
+                graph,
+            });
+            let _ = std::fs::remove_dir_all(&extracted);
+        }
+        let delta = compute_snapshot_diff(&legacy_snapshots[0], &legacy_snapshots[1]);
+        assert!(delta.added_nodes.is_empty(), "added: {:?}", delta.added_nodes);
+        assert!(delta.removed_nodes.is_empty(), "removed: {:?}", delta.removed_nodes);
+        assert!(delta.added_edges.is_empty(), "added: {:?}", delta.added_edges);
+        assert!(delta.removed_edges.is_empty(), "removed: {:?}", delta.removed_edges);
+        assert_eq!(delta.node_delta, 0);
+        assert_eq!(delta.edge_delta, 0);
+    }
+
+    #[tokio::test]
+    async fn snapshot_diff_zipball_wrapper_legacy_matches_new() {
+        // GitHub zipball layout: extraction root contains one wrapper
+        // directory (<owner>-<repo>-<sha>) and the old persist path
+        // rooted identities at it — no ckb-* marker segment at all in
+        // the stored IDs beyond the temp parent.
+        let wrapped_root = std::env::temp_dir()
+            .join(format!("ckb-v5-wrap-{}", uuid::Uuid::new_v4()))
+            .join("someowner-somerepo-deadbeefcafe");
+        copy_dir(Path::new(&fixture("fixture-a")), &wrapped_root);
+        let (graph, report) = build_graph(&wrapped_root.to_string_lossy())
+            .await
+            .unwrap();
+        let legacy = ArchitectureSnapshot {
+            id: "legacy".to_string(),
+            project_key: "proj".to_string(),
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            report: report.clone(),
+            graph: graph.clone(),
+        };
+
+        let (state, data_dir) = test_state();
+        let response = save_scan(
+            &state,
+            "proj".to_string(),
+            graph,
+            report,
+            None,
+            None,
+            &wrapped_root.to_string_lossy(),
+        )
+        .await
+        .unwrap();
+        let snapshot_id = response.0["snapshotId"].as_str().unwrap().to_string();
+        let new = read_snapshot(&state, "proj", &snapshot_id).await.unwrap();
+        assert!(new
+            .graph
+            .nodes()
+            .iter()
+            .all(|n| n.id.0.starts_with("src/")));
+
+        let delta = compute_snapshot_diff(&legacy, &new);
+        assert!(delta.added_nodes.is_empty(), "added: {:?}", delta.added_nodes);
+        assert!(delta.removed_nodes.is_empty(), "removed: {:?}", delta.removed_nodes);
+        assert!(delta.added_edges.is_empty(), "added: {:?}", delta.added_edges);
+        assert!(delta.removed_edges.is_empty(), "removed: {:?}", delta.removed_edges);
+        assert_eq!(delta.node_delta, 0);
+        assert_eq!(delta.edge_delta, 0);
+
+        let _ = std::fs::remove_dir_all(wrapped_root.parent().unwrap());
+        let _ = std::fs::remove_dir_all(&data_dir);
+    }
+
+    #[test]
+    fn diff_identity_strips_extraction_scaffolding() {
+        assert_eq!(
+            diff_identity("/tmp/ckb-zip-9f86d081/src/core/a.ts::file"),
+            "src/core/a.ts::file"
+        );
+        assert_eq!(
+            diff_identity("/tmp/ckb-reality-9f86d081/owner-repo-abc123/src/a.ts::file"),
+            "owner-repo-abc123/src/a.ts::file",
+            "the zipball wrapper segment survives marker stripping; suffix pairing aligns it"
+        );
+        assert_eq!(diff_identity("src/core/a.ts::file"), "src/core/a.ts::file");
+    }
+
+    #[test]
+    fn canonical_map_prefers_the_most_specific_suffix_match() {
+        let from: HashSet<String> = [
+            "proj/app/src/a.ts::file".to_string(),
+            "proj/src/a.ts::file".to_string(),
+        ]
+        .into_iter()
+        .collect();
+        let to: HashSet<String> = [
+            "app/src/a.ts::file".to_string(),
+            "src/a.ts::file".to_string(),
+        ]
+        .into_iter()
+        .collect();
+        let map = canonical_id_map(&from, &to);
+        assert_eq!(map["proj/app/src/a.ts::file"], "app/src/a.ts::file");
+        assert_eq!(map["proj/src/a.ts::file"], "src/a.ts::file");
+        assert_eq!(map["app/src/a.ts::file"], "app/src/a.ts::file");
+        assert_eq!(map["src/a.ts::file"], "src/a.ts::file");
+    }
 }

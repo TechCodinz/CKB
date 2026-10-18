@@ -1,0 +1,10 @@
+[
+  {
+    "name": "ui-must-not-import-db",
+    "description": "The UI layer must reach data through the service layer; direct ui -> db imports are forbidden",
+    "pattern": "src/db/",
+    "from": "src/ui/",
+    "to": "src/db/",
+    "severity": "Error"
+  }
+]
