@@ -108,7 +108,7 @@ class CkbSettingsConfigurable : Configurable {
         val settings = CkbSettings.instance
         settings.serverUrl = serverUrlField?.text?.trim().orEmpty().ifBlank { "http://localhost:3000" }
         settings.intelligenceBinary = intelligenceBinaryField?.text?.trim().orEmpty().ifBlank { "ckb-intelligence" }
-        settings.apiKey = <redacted>?.password ?: charArrayOf()).trim()
+        settings.apiKey = String(apiKeyField?.password ?: charArrayOf()).trim()
         settings.autoScanOnOpen = autoScanBox?.isSelected ?: true
         settings.deepAnalysisOnOpen = deepAnalysisBox?.isSelected ?: true
     }
