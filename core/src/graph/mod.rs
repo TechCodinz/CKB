@@ -344,6 +344,79 @@ impl DependencyGraph {
     pub fn nodes(&self) -> Vec<&Node> { self.graph.node_weights().collect() }
     pub fn edges(&self) -> Vec<&Edge> { self.graph.edge_weights().collect() }
 
+    /// A copy of this graph with every identity rooted at `root`
+    /// rewritten to its project-relative form: node IDs and paths, edge
+    /// endpoints, runtime-trace keys and pending import/call file paths
+    /// all lose the `root` prefix.
+    ///
+    /// Node identity in this engine is `"<file path>::<symbol>"`, so a
+    /// graph built from an absolute or temporary scan root (the hosted
+    /// server extracts uploads under a fresh per-scan directory) carries
+    /// that root in every ID. Persisting such a graph as a snapshot makes
+    /// cross-scan diffs useless — the same project scanned twice shares
+    /// zero node identities. The CLI avoids this by being invoked at the
+    /// project root; hosted callers use this to store snapshots with the
+    /// same project-relative identity (`src/core/util.ts::file`) a local
+    /// scan of the same tree produces. Identities not rooted at `root`
+    /// pass through unchanged.
+    pub fn relative_to(&self, root: &Path) -> DependencyGraph {
+        let root_str = root.to_string_lossy().replace('\\', "/");
+        let root_str = root_str.trim_end_matches('/');
+        if root_str.is_empty() {
+            return self.clone();
+        }
+        let strip = |value: &str| -> String {
+            let normalized = value.replace('\\', "/");
+            match normalized
+                .strip_prefix(root_str)
+                .and_then(|rest| rest.strip_prefix('/'))
+            {
+                Some(rest) => rest.to_string(),
+                None => normalized,
+            }
+        };
+
+        let id_map: HashMap<NodeId, NodeId> = self
+            .graph
+            .node_weights()
+            .map(|node| (node.id.clone(), NodeId(strip(&node.id.0))))
+            .collect();
+
+        let mut out = self.clone();
+        for node in out.graph.node_weights_mut() {
+            if let Some(new_id) = id_map.get(&node.id) {
+                node.id = new_id.clone();
+            }
+            node.path = std::path::PathBuf::from(strip(&node.path.to_string_lossy()));
+        }
+        out.node_indices.clear();
+        out.reverse_indices.clear();
+        for idx in out.graph.node_indices() {
+            let id = out.graph[idx].id.clone();
+            out.node_indices.insert(id.clone(), idx);
+            out.reverse_indices.insert(idx, id);
+        }
+        for edge in out.graph.edge_weights_mut() {
+            if let Some(from) = id_map.get(&edge.from) {
+                edge.from = from.clone();
+            }
+            if let Some(to) = id_map.get(&edge.to) {
+                edge.to = to.clone();
+            }
+        }
+        out.runtime_traces = std::mem::take(&mut out.runtime_traces)
+            .into_iter()
+            .map(|(id, metrics)| (id_map.get(&id).cloned().unwrap_or(id), metrics))
+            .collect();
+        for (file, _) in &mut out.pending_imports {
+            *file = strip(file);
+        }
+        for (file, _) in &mut out.pending_calls {
+            *file = strip(file);
+        }
+        out
+    }
+
     pub fn find_node_by_path(&self, path: &str) -> Option<&Node> {
         for idx in self.graph.node_indices() {
             let node = &self.graph[idx];
@@ -482,6 +555,49 @@ mod tests {
         graph.add_edge_once(first_index, second_index, make_edge(first_id.clone(), second_id.clone(), EdgeKind::Import, 1.0, HashMap::new()));
         graph.add_edge_once(second_index, first_index, make_edge(second_id, first_id, EdgeKind::Import, 1.0, HashMap::new()));
         assert_eq!(graph.find_architectural_cycles().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn relative_to_rewrites_rooted_identities_to_project_relative() {
+        let root = "/tmp/ckb-zip-00000000-0000-0000-0000-000000000000";
+        let a_path = format!("{root}/src/a.ts");
+        let b_path = format!("{root}/src/b.ts");
+        let mut graph = DependencyGraph::new();
+        graph.add_file(&analysis(
+            &a_path,
+            vec![
+                node(&a_path, "a.ts", NodeKind::File, 1),
+                node(&a_path, "start", NodeKind::Function, 3),
+            ],
+            vec![Import { source: "./b".into(), symbols: vec![], kind: ImportKind::Named }],
+            vec![],
+        )).unwrap();
+        graph.add_file(&analysis(
+            &b_path,
+            vec![node(&b_path, "b.ts", NodeKind::File, 1)],
+            vec![], vec![],
+        )).unwrap();
+        graph.build_call_graph().unwrap();
+
+        let relative = graph.relative_to(Path::new(root));
+        assert_eq!(relative.node_count(), graph.node_count());
+        assert_eq!(relative.edge_count(), graph.edge_count());
+        let ids: Vec<&str> = relative.nodes().iter().map(|n| n.id.0.as_str()).collect();
+        assert!(ids.contains(&"src/a.ts::file"), "ids: {ids:?}");
+        assert!(ids.contains(&"src/a.ts::start"), "ids: {ids:?}");
+        assert!(ids.contains(&"src/b.ts::file"), "ids: {ids:?}");
+        assert!(relative.nodes().iter().all(|n| !n.id.0.contains("ckb-zip")));
+        assert!(relative.nodes().iter().all(|n| !n.path.starts_with(root)));
+        let deps = relative.get_dependencies(&NodeId("src/a.ts::file".into())).unwrap();
+        assert!(deps.contains(&NodeId("src/b.ts::file".into())));
+        for edge in relative.edges() {
+            assert!(!edge.from.0.contains("ckb-zip") && !edge.to.0.contains("ckb-zip"));
+        }
+
+        // Already-relative and foreign-rooted identities pass through.
+        let untouched = relative.relative_to(Path::new("/somewhere/else"));
+        let ids: Vec<&str> = untouched.nodes().iter().map(|n| n.id.0.as_str()).collect();
+        assert!(ids.contains(&"src/a.ts::file"));
     }
 
     #[test]
