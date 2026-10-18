@@ -534,7 +534,33 @@ fn apply_project_rules(
     Ok(())
 }
 
+/// Async entry point for a graph build. The build itself is
+/// synchronous CPU-bound work (tree-sitter parsing, graph assembly,
+/// pattern/drift analysis), so it runs on tokio's blocking pool:
+/// executed inline it occupies an async worker thread for the whole
+/// parse, and every other request handled by that worker — including
+/// the small graph/report reads the cloud console chains together —
+/// stalls for as long as the parse takes (measured during the
+/// converse-hang diagnosis: a trivial graph GET waited 23 s behind
+/// concurrent builds on a 2-core box, and the wait scales inversely
+/// with the host's CPU budget). Every caller keeps the same
+/// signature, results, and error mapping; a build that panics now
+/// surfaces as an `anyhow` error (the blocking task's join error)
+/// instead of unwinding the request task, and the handlers map both
+/// to the same 500.
 async fn build_graph(root: &str) -> anyhow::Result<(DependencyGraph, ScanReport)> {
+    let root = root.to_owned();
+    tokio::task::spawn_blocking(move || build_graph_blocking(&root))
+        .await
+        .map_err(|error| anyhow::anyhow!("graph build task failed to complete: {error}"))?
+}
+
+/// The synchronous build. File contents are read with `std::fs` and
+/// parsed via `LanguageParser::parse_content` — exactly what
+/// `LanguageParser::parse_file` does after its `tokio::fs` read — so
+/// results and failure handling (unreadable or unparseable files are
+/// skipped) are unchanged.
+fn build_graph_blocking(root: &str) -> anyhow::Result<(DependencyGraph, ScanReport)> {
     let started = std::time::Instant::now();
     let parser = LanguageParser::new();
     let files = discover(root)?;
@@ -542,8 +568,10 @@ async fn build_graph(root: &str) -> anyhow::Result<(DependencyGraph, ScanReport)
 
     for file in files {
         let path = file.to_string_lossy().to_string();
-        if let Ok(analysis) = parser.parse_file(&path).await {
-            analyses.push(analysis);
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            if let Ok(analysis) = parser.parse_content(&path, &content) {
+                analyses.push(analysis);
+            }
         }
     }
     if analyses.is_empty() {
@@ -747,7 +775,16 @@ async fn scan_github(
 
     let bytes = response.bytes().await.map_err(internal)?;
     let temp = std::env::temp_dir().join(format!("ckb-reality-{}", uuid::Uuid::new_v4()));
-    let repo_root = extract_zip_safely(&bytes, &temp).map_err(bad)?;
+    // Extraction is synchronous IO/CPU work; keep it off the async
+    // workers (same spawn_blocking treatment as build_graph, and the
+    // same pattern reality_bridge uses for this function).
+    let extraction_target = temp.clone();
+    let repo_root = tokio::task::spawn_blocking(move || {
+        extract_zip_safely(&bytes, &extraction_target)
+    })
+    .await
+    .map_err(internal)?
+    .map_err(bad)?;
     let built = build_graph(&repo_root.to_string_lossy()).await;
     let _ = std::fs::remove_dir_all(&temp);
     let (graph, report) = built.map_err(internal)?;
@@ -771,7 +808,16 @@ async fn scan_zip(
     let payload = request.file_data.rsplit(',').next().unwrap_or(&request.file_data);
     let bytes = BASE64.decode(payload.as_bytes()).map_err(bad)?;
     let temp = std::env::temp_dir().join(format!("ckb-zip-{}", uuid::Uuid::new_v4()));
-    let repo_root = extract_zip_safely(&bytes, &temp).map_err(bad)?;
+    // Extraction is synchronous IO/CPU work; keep it off the async
+    // workers (same spawn_blocking treatment as build_graph, and the
+    // same pattern reality_bridge uses for this function).
+    let extraction_target = temp.clone();
+    let repo_root = tokio::task::spawn_blocking(move || {
+        extract_zip_safely(&bytes, &extraction_target)
+    })
+    .await
+    .map_err(internal)?
+    .map_err(bad)?;
     let built = build_graph(&repo_root.to_string_lossy()).await;
     let _ = std::fs::remove_dir_all(&temp);
     let (graph, report) = built.map_err(internal)?;
@@ -2076,6 +2122,27 @@ mod tests {
         assert_eq!(report.nodes, 26);
         assert_eq!(report.edges, 33);
         assert!(report.drift.is_empty());
+    }
+
+    /// Scheduling guard for the spawn_blocking build path: two builds
+    /// driven concurrently both complete with their ground-truth
+    /// results (the async wrapper must neither deadlock the runtime
+    /// nor cross-contaminate builds). Asserts results, not timings —
+    /// the starvation measurements live in CONVERSE-HANG-DIAGNOSIS.md.
+    #[tokio::test]
+    async fn concurrent_builds_return_ground_truth() {
+        let root_a = fixture("fixture-a");
+        let root_b = fixture("fixture-b");
+        let (built_a, built_b) =
+            tokio::join!(build_graph(&root_a), build_graph(&root_b));
+        let (_graph_a, report_a) = built_a.unwrap();
+        let (_graph_b, report_b) = built_b.unwrap();
+        assert_eq!(report_a.nodes, 24);
+        assert_eq!(report_a.edges, 31);
+        assert_eq!(report_a.drift.len(), 1);
+        assert_eq!(report_b.nodes, 26);
+        assert_eq!(report_b.edges, 33);
+        assert!(report_b.drift.is_empty());
     }
 
     #[tokio::test]
