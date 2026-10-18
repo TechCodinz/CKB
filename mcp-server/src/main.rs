@@ -211,13 +211,25 @@ async fn require_api_key(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    use std::io::Write;
-    println!("CKB MCP Server: starting execution...");
-    std::io::stdout().flush().unwrap();
-    
-    tracing_subscriber::fmt::init();
-    
     let args: Vec<String> = std::env::args().collect();
+    let stdio_mode = args.iter().any(|a| a == "--stdio");
+
+    // In --stdio mode stdout *is* the JSON-RPC transport: anything else
+    // written there (startup banner, tracing logs) corrupts the stream
+    // for strict MCP clients that parse stdout line-by-line as JSON-RPC.
+    // Route the banner and all tracing output to stderr in that mode.
+    // (tracing_subscriber's default writer is stdout, which is why the
+    // banner AND an ANSI-coloured INFO line previously preceded the
+    // first JSON-RPC response.)
+    if stdio_mode {
+        tracing_subscriber::fmt()
+            .with_writer(std::io::stderr)
+            .init();
+        eprintln!("CKB MCP Server: starting execution (stdio JSON-RPC mode)...");
+    } else {
+        println!("CKB MCP Server: starting execution...");
+        tracing_subscriber::fmt::init();
+    }
     let engine = CkbEngine::new()?;
     let api_key = std::env::var("CKB_API_KEY").ok().filter(|k| !k.is_empty()).map(Arc::new);
     let backend = match (std::env::var("CKB_BACKEND_URL"), std::env::var("CKB_INTERNAL_SECRET")) {
@@ -237,7 +249,7 @@ async fn main() -> anyhow::Result<()> {
         http_client: reqwest::Client::new(),
     };
 
-    if args.iter().any(|a| a == "--stdio") {
+    if stdio_mode {
         info!("Starting CKB MCP Server in Stdio JSON-RPC mode...");
         run_stdio_loop(state).await?;
         return Ok(());

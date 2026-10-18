@@ -1,6 +1,8 @@
 use axum::{
     extract::{DefaultBodyLimit, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, Request, StatusCode},
+    middleware::{self, Next},
+    response::Response,
     routing::{get, post},
     Json, Router,
 };
@@ -35,6 +37,49 @@ struct AppState {
     scan_gate: Arc<Semaphore>,
     http: reqwest::Client,
     allow_local_scan: bool,
+    /// Shared operator API key (CKB_API_KEY), same contract as the main
+    /// `ckb-mcp-server`: when set, every `/api/v1/*` route requires it via
+    /// `X-API-Key` or `Authorization: Bearer`. When unset the bridge runs
+    /// unauthenticated (with a startup warning) — but it now binds
+    /// loopback by default, so that posture is no longer network-exposed
+    /// unless the operator explicitly opts in with CKB_BIND_ALL=1.
+    api_key: Option<Arc<String>>,
+}
+
+fn extract_api_key(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get("x-api-key")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+        .or_else(|| {
+            headers
+                .get(axum::http::header::AUTHORIZATION)
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.strip_prefix("Bearer "))
+                .map(|s| s.to_string())
+        })
+}
+
+/// Mirrors `require_api_key` in the main server (mcp-server/src/main.rs):
+/// no-op when no key is configured, 401 on a missing/wrong key otherwise.
+async fn require_api_key(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    request: Request<axum::body::Body>,
+    next: Next,
+) -> Result<Response, (StatusCode, String)> {
+    if let Some(expected) = &state.api_key {
+        match extract_api_key(&headers) {
+            Some(key) if key == expected.as_str() => {}
+            _ => {
+                return Err((
+                    StatusCode::UNAUTHORIZED,
+                    "Missing or invalid API key. Set CKB_API_KEY and send it via X-API-Key or Authorization: Bearer.".to_string(),
+                ));
+            }
+        }
+    }
+    Ok(next.run(request).await)
 }
 
 #[derive(Deserialize)]
@@ -945,6 +990,17 @@ async fn main() -> anyhow::Result<()> {
     let http = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
         .build()?;
+    let api_key = std::env::var("CKB_API_KEY")
+        .ok()
+        .filter(|k| !k.is_empty())
+        .map(Arc::new);
+    if api_key.is_none() {
+        tracing::warn!(
+            "CKB_API_KEY is not set. The reality bridge API is running WITHOUT authentication. \
+             It binds loopback by default; set CKB_API_KEY before exposing it beyond localhost \
+             (e.g. together with CKB_BIND_ALL=1)."
+        );
+    }
     let state = AppState {
         engine: Arc::new(CkbEngine::new_with_storage_path(&graph_store_string)?),
         latest_report: Arc::new(RwLock::new(None)),
@@ -955,10 +1011,34 @@ async fn main() -> anyhow::Result<()> {
         allow_local_scan: std::env::var("CKB_ALLOW_LOCAL_SCAN")
             .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
             .unwrap_or(false),
+        api_key,
     };
 
-    let app = Router::new()
-        .route("/health", get(health))
+    // CORS: same posture as the main server — wide open only on explicit
+    // CKB_ALLOWED_ORIGIN="*", a single configured origin otherwise, and no
+    // cross-origin access when unset. (Previously: allow Any, always.)
+    let cors = match std::env::var("CKB_ALLOWED_ORIGIN") {
+        Ok(origin) if origin == "*" => {
+            tracing::warn!("CKB_ALLOWED_ORIGIN=* — CORS is wide open. Only do this for local/dev use.");
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers(Any)
+        }
+        Ok(origin) => {
+            let origin: axum::http::HeaderValue = origin.parse()?;
+            CorsLayer::new()
+                .allow_origin(origin)
+                .allow_methods(Any)
+                .allow_headers(Any)
+        }
+        Err(_) => {
+            tracing::warn!("CKB_ALLOWED_ORIGIN not set — defaulting to no cross-origin browser access.");
+            CorsLayer::new()
+        }
+    };
+
+    let protected_routes = Router::new()
         .route("/api/v1/scan", post(scan_local))
         .route("/api/v1/report", get(report))
         .route("/api/v1/impact", post(impact))
@@ -981,20 +1061,28 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/v1/intelligence/memory/query", post(memory_query))
         .route("/api/v1/intelligence/causal-path", post(causal_path))
         .route("/api/v1/intelligence/failure-cone", post(failure_cone))
+        .route_layer(middleware::from_fn_with_state(state.clone(), require_api_key));
+
+    let app = Router::new()
+        .route("/health", get(health))
+        .merge(protected_routes)
         .layer(DefaultBodyLimit::max(85 * 1024 * 1024))
-        .layer(
-            CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods(Any)
-                .allow_headers(Any),
-        )
+        .layer(cors)
         .with_state(state);
 
     let port: u16 = std::env::var("PORT")
         .ok()
         .and_then(|value| value.parse::<u16>().ok())
         .unwrap_or(3000);
-    let address = SocketAddr::from(([0, 0, 0, 0], port));
+    // Loopback by default, like the main server; CKB_BIND_ALL=1 opts in
+    // to binding all interfaces. (Previously: 0.0.0.0 unconditionally,
+    // with no auth and CORS Any — anyone who could reach the port could
+    // upload ZIPs, trigger GitHub scans, and read the results.)
+    let bind_all = std::env::var("CKB_BIND_ALL")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    let host: [u8; 4] = if bind_all { [0, 0, 0, 0] } else { [127, 0, 0, 1] };
+    let address = SocketAddr::from((host, port));
     let listener = tokio::net::TcpListener::bind(address).await?;
     axum::serve(listener, app).await?;
     Ok(())
