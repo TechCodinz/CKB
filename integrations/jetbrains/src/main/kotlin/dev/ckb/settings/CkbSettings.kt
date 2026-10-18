@@ -6,6 +6,7 @@ import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.intellij.openapi.options.Configurable
 import com.intellij.ui.components.JBCheckBox
+import com.intellij.ui.components.JBPasswordField
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.FormBuilder
 import javax.swing.JComponent
@@ -18,6 +19,11 @@ class CkbSettings : PersistentStateComponent<CkbSettings.State> {
         var serverUrl: String = "http://localhost:3000",
         var cloudApiUrl: String = "https://ckb-backend-api.onrender.com",
         var intelligenceBinary: String = "ckb-intelligence",
+        // Local-server API key, sent by CkbApiClient as X-API-Key /
+        // Authorization: Bearer on every request (same contract as the
+        // VS Code extension's `ckb.apiKey`). Needed whenever the server
+        // runs with CKB_API_KEY set; blank = no auth header.
+        var apiKey: String = "",
         var autoScanOnOpen: Boolean = true,
         var deepAnalysisOnOpen: Boolean = true,
         var showInlineAnnotations: Boolean = true
@@ -40,6 +46,10 @@ class CkbSettings : PersistentStateComponent<CkbSettings.State> {
         get() = myState.cloudApiUrl
         set(value) { myState = myState.copy(cloudApiUrl = value) }
 
+    var apiKey: String
+        get() = myState.apiKey
+        set(value) { myState = myState.copy(apiKey = value) }
+
     var autoScanOnOpen: Boolean
         get() = myState.autoScanOnOpen
         set(value) { myState = myState.copy(autoScanOnOpen = value) }
@@ -61,6 +71,7 @@ class CkbSettings : PersistentStateComponent<CkbSettings.State> {
 class CkbSettingsConfigurable : Configurable {
     private var serverUrlField: JBTextField? = null
     private var intelligenceBinaryField: JBTextField? = null
+    private var apiKeyField: JBPasswordField? = null
     private var autoScanBox: JBCheckBox? = null
     private var deepAnalysisBox: JBCheckBox? = null
 
@@ -70,11 +81,13 @@ class CkbSettingsConfigurable : Configurable {
         val settings = CkbSettings.instance
         serverUrlField = JBTextField(settings.serverUrl)
         intelligenceBinaryField = JBTextField(settings.intelligenceBinary)
+        apiKeyField = JBPasswordField().apply { text = settings.apiKey }
         autoScanBox = JBCheckBox("Refresh base architecture when a project opens", settings.autoScanOnOpen)
         deepAnalysisBox = JBCheckBox("Hydrate deep activity + architecture memory on project open", settings.deepAnalysisOnOpen)
         return FormBuilder.createFormBuilder()
             .addLabeledComponent("CKB server fallback URL:", serverUrlField!!, 1, false)
             .addLabeledComponent("Local intelligence binary:", intelligenceBinaryField!!, 1, false)
+            .addLabeledComponent("CKB server API key (if server sets CKB_API_KEY):", apiKeyField!!, 1, false)
             .addComponent(autoScanBox!!)
             .addComponent(deepAnalysisBox!!)
             .addSeparator()
@@ -86,6 +99,7 @@ class CkbSettingsConfigurable : Configurable {
         val settings = CkbSettings.instance
         return serverUrlField?.text != settings.serverUrl
             || intelligenceBinaryField?.text != settings.intelligenceBinary
+            || String(apiKeyField?.password ?: charArrayOf()) != settings.apiKey
             || autoScanBox?.isSelected != settings.autoScanOnOpen
             || deepAnalysisBox?.isSelected != settings.deepAnalysisOnOpen
     }
@@ -94,6 +108,7 @@ class CkbSettingsConfigurable : Configurable {
         val settings = CkbSettings.instance
         settings.serverUrl = serverUrlField?.text?.trim().orEmpty().ifBlank { "http://localhost:3000" }
         settings.intelligenceBinary = intelligenceBinaryField?.text?.trim().orEmpty().ifBlank { "ckb-intelligence" }
+        settings.apiKey = <redacted>?.password ?: charArrayOf()).trim()
         settings.autoScanOnOpen = autoScanBox?.isSelected ?: true
         settings.deepAnalysisOnOpen = deepAnalysisBox?.isSelected ?: true
     }
@@ -102,6 +117,7 @@ class CkbSettingsConfigurable : Configurable {
         val settings = CkbSettings.instance
         serverUrlField?.text = settings.serverUrl
         intelligenceBinaryField?.text = settings.intelligenceBinary
+        apiKeyField?.text = settings.apiKey
         autoScanBox?.isSelected = settings.autoScanOnOpen
         deepAnalysisBox?.isSelected = settings.deepAnalysisOnOpen
     }

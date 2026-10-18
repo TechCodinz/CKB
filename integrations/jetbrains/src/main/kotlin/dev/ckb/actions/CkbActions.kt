@@ -149,19 +149,25 @@ class AnalyzeImpactAction : AnAction("Analyze Impact at Cursor") {
                     appendLine("Effort: ${imp.estimated_effort}")
                     appendLine()
 
-                    if (imp.directly_affected.isNotEmpty()) {
-                        appendLine("Directly affected (${imp.directly_affected.size}):")
-                        imp.directly_affected.take(8).forEach { appendLine("  • $it") }
-                        if (imp.directly_affected.size > 8)
-                            appendLine("  ...and ${imp.directly_affected.size - 8} more")
+                    // Server JSON fields are direct_impacts/indirect_impacts
+                    // of ImpactedNode objects (see CkbApiClient.ImpactAnalysis).
+                    if (imp.direct_impacts.isNotEmpty()) {
+                        appendLine("Directly affected (${imp.direct_impacts.size}):")
+                        imp.direct_impacts.take(8).forEach { n ->
+                            appendLine("  • ${n.path}:${n.line} (${n.impact_kind})")
+                        }
+                        if (imp.direct_impacts.size > 8)
+                            appendLine("  ...and ${imp.direct_impacts.size - 8} more")
                         appendLine()
                     }
 
-                    if (imp.transitively_affected.isNotEmpty()) {
-                        appendLine("Transitively affected (${imp.transitively_affected.size}):")
-                        imp.transitively_affected.take(5).forEach { appendLine("  • $it") }
-                        if (imp.transitively_affected.size > 5)
-                            appendLine("  ...and ${imp.transitively_affected.size - 5} more")
+                    if (imp.indirect_impacts.isNotEmpty()) {
+                        appendLine("Transitively affected (${imp.indirect_impacts.size}):")
+                        imp.indirect_impacts.take(5).forEach { n ->
+                            appendLine("  • ${n.path}:${n.line} (${n.impact_kind})")
+                        }
+                        if (imp.indirect_impacts.size > 5)
+                            appendLine("  ...and ${imp.indirect_impacts.size - 5} more")
                     }
                 }
 
