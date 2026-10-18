@@ -197,9 +197,9 @@ impl CkbEngine {
         // Detect architectural patterns
         let patterns = self.analyzer.detect_patterns(&graph)?;
         
-        // Detect drift
-        let drift = self.analyzer.detect_drift(&graph, &patterns)?;
-        
+        // Detect drift (inferred boundaries + the project's own rules)
+        let drift = self.detect_drift_with_project_rules(&graph, &patterns, path)?;
+
         // Store snapshot
         let snapshot_id = self.storage.store_snapshot(&graph).await?;
         
@@ -216,8 +216,65 @@ impl CkbEngine {
         })
     }
     
+    /// Drift for a finished graph: inferred-boundary/cycle detection plus
+    /// the project's own `.ckb/rules.json` enforcement when the scanned
+    /// root has one. A rules file that exists but cannot be parsed fails
+    /// the scan — silently skipping it would leave the project
+    /// unenforced while its owners believe otherwise (which is exactly
+    /// what happened when nothing loaded the file at all).
+    fn detect_drift_with_project_rules(
+        &self,
+        graph: &graph::DependencyGraph,
+        patterns: &[ArchitecturalPattern],
+        root: &str,
+    ) -> Result<Vec<DriftViolation>, anyhow::Error> {
+        let mut drift = self.analyzer.detect_drift(graph, patterns)?;
+        if let Some(rules) = crate::analysis::load_project_rules(std::path::Path::new(root))? {
+            let mut seen: std::collections::HashSet<String> = drift
+                .iter()
+                .map(|v| format!("{:?}|{}|{}|{}", v.kind, v.from.0, v.to.0, v.boundary))
+                .collect();
+            for violation in crate::analysis::check_project_rules(graph, &rules) {
+                let key = format!(
+                    "{:?}|{}|{}|{}",
+                    violation.kind, violation.from.0, violation.to.0, violation.boundary
+                );
+                if seen.insert(key) {
+                    drift.push(violation);
+                }
+            }
+        }
+        Ok(drift)
+    }
+
+    /// Load a previously stored snapshot graph by ID (`None` when the
+    /// store holds no such snapshot).
+    pub async fn load_snapshot(
+        &self,
+        snapshot_id: &str,
+    ) -> Result<Option<graph::DependencyGraph>, anyhow::Error> {
+        self.storage.load_snapshot(snapshot_id).await
+    }
+
+    /// Metadata for every stored snapshot, oldest first.
+    pub async fn list_snapshots(&self) -> Result<Vec<SnapshotMetadata>, anyhow::Error> {
+        let mut snapshots = self.storage.list_snapshots().await?;
+        snapshots.sort_by_key(|s| s.timestamp);
+        Ok(snapshots)
+    }
+
+    /// Structural delta between two snapshot graphs (see
+    /// `ArchitectureAnalyzer::compare_graphs`).
+    pub fn compare_snapshots(
+        &self,
+        before: &graph::DependencyGraph,
+        after: &graph::DependencyGraph,
+    ) -> Result<SnapshotDelta, anyhow::Error> {
+        self.analyzer.compare_graphs(before, after)
+    }
+
     /// Analyze impact of a potential change
-    pub async fn analyze_impact(&self, 
+    pub async fn analyze_impact(&self,
                                file: &str, 
                                line: u32,
                                change_type: ChangeType) -> Result<ImpactAnalysis, anyhow::Error> {
@@ -432,7 +489,7 @@ impl CkbEngine {
         graph.build_type_graph()?;
         
         let patterns = self.analyzer.detect_patterns(&graph)?;
-        let drift = self.analyzer.detect_drift(&graph, &patterns)?;
+        let drift = self.detect_drift_with_project_rules(&graph, &patterns, path)?;
         let snapshot_id = self.storage.store_snapshot(&graph).await?;
         
         Ok(ScanReport {

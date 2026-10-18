@@ -3,6 +3,7 @@
 mod boundaries;
 mod patterns;
 mod drift;
+pub mod rules;
 pub mod clone_detector;
 pub mod test_coverage;
 pub mod memory;
@@ -28,6 +29,7 @@ pub mod reference_architecture;
 pub use boundaries::*;
 pub use patterns::*;
 pub use drift::*;
+pub use rules::*;
 pub use clone_detector::*;
 pub use test_coverage::*;
 pub use memory::*;
@@ -147,6 +149,92 @@ impl ArchitectureAnalyzer {
         }
 
         Ok(violations)
+    }
+
+    /// Structural delta between two snapshot graphs: which files, nodes
+    /// and edges appeared/disappeared, and which violations were resolved
+    /// or introduced. Violations are recomputed from each graph (stored
+    /// snapshots keep the graph, not the scan report), keyed on
+    /// (kind, from, to, boundary) because violation IDs are fresh UUIDs
+    /// per scan.
+    ///
+    /// Node identity is normalized to paths relative to each graph's own
+    /// common root: two scans of the same project from different absolute
+    /// locations (e.g. `fixture-a/` vs `fixture-b/` checkouts) must diff
+    /// as the same project, not as "everything removed, everything
+    /// added".
+    pub fn compare_graphs(&self, before: &DependencyGraph, after: &DependencyGraph) -> Result<SnapshotDelta> {
+        let before_root = graph_common_root(before);
+        let after_root = graph_common_root(after);
+
+        let before_files: HashSet<String> = file_paths_relative(before, &before_root);
+        let after_files: HashSet<String> = file_paths_relative(after, &after_root);
+
+        let before_nodes: HashSet<String> = before
+            .nodes()
+            .iter()
+            .map(|n| relative_id(&n.id.0, &before_root))
+            .collect();
+        let after_nodes: HashSet<String> = after
+            .nodes()
+            .iter()
+            .map(|n| relative_id(&n.id.0, &after_root))
+            .collect();
+
+        let before_edges = edge_multiset(before, &before_root);
+        let after_edges = edge_multiset(after, &after_root);
+
+        let before_violations = self.violation_set(before, &before_root)?;
+        let after_violations = self.violation_set(after, &after_root)?;
+        let before_keys: HashSet<String> = before_violations.iter().map(|v| v.key()).collect();
+        let after_keys: HashSet<String> = after_violations.iter().map(|v| v.key()).collect();
+
+        Ok(SnapshotDelta {
+            files_before: before_files.len(),
+            files_after: after_files.len(),
+            files_added: sorted_diff(&after_files, &before_files),
+            files_removed: sorted_diff(&before_files, &after_files),
+            nodes_before: before.node_count(),
+            nodes_after: after.node_count(),
+            nodes_added: sorted_diff(&after_nodes, &before_nodes),
+            nodes_removed: sorted_diff(&before_nodes, &after_nodes),
+            edges_before: before.edge_count(),
+            edges_after: after.edge_count(),
+            edges_added: multiset_diff(&after_edges, &before_edges),
+            edges_removed: multiset_diff(&before_edges, &after_edges),
+            violations_before: before_violations.len(),
+            violations_after: after_violations.len(),
+            violations_resolved: before_violations
+                .iter()
+                .filter(|v| !after_keys.contains(&v.key()))
+                .cloned()
+                .collect(),
+            violations_introduced: after_violations
+                .iter()
+                .filter(|v| !before_keys.contains(&v.key()))
+                .cloned()
+                .collect(),
+        })
+    }
+
+    /// Recompute a graph's violations and normalize them for diffing.
+    fn violation_set(&self, graph: &DependencyGraph, root: &std::path::Path) -> Result<Vec<ViolationDelta>> {
+        let patterns = self.detect_patterns(graph)?;
+        let drift = self.detect_drift(graph, &patterns)?;
+        let mut out: Vec<ViolationDelta> = drift
+            .iter()
+            .map(|v| ViolationDelta {
+                kind: format!("{:?}", v.kind),
+                from: relative_id(&v.from.0, root),
+                to: relative_id(&v.to.0, root),
+                boundary: v.boundary.clone(),
+                severity: format!("{:?}", v.severity),
+                message: v.message.clone(),
+            })
+            .collect();
+        out.sort_by_key(|a| a.key());
+        out.dedup_by(|a, b| a.key() == b.key());
+        Ok(out)
     }
 
     pub fn infer_boundaries(&self, graph: &DependencyGraph) -> Result<Vec<ArchitectureBoundary>> {
@@ -284,6 +372,161 @@ impl Default for ArchitectureAnalyzer {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// One edge in a snapshot delta. `count` covers parallel identical
+/// edges (same endpoints and kind) whose multiplicity changed.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct EdgeDelta {
+    pub from: String,
+    pub to: String,
+    pub kind: String,
+    pub count: usize,
+}
+
+/// One violation in a snapshot delta, with root-relative node IDs.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ViolationDelta {
+    pub kind: String,
+    pub from: String,
+    pub to: String,
+    pub boundary: String,
+    pub severity: String,
+    pub message: String,
+}
+
+impl ViolationDelta {
+    /// Identity for diffing: violation UUIDs are per-scan noise, so two
+    /// violations are "the same" when kind/endpoints/boundary agree.
+    fn key(&self) -> String {
+        format!("{}|{}|{}|{}", self.kind, self.from, self.to, self.boundary)
+    }
+}
+
+/// The full structural delta between two snapshot graphs, as produced by
+/// `ArchitectureAnalyzer::compare_graphs`. All node/file identifiers are
+/// relative to each graph's own scan root (see `graph_common_root`).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SnapshotDelta {
+    pub files_before: usize,
+    pub files_after: usize,
+    pub files_added: Vec<String>,
+    pub files_removed: Vec<String>,
+    pub nodes_before: usize,
+    pub nodes_after: usize,
+    pub nodes_added: Vec<String>,
+    pub nodes_removed: Vec<String>,
+    pub edges_before: usize,
+    pub edges_after: usize,
+    pub edges_added: Vec<EdgeDelta>,
+    pub edges_removed: Vec<EdgeDelta>,
+    pub violations_before: usize,
+    pub violations_after: usize,
+    pub violations_resolved: Vec<ViolationDelta>,
+    pub violations_introduced: Vec<ViolationDelta>,
+}
+
+/// Deepest common directory prefix of every node path in the graph —
+/// the scan root the graph's absolute node IDs are relative to. With a
+/// single distinct path this is that file's parent directory.
+fn graph_common_root(graph: &DependencyGraph) -> std::path::PathBuf {
+    let mut paths: Vec<std::path::PathBuf> =
+        graph.nodes().iter().map(|n| n.path.clone()).collect();
+    paths.sort();
+    paths.dedup();
+    if paths.is_empty() {
+        return std::path::PathBuf::new();
+    }
+    let mut root = std::path::PathBuf::new();
+    for component in paths[0].components() {
+        let candidate = root.join(component.as_os_str());
+        if paths.iter().all(|p| p.starts_with(&candidate)) {
+            root = candidate;
+        } else {
+            break;
+        }
+    }
+    if paths.len() == 1 || root == paths[0] {
+        root = paths[0].parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    }
+    root
+}
+
+/// Rewrite an absolute node ID (`<abs path>::<symbol>`) relative to the
+/// graph root (`<rel path>::<symbol>`). IDs without a `::` separator or
+/// outside the root pass through unchanged.
+fn relative_id(raw: &str, root: &std::path::Path) -> String {
+    let root_str = root.to_string_lossy();
+    match raw.split_once("::") {
+        Some((path, rest)) => match path.strip_prefix(root_str.as_ref()) {
+            Some(rel) => format!("{}::{}", rel.trim_start_matches(['/', '\\']), rest),
+            None => raw.to_string(),
+        },
+        None => raw.to_string(),
+    }
+}
+
+/// Root-relative paths of all File nodes in the graph.
+fn file_paths_relative(
+    graph: &DependencyGraph,
+    root: &std::path::Path,
+) -> HashSet<String> {
+    graph
+        .nodes()
+        .iter()
+        .filter(|n| n.kind == NodeKind::File)
+        .map(|n| {
+            let rel = relative_id(&n.id.0, root);
+            rel.strip_suffix("::file").map(|s| s.to_string()).unwrap_or(rel)
+        })
+        .collect()
+}
+
+type EdgeKey = (String, String, String);
+
+/// Edge multiset keyed on (relative from, relative to, kind) — edge
+/// UUIDs are per-scan noise and parallel identical edges are possible.
+fn edge_multiset(
+    graph: &DependencyGraph,
+    root: &std::path::Path,
+) -> std::collections::HashMap<EdgeKey, usize> {
+    let mut out: std::collections::HashMap<EdgeKey, usize> = std::collections::HashMap::new();
+    for edge in graph.edges() {
+        let key = (
+            relative_id(&edge.from.0, root),
+            relative_id(&edge.to.0, root),
+            format!("{:?}", edge.kind),
+        );
+        *out.entry(key).or_insert(0) += 1;
+    }
+    out
+}
+
+fn sorted_diff(a: &HashSet<String>, b: &HashSet<String>) -> Vec<String> {
+    let mut out: Vec<String> = a.difference(b).cloned().collect();
+    out.sort();
+    out
+}
+
+/// Entries present in `a` beyond their multiplicity in `b`.
+fn multiset_diff(
+    a: &std::collections::HashMap<EdgeKey, usize>,
+    b: &std::collections::HashMap<EdgeKey, usize>,
+) -> Vec<EdgeDelta> {
+    let mut out: Vec<EdgeDelta> = a
+        .iter()
+        .filter_map(|((from, to, kind), count)| {
+            let other = b.get(&(from.clone(), to.clone(), kind.clone())).copied().unwrap_or(0);
+            (count > &other).then(|| EdgeDelta {
+                from: from.clone(),
+                to: to.clone(),
+                kind: kind.clone(),
+                count: count - other,
+            })
+        })
+        .collect();
+    out.sort_by(|x, y| (&x.from, &x.to, &x.kind).cmp(&(&y.from, &y.to, &y.kind)));
+    out
 }
 
 pub trait PatternDetector: Send + Sync {
