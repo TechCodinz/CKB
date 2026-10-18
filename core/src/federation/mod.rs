@@ -196,9 +196,9 @@ impl FederatedGraphEngine {
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
 
-        if bottleneck_microservices.is_empty() && !fed.repos.is_empty() {
-            bottleneck_microservices.push(fed.repos[0].repo_name.clone());
-        }
+        // Honest empty state: if no repo exceeds the size threshold, there is
+        // no evidence-based bottleneck to report. (Previously this fabricated
+        // one by arbitrarily labelling the first repo a bottleneck.)
 
         OrganizationalIntelligenceReport {
             total_organization_repositories: fed.total_repos_federated,
