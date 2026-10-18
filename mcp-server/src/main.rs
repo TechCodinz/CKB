@@ -633,6 +633,30 @@ async fn run_stdio_loop(state: AppState) -> anyhow::Result<()> {
                             Err(e) => format!("Impact analysis error: {}", e),
                         }
                     }
+                    "ckb_check_drift" => {
+                        // This arm did not exist: the tool was advertised
+                        // in tools/list but every stdio call fell through to
+                        // the default "executed successfully" fallback, so
+                        // clients received no drift data at all. Mirror the
+                        // CLI `check` command: scan the path and report the
+                        // violations the engine actually found.
+                        let path = args.and_then(|a| a.get("path")).and_then(|p| p.as_str()).unwrap_or(".");
+                        let engine = state.engine.read().await;
+                        match engine.scan_codebase(path).await {
+                            Ok(report) => {
+                                let text = serde_json::to_string_pretty(&json!({
+                                    "files_processed": report.files_processed,
+                                    "nodes": report.nodes,
+                                    "edges": report.edges,
+                                    "violations_count": report.drift.len(),
+                                    "violations": report.drift,
+                                })).unwrap_or_default();
+                                *state.latest_report.write().await = Some(report);
+                                text
+                            }
+                            Err(e) => format!("Drift check error: {}", e),
+                        }
+                    }
                     "ckb_agentic_diff_guardrail" => {
                         let file = args.and_then(|a| a.get("target_file")).and_then(|f| f.as_str()).unwrap_or("");
                         format!("Guardrail check passed for {}. Proposed diff does not violate layer boundaries.", file)
