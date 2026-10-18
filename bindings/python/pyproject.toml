@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ckb-sdk"
+version = "0.1.0"
+description = "Python HTTP client for the CKB MCP REST server (ckb-mcp-server). Standard-library only: it delegates all scanning to a running server over HTTP; it does not embed the Rust engine."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+keywords = ["ckb", "code-knowledge-base", "architecture", "mcp"]
+
+[tool.setuptools]
+packages = ["ckb"]
