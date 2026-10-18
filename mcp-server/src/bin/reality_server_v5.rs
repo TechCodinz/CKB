@@ -460,6 +460,48 @@ fn external_dependencies(analyses: &[FileAnalysis]) -> Vec<String> {
     dependencies.into_iter().collect()
 }
 
+/// Merge `.ckb/rules.json` violations into a scan's drift — the same
+/// enforcement `CkbEngine::scan_codebase` runs for the CLI/MCP paths
+/// (`detect_drift_with_project_rules` in ckb-core). Until now this
+/// hosted path called `detect_drift` alone, so engine reports never
+/// contained ForbiddenDependency violations even for projects carrying
+/// a valid rules file: Mission Control (via the cloud backend's own
+/// analyzer merge) showed them, but anything reading the engine report
+/// itself — the Raiziom console's health among it — silently missed
+/// them and quoted a higher health score.
+///
+/// Semantics deliberately mirror the core: violations come from
+/// `check_project_rules` unchanged (same kind/boundary/severity/message
+/// shape), are deduplicated against the inferred drift with the core's
+/// `kind|from|to|boundary` key, and a malformed rules file errors the
+/// scan — `load_project_rules` fails loudly and every caller of
+/// `build_graph` already propagates scan errors as a failed request,
+/// exactly as the CLI fails the scan. Silently skipping a broken rules
+/// file would leave the project unenforced while its owners believe
+/// otherwise.
+fn apply_project_rules(
+    graph: &DependencyGraph,
+    root: &str,
+    drift: &mut Vec<ckb_core::DriftViolation>,
+) -> anyhow::Result<()> {
+    if let Some(rules) = ckb_core::load_project_rules(Path::new(root))? {
+        let mut seen: HashSet<String> = drift
+            .iter()
+            .map(|v| format!("{:?}|{}|{}|{}", v.kind, v.from.0, v.to.0, v.boundary))
+            .collect();
+        for violation in ckb_core::check_project_rules(graph, &rules) {
+            let key = format!(
+                "{:?}|{}|{}|{}",
+                violation.kind, violation.from.0, violation.to.0, violation.boundary
+            );
+            if seen.insert(key) {
+                drift.push(violation);
+            }
+        }
+    }
+    Ok(())
+}
+
 async fn build_graph(root: &str) -> anyhow::Result<(DependencyGraph, ScanReport)> {
     let started = std::time::Instant::now();
     let parser = LanguageParser::new();
@@ -485,7 +527,8 @@ async fn build_graph(root: &str) -> anyhow::Result<(DependencyGraph, ScanReport)
 
     let analyzer = ArchitectureAnalyzer::new();
     let patterns = analyzer.detect_patterns(&graph)?;
-    let drift = analyzer.detect_drift(&graph, &patterns)?;
+    let mut drift = analyzer.detect_drift(&graph, &patterns)?;
+    apply_project_rules(&graph, root, &mut drift)?;
     let report = ScanReport {
         files_processed: analyses.len(),
         nodes: graph.node_count(),
