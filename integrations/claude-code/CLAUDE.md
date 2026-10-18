@@ -13,8 +13,8 @@ You have access to real-time architectural intelligence.
 - If risk_score > 0.7 — explicitly warn before proceeding
 
 **Before adding any new feature:**
-- Call `ckb_check_boundaries` to determine the correct layer
-- Call `ckb_get_patterns` to follow established conventions
+- Call `ckb_check_drift` to see current layer-boundary and drift violations before choosing a layer
+- Call `ckb_generate_ai_rules` / `ckb_get_prompt_context` to follow established conventions
 
 **Before creating any new file:**
 - Check if CKB shows an existing module that should be extended instead
@@ -22,7 +22,7 @@ You have access to real-time architectural intelligence.
 ## Architecture Rules (enforced by CKB scan)
 - No circular dependencies between modules
 - Lower layers (Domain) must NOT import from higher layers (Infrastructure)
-- Follow the patterns detected by `ckb_get_patterns`
+- Follow the conventions surfaced by `ckb_generate_ai_rules` and `ckb_get_prompt_context`
 - "God objects" (>20 deps) must not gain new dependencies without approval
 
 ## Commands Available

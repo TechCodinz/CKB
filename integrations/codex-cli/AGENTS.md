@@ -13,8 +13,8 @@ Before modifying any file:
 - If risk_score > 0.7: request explicit confirmation
 
 Before adding new features:
-- Call `ckb_check_boundaries` to determine correct architectural layer
-- Call `ckb_get_patterns` to follow existing conventions
+- Call `ckb_check_drift` to see current layer-boundary and drift violations before choosing a layer
+- Call `ckb_generate_ai_rules` / `ckb_get_prompt_context` to follow existing conventions
 
 Architecture constraints enforced by CKB:
 - No circular dependencies

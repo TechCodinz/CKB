@@ -7,7 +7,7 @@ real-time architectural intelligence about this codebase.
 
 ## BEFORE GENERATING ANY CODE, YOU MUST:
 
-1. Call `ckb_check_boundaries` to understand the current architecture
+1. Call `ckb_check_drift` to see current architecture drift and boundary violations
 2. Call `ckb_analyze_impact` on any file you're about to modify significantly
 3. Respect the detected layer boundaries (Domain, Application, Infrastructure, etc.)
 
@@ -22,7 +22,7 @@ real-time architectural intelligence about this codebase.
 ## WHEN ADDING NEW FEATURES:
 
 1. First ask: "Does CKB show an existing pattern I should follow?"
-2. Place new code in the correct layer based on `ckb_check_boundaries`
+2. Place new code in the correct layer based on `ckb_check_drift` results
 3. After generating, mentally verify: would `ckb check` pass on this code?
 
 ## WHEN REFACTORING:

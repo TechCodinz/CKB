@@ -43,7 +43,7 @@ ckb scan /your/project
 ```bash
 # Claude will automatically use CKB tools
 claude "Add OAuth2 authentication to this service"
-# → Claude calls ckb_check_boundaries → sees auth layer
+# → Claude calls ckb_check_drift → sees auth layer boundary violations
 # → Generates code that fits your architecture
 
 claude "Refactor the UserRepository class"  
@@ -55,8 +55,8 @@ claude "Refactor the UserRepository class"
 
 | Tool | Description |
 |------|-------------|
-| `ckb_scan` | Scan codebase and build knowledge graph |
-| `ckb_get_report` | Get latest scan results |
+| `ckb_scan_project` | Scan codebase and build knowledge graph |
+| `ckb_check_drift` | Current drift, circular-dependency and layer-boundary violations |
 | `ckb_analyze_impact` | Impact analysis for a file:line change |
-| `ckb_check_boundaries` | Get architectural layer boundaries |
-| `ckb_get_patterns` | Detect architectural patterns |
+| `ckb_generate_ai_rules` | AI rules generated from the patterns and conventions detected in the codebase |
+| `ckb_get_prompt_context` | Bounded, token-optimized architecture context for a query |

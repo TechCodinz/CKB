@@ -47,11 +47,11 @@ Now Cursor will **automatically query CKB** before generating code, so it:
 
 | Tool | What Cursor gets |
 |------|-----------------|
-| `ckb_scan` | Full dependency graph and violations |
-| `ckb_check_boundaries` | Current architectural boundaries |
+| `ckb_scan_project` | Full dependency graph and violations |
+| `ckb_check_drift` | Current drift and architectural boundary violations |
 | `ckb_analyze_impact` | What a change would break |
-| `ckb_get_patterns` | Detected architectural patterns (MVC, DDD, etc.) |
-| `ckb_suggest` | Architectural suggestions for current file |
+| `ckb_generate_ai_rules` | AI rules from detected architectural patterns (MVC, DDD, etc.) |
+| `ckb_ask` | Natural-language architecture questions and guidance |
 
 ## Example Cursor Prompts (after CKB integration)
 

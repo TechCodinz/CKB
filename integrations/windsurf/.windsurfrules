@@ -5,7 +5,7 @@
 You have access to the CKB (Code Knowledge Base) MCP server.
 
 ## BEFORE GENERATING ANY CODE:
-1. Call `ckb_check_boundaries` to get current architecture layers
+1. Call `ckb_check_drift` to get current architecture drift and boundary violations
 2. Call `ckb_analyze_impact` on any file you plan to significantly modify
 3. Never put code in the wrong layer
 

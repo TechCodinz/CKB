@@ -52,7 +52,7 @@ codex "What would break if I delete src/auth/token.ts?"
 
 ## CKB Architectural Assistant
 - Server: ckb (MCP)
-- Use ckb_check_boundaries before adding features
+- Use ckb_check_drift before adding features
 - Use ckb_analyze_impact before modifying existing files
 - Risk score > 0.7: warn user before proceeding
 ```

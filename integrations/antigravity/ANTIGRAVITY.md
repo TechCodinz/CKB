@@ -14,8 +14,8 @@ CKB MCP Server: http://localhost:3000
 - If risk_score > 0.7: state "⚠️ High-risk change" and ask for confirmation
 
 **Before adding any new feature:**
-- Call `ckb_check_boundaries` to identify correct architectural layer
-- Call `ckb_get_patterns` to follow existing code conventions
+- Call `ckb_check_drift` to see current layer-boundary and drift violations before choosing a layer
+- Call `ckb_generate_ai_rules` / `ckb_get_prompt_context` to follow existing code conventions
 - Never create a new module if CKB shows an existing one that fits
 
 **During refactoring sessions:**
