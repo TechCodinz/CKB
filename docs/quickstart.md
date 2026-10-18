@@ -3,20 +3,22 @@
 
 ### 1. Install CKB
 
-**macOS / Linux:**
+**CLI — build from source (all platforms):**
 ```bash
-curl -fsSL https://ckb.dev/install.sh | sh
+git clone https://github.com/TechCodinz/CKB.git
+cd CKB
+cargo install --path cli
 ```
+Prebuilt CLI binaries are attached to
+[GitHub Releases](https://github.com/TechCodinz/CKB/releases).
 
-**Windows:**
-```powershell
-iwr https://ckb.dev/install.ps1 -useb | iex
-```
-
-**Or with Cargo:**
+**VS Code / VSCodium extension (macOS / Linux):**
 ```bash
-cargo install ckb-cli
+curl -fsSL https://ckb-nu.vercel.app/install.sh | sh
 ```
+That script installs the CKB editor extension from Open VSX — it is
+not a CLI installer. (There is no `ckb.dev/install.ps1`; Windows users
+install the extension from the Open VSX / Marketplace listing.)
 
 ### 2. Scan Your First Project
 ```bash
@@ -88,7 +90,7 @@ Add to `~/.continue/config.json`:
 
 ### 5. View Your Dashboard
 
-Open https://app.ckb.dev and log in.
+Open https://ckb-nu.vercel.app and log in.
 
 You'll see:
 - Project health scores
@@ -107,10 +109,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Install CKB
-        run: curl -fsSL https://ckb.dev/install.sh | sh
-      - name: Check architecture
-        run: ckb check . --strict
+      # This repo ships a composite action that builds ckb-cli from
+      # source and runs the check (posting a PR summary comment):
+      - name: CKB architecture check
+        uses: TechCodinz/CKB/.github/actions/ckb-scan@main
 ```
 
 **GitLab CI:**
@@ -118,7 +120,9 @@ jobs:
 ckb-check:
   stage: test
   script:
-    - curl -fsSL https://ckb.dev/install.sh | sh
+    # Install ckb-cli first: build from source (cargo install --path cli
+    # in a clone of https://github.com/TechCodinz/CKB) or download a
+    # prebuilt binary from https://github.com/TechCodinz/CKB/releases
     - ckb check . --strict
 ```
 
@@ -129,4 +133,4 @@ ckb-check:
 - Integrate with Slack
 - Schedule architectural review
 
-Questions? Join our Discord or email support@ckb.dev
+Questions? Open an issue at https://github.com/TechCodinz/CKB/issues

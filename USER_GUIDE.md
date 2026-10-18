@@ -108,8 +108,10 @@ Install the CKB CLI globally:
 # Cargo install
 cargo install --path cli
 
-# Or binary curl script (Linux / macOS)
-curl -fsSL https://ckb.dev/install.sh | sh
+# Prebuilt CLI binaries: https://github.com/TechCodinz/CKB/releases
+# (There is no ckb.dev install script. The script served at
+# https://ckb-nu.vercel.app/install.sh installs the VS Code extension
+# from Open VSX, not the CLI.)
 ```
 
 ### Core CLI Commands

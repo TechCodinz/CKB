@@ -3,6 +3,7 @@ name = "ckb-wasm"
 version = "0.1.0"
 edition = "2021"
 description = "CKB WASM bindings"
+license = "MIT"
 
 [lib]
 crate-type = ["cdylib"]

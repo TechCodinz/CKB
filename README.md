@@ -27,7 +27,7 @@
 | **MCP Server** | Exposes architecture data and durable memory to MCP-compatible AI assistants |
 | **CI/CD integration** | SARIF, JUnit, and JSON output for GitHub Actions, GitLab CI, etc. |
 | **VS Code extension** | Real-time diagnostics and status bar integration |
-| **Web Dashboard** | React-based Code X-Ray, Living Graph, Time Machine and evidence views |
+| **Web Dashboard** | React-based Code X-Ray, Living Graph, Time Machine and evidence views (in the private CKB Cloud repo — see Architecture) |
 
 ## User & Integration Guide
 
@@ -46,11 +46,14 @@
 ### Install the CLI
 
 ```bash
-# macOS / Linux
-curl -fsSL https://ckb.dev/install.sh | sh
-
-# Or build from source
+# Build from source (this repo) — installs ckb-cli plus its `ckb` alias
 cargo install --path cli
+
+# Prebuilt CLI binaries are attached to GitHub Releases:
+# https://github.com/TechCodinz/CKB/releases
+
+# VS Code / VSCodium extension (installs from Open VSX):
+curl -fsSL https://ckb-nu.vercel.app/install.sh | sh
 ```
 
 ### Scan a Project
@@ -134,15 +137,17 @@ For clients using the standard CKB MCP/REST process rather than the dedicated me
 ```text
 ckb/
 ├── core/          # Rust engine — parsing, graph, analysis, storage
-├── cli/           # CLI binary
+├── cli/           # CLI binaries (ckb-cli, plus the ckb alias)
 ├── mcp-server/    # MCP + Reality REST servers + durable Architecture Memory
-├── web/           # React dashboard with X-Ray and graph visualization
 ├── integrations/  # VS Code, JetBrains, Cursor extensions
 ├── bindings/      # Node.js, Python, WASM bindings
-├── backend/       # TypeScript API (billing, auth, security)
-├── landing/       # Marketing landing page
-└── deploy/        # Docker + Kubernetes configs
+└── deploy/        # Render deployment notes
 ```
+
+> **Not in this repo:** the React web dashboard, the TypeScript backend
+> API (billing, auth, security), and the landing page live in the
+> private **CKB Cloud** repository. The dashboard built from it is
+> deployed at https://ckb-nu.vercel.app.
 
 ## Pricing
 
@@ -174,6 +179,6 @@ cargo run -p ckb-mcp-server --bin architecture_memory_mcp
 
 ## License
 
-Dual-licensed under [MIT](LICENSE) and [Apache 2.0](LICENSE).
+Licensed under the [MIT License](LICENSE).
 
 Copyright © 2026 CKB Contributors

@@ -4,6 +4,19 @@
 **Branch:** `agent/v13.2-memory-lane`  
 **Engineer:** Antigravity (automated hardening pass)
 
+> **Update (2026-10-18):** this report describes the unmerged
+> `agent/v13.2-memory-lane` branch, not current `main`. On current
+> `main` (`bf24aed` plus the 2026-10-18 fix pass), the verified numbers
+> are: `cargo check --workspace` clean (0 compiler warnings; one
+> cargo manifest note remains, about `cli/src/main.rs` backing both
+> the `ckb` and `ckb-cli` bin targets — that alias is intentional),
+> `cargo clippy --workspace -- -D warnings` clean, and
+> `cargo test --workspace` = **173 / 173 PASS** (136 ckb-core lib +
+> 4 v13 contract + 3 pre-vps + 20 render_gateway + 10 CLI across the
+> `ckb-cli`/`ckb` bin targets). The VS Code extension is now v1.10.3
+> (the 1.9.1 VSIX below is historical). The Phase 3 backend/web rows
+> describe the private CKB Cloud repo and were not re-verified here.
+
 ---
 
 ## Summary
@@ -11,7 +24,7 @@
 | Gate | Result |
 |------|--------|
 | `cargo check --workspace` | ✅ CLEAN |
-| `cargo test --workspace` | ✅ **116 / 116 PASS** |
+| `cargo test --workspace` | ✅ **116 / 116 PASS** on that branch — superseded: **173 / 173** on current `main` (see update note) |
 | VS Code `tsc` compile | ✅ CLEAN |
 | VS Code VSIX package | ✅ `ckb-vscode-1.9.1.vsix` |
 | Backend `prisma validate` | ✅ VALID |
@@ -77,7 +90,7 @@ test ambiguous_otlp_identity_is_not_a_source_symbol ... ok
 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 ```
 
-**Total: 116 / 116 tests pass, 0 failed.**
+**Total (on that branch): 116 / 116 tests pass, 0 failed.** Current `main` total is 173 / 173 — see the update note at the top of this file.
 
 ### Preserved Capabilities ✅
 

@@ -3,6 +3,7 @@ name = "ckb-cli"
 version = "0.1.0"
 edition = "2021"
 description = "CKB CLI - Architectural intelligence for AI-era development"
+license = "MIT"
 
 [[bin]]
 name = "ckb-cli"
