@@ -8,6 +8,14 @@ description = "CKB CLI - Architectural intelligence for AI-era development"
 name = "ckb-cli"
 path = "src/main.rs"
 
+# `ckb` alias for the same main.rs: docs, MCP client configs, and the
+# VS Code extension's default `ckb.cliBinary` all invoke the CLI as `ckb`,
+# but only `ckb-cli` was ever built — default-config first runs died with
+# ENOENT. Both names now ship.
+[[bin]]
+name = "ckb"
+path = "src/main.rs"
+
 [[bin]]
 name = "ckb-causality"
 path = "src/bin/ckb-causality.rs"

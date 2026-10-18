@@ -186,13 +186,14 @@ struct WatchArgs {
 struct SuggestArgs {
     /// Path to codebase
     path: PathBuf,
-    
+
     /// Number of suggestions
     #[arg(short, long, default_value = "5")]
     count: usize,
-    
-    /// Focus area
-    #[arg(short, long)]
+
+    /// Focus area (short is -F: the global -f/--format already owns -f,
+    /// and reusing it here made clap panic in debug builds)
+    #[arg(short = 'F', long)]
     focus: Option<String>,
 }
 
@@ -212,8 +213,9 @@ struct DocsArgs {
 
 #[derive(Args)]
 struct ServeArgs {
-    /// Host address
-    #[arg(short, long, default_value = "127.0.0.1")]
+    /// Host address (short is -H: -h is clap's auto --help flag, and
+    /// claiming it here made clap panic in debug builds)
+    #[arg(short = 'H', long, default_value = "127.0.0.1")]
     host: String,
     
     /// Port
@@ -243,8 +245,10 @@ struct InitArgs {
     #[arg(default_value = ".")]
     path: PathBuf,
 
-    /// Force overwrite existing rule files
-    #[arg(short, long)]
+    /// Force overwrite existing rule files (short is -F: the global
+    /// -f/--format already owns -f, and reusing it here made clap panic
+    /// in debug builds)
+    #[arg(short = 'F', long)]
     force: bool,
 }
 
@@ -274,6 +278,26 @@ impl From<SeverityLevel> for Severity {
             SeverityLevel::Error => Severity::Error,
             SeverityLevel::Critical => Severity::Critical,
         }
+    }
+}
+
+/// True when the requested output format is machine-readable (JSON, SARIF,
+/// JUnit XML). For those formats stdout must carry *only* the payload —
+/// human chrome (headers, banners) goes to stderr so the output can be
+/// piped straight into `json.tool`, a SARIF uploader, or `JSON.parse`
+/// (the VS Code extension's `runCliJson` does exactly that and previously
+/// could never succeed against this CLI).
+fn is_machine_format(format: &str) -> bool {
+    matches!(format, "json" | "sarif" | "junit")
+}
+
+/// Print a human-facing header line: stdout for human formats, stderr
+/// when a machine format owns stdout.
+fn print_header(machine: bool, line: String) {
+    if machine {
+        eprintln!("{}", line);
+    } else {
+        println!("{}", line);
     }
 }
 
@@ -328,8 +352,11 @@ async fn init_command(args: InitArgs) -> Result<()> {
 
 async fn scan_command(args: ScanArgs, format: String) -> Result<()> {
     let start = Instant::now();
-    
-    println!("🔍 CKB Scan - Analyzing codebase: {}", args.path.display());
+
+    print_header(
+        is_machine_format(&format),
+        format!("🔍 CKB Scan - Analyzing codebase: {}", args.path.display()),
+    );
     
     let multi = MultiProgress::new();
     let scan_pb = multi.add(ProgressBar::new_spinner());
@@ -366,30 +393,52 @@ async fn scan_command(args: ScanArgs, format: String) -> Result<()> {
 }
 
 async fn check_command(args: CheckArgs, format: String) -> Result<()> {
-    println!("🔍 CKB Check - Analyzing architectural drift: {}", args.path.display());
-    
+    // `--report-format` is the check-specific format selector (it's what
+    // the README's headline `ckb check --strict --report-format sarif`
+    // example uses). It was previously defined but never read — the
+    // command silently switched on the global `--format` instead. An
+    // explicit non-default `--report-format` now wins; otherwise the
+    // global format applies, exactly as before.
+    let report_format = if args.report_format != "human" {
+        args.report_format.clone()
+    } else {
+        format.clone()
+    };
+    let machine = is_machine_format(&report_format);
+    print_header(
+        machine,
+        format!(
+            "🔍 CKB Check - Analyzing architectural drift: {}",
+            args.path.display()
+        ),
+    );
+
     let engine = CkbEngine::new()?;
     let report = engine.scan_codebase(&args.path.to_string_lossy()).await?;
-    
-    match format.as_str() {
-        "json" => {
-            println!("{}", to_string_pretty(&report)?);
-        }
-        "sarif" => {
-            let sarif = generate_sarif(&report);
-            println!("{}", to_string_pretty(&sarif)?);
-        }
-        "junit" => {
-            let junit = generate_junit(&report);
-            println!("{}", junit);
-        }
-        _ => {
-            display_drift_report(&report.drift);
-        }
+
+    // Render the payload once so stdout and --output never disagree.
+    let payload: Option<String> = match report_format.as_str() {
+        "json" => Some(to_string_pretty(&report)?),
+        "sarif" => Some(to_string_pretty(&generate_sarif(&report))?),
+        "junit" => Some(generate_junit(&report)),
+        _ => None,
+    };
+
+    match &payload {
+        Some(payload) => println!("{}", payload),
+        None => display_drift_report(&report.drift),
     }
-    
-    if let Some(output) = args.output {
-        fs::write(output, to_string_pretty(&report)?).await?;
+
+    if let Some(output) = &args.output {
+        // The report file carries the payload in the selected report
+        // format. For the human/table format there is no file rendering,
+        // so the file keeps the JSON report it has always carried (the
+        // ckb-scan GitHub Action parses `.drift` out of it).
+        let file_contents = match &payload {
+            Some(payload) => payload.clone(),
+            None => to_string_pretty(&report)?,
+        };
+        fs::write(output, file_contents).await?;
     }
 
     // Previously `--strict` and `--fail-on` were parsed but never actually
@@ -414,8 +463,14 @@ async fn check_command(args: CheckArgs, format: String) -> Result<()> {
 }
 
 async fn impact_command(args: ImpactArgs, format: String) -> Result<()> {
-    println!("🔍 CKB Impact - Analyzing change impact at {}:{}", 
-        args.file.display(), args.line);
+    print_header(
+        is_machine_format(&format),
+        format!(
+            "🔍 CKB Impact - Analyzing change impact at {}:{}",
+            args.file.display(),
+            args.line
+        ),
+    );
     
     let engine = CkbEngine::new()?;
     engine.scan_codebase(&args.path.to_string_lossy()).await?;
@@ -508,7 +563,7 @@ async fn watch_command(args: WatchArgs) -> Result<()> {
             }
         };
         
-        let current_hash = format!("{:x}", md5::compute(to_string_pretty(&report)?));
+        let current_hash = report_fingerprint(&report);
         
         if current_hash != previous_hash {
             println!("🔄 Change detected at {}", chrono::Local::now().format("%H:%M:%S"));
@@ -552,7 +607,10 @@ async fn watch_command(args: WatchArgs) -> Result<()> {
 }
 
 async fn suggest_command(args: SuggestArgs, format: String) -> Result<()> {
-    println!("🔍 CKB Suggest - Finding architectural improvements");
+    print_header(
+        is_machine_format(&format),
+        "🔍 CKB Suggest - Finding architectural improvements".to_string(),
+    );
     
     let engine = CkbEngine::new()?;
     let report = engine.scan_codebase(&args.path.to_string_lossy()).await?;
@@ -593,7 +651,10 @@ async fn docs_command(args: DocsArgs) -> Result<()> {
 }
 
 async fn validate_command(args: ValidateArgs, format: String) -> Result<()> {
-    println!("🔍 CKB Validate - Validating against custom rules");
+    print_header(
+        is_machine_format(&format),
+        "🔍 CKB Validate - Validating against custom rules".to_string(),
+    );
     
     let rules_content = fs::read_to_string(&args.rules).await?;
     let rules: Vec<CustomRule> = serde_json::from_str(&rules_content)?;
@@ -615,10 +676,163 @@ async fn validate_command(args: ValidateArgs, format: String) -> Result<()> {
     Ok(())
 }
 
+/// Stable content fingerprint of a scan report, for watch-mode change
+/// detection. Deliberately excludes everything that changes on every scan
+/// even when the code doesn't — `snapshot_id` (a fresh UUID per scan),
+/// `duration_ms` (measured wall-clock), and violation `id`s (fresh UUIDs).
+/// Hashing the pretty-printed report, as the watch loop previously did,
+/// therefore "detected a change" on *every* poll and re-ran `--exec`
+/// forever on an untouched codebase.
+fn report_fingerprint(report: &ScanReport) -> String {
+    let mut drift: Vec<String> = report
+        .drift
+        .iter()
+        .map(|v| {
+            format!(
+                "{:?}|{}|{}|{}|{:?}|{}",
+                v.kind, v.from.0, v.to.0, v.boundary, v.severity, v.message
+            )
+        })
+        .collect();
+    drift.sort();
+
+    let mut patterns: Vec<String> = report
+        .patterns
+        .iter()
+        .map(|p| {
+            let mut boundaries: Vec<&str> =
+                p.boundaries.iter().map(|b| b.name.as_str()).collect();
+            boundaries.sort();
+            format!("{}|{}", p.name, boundaries.join(","))
+        })
+        .collect();
+    patterns.sort();
+
+    let mut external_dependencies = report.external_dependencies.clone();
+    external_dependencies.sort();
+
+    let fingerprint = json!({
+        "files_processed": report.files_processed,
+        "nodes": report.nodes,
+        "edges": report.edges,
+        "drift": drift,
+        "patterns": patterns,
+        "package_identity": report.package_identity,
+        "external_dependencies": external_dependencies,
+    });
+    format!("{:x}", md5::compute(fingerprint.to_string()))
+}
+
 async fn serve_command(args: ServeArgs) -> Result<()> {
-    println!("🚀 Starting CKB MCP server on {}:{}", args.host, args.port);
-    println!("Press Ctrl+C to stop");
+    // The REST/MCP server implementation lives in the `ckb-mcp-server`
+    // crate (binary `ckb-mcp-server`). `ckb serve` delegates to that
+    // binary — previously this function printed "Starting CKB MCP
+    // server…" and returned immediately without ever binding a port.
+    // The child inherits stdio, so `--stdio` JSON-RPC works through this
+    // delegation unchanged, and Ctrl+C reaches the real server.
+    let server_bin = locate_mcp_server_binary().ok_or_else(|| {
+        anyhow::anyhow!(
+            "ckb-mcp-server binary not found (looked next to the ckb executable and on PATH). \
+             Build/install it with `cargo build --release -p ckb-mcp-server` or \
+             `cargo install --path mcp-server`, then re-run `ckb serve`."
+        )
+    })?;
+
+    let mut cmd = tokio::process::Command::new(&server_bin);
+    if args.stdio {
+        cmd.arg("--stdio");
+    }
+    // The server reads its port from the PORT env var.
+    cmd.env("PORT", args.port.to_string());
+
+    // The server binds loopback by default and only binds all interfaces
+    // when CKB_BIND_ALL=1 is set, so map --host onto that contract and
+    // say plainly when a requested host can't be honoured exactly.
+    match args.host.as_str() {
+        "0.0.0.0" | "::" => {
+            cmd.env("CKB_BIND_ALL", "1");
+        }
+        "127.0.0.1" | "localhost" | "::1" => {}
+        other => {
+            eprintln!(
+                "⚠️  ckb-mcp-server binds either loopback (default) or all interfaces; \
+                 --host {other} can't be honoured exactly, binding loopback instead. \
+                 Use --host 0.0.0.0 to bind all interfaces."
+            );
+        }
+    }
+
+    if args.cors {
+        // "Enable CORS" in the server's terms means an explicit allowed
+        // origin; "*" is the only origin the --cors flag can mean. The
+        // server itself logs a wide-open warning for it.
+        if std::env::var_os("CKB_ALLOWED_ORIGIN").is_none() {
+            cmd.env("CKB_ALLOWED_ORIGIN", "*");
+        }
+        eprintln!("⚠️  CORS enabled for the server process (CKB_ALLOWED_ORIGIN).");
+    }
+
+    if let Some(key) = &args.api_key {
+        cmd.env("CKB_API_KEY", key);
+    }
+    if args.auth && args.api_key.is_none() && std::env::var_os("CKB_API_KEY").is_none() {
+        anyhow::bail!(
+            "serve --auth requires an API key: pass --api-key <key> or set CKB_API_KEY. \
+             Without one the server would run unauthenticated."
+        );
+    }
+
+    eprintln!(
+        "🚀 Delegating to {} on {}:{} (Ctrl+C stops the server)",
+        server_bin.display(),
+        args.host,
+        args.port
+    );
+
+    let status = cmd
+        .stdin(std::process::Stdio::inherit())
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit())
+        .status()
+        .await
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to launch ckb-mcp-server at {}: {}",
+                server_bin.display(),
+                e
+            )
+        })?;
+
+    if !status.success() {
+        anyhow::bail!("ckb-mcp-server exited with status {}", status);
+    }
     Ok(())
+}
+
+/// Find the `ckb-mcp-server` binary: first as a sibling of the running
+/// executable (the layout `cargo build`/`cargo install` produce), then
+/// on `PATH`.
+fn locate_mcp_server_binary() -> Option<PathBuf> {
+    let bin_name = if cfg!(windows) {
+        "ckb-mcp-server.exe"
+    } else {
+        "ckb-mcp-server"
+    };
+    if let Ok(exe) = std::env::current_exe() {
+        let sibling = exe.with_file_name(bin_name);
+        if sibling.is_file() {
+            return Some(sibling);
+        }
+    }
+    if let Ok(paths) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&paths) {
+            let candidate = dir.join(bin_name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
 }
 
 async fn tui_command() -> Result<()> {
@@ -1003,4 +1217,116 @@ struct SnapshotDiff {}
 #[allow(dead_code)]
 fn display_custom_violations(violations: &[DriftViolation]) {
     display_drift_report(violations);
+}
+
+#[cfg(test)]
+mod cli_regression_tests {
+    use super::*;
+    use clap::{CommandFactory, error::ErrorKind};
+
+    /// Regression test for the clap short-flag collisions that made
+    /// `serve`, `suggest`, and `init` panic (exit 101) in debug builds:
+    /// ServeArgs.host claimed `-h` (clap's --help), and SuggestArgs.focus
+    /// / InitArgs.force claimed `-f` (the global --format). Building the
+    /// full command tree runs clap's own consistency assertions — under
+    /// `cargo test` (a debug build) any reintroduced collision panics
+    /// here before it can ship.
+    #[test]
+    fn cli_definition_has_no_flag_conflicts() {
+        Cli::command().debug_assert();
+    }
+
+    /// Every subcommand must render `--help` (an Err with kind
+    /// DisplayHelp) instead of panicking on its flag definitions.
+    #[test]
+    fn every_subcommand_help_renders() {
+        for sub in [
+            "scan", "check", "impact", "snapshots", "compare", "export", "watch", "suggest",
+            "docs", "serve", "init", "validate",
+        ] {
+            let err = match Cli::try_parse_from(["ckb", sub, "--help"]) {
+                Ok(_) => panic!("--help should short-circuit parsing"),
+                Err(e) => e,
+            };
+            assert_eq!(
+                err.kind(),
+                ErrorKind::DisplayHelp,
+                "subcommand {sub} --help did not render help"
+            );
+        }
+    }
+
+    /// Trivial invocations of the three formerly-panicking subcommands
+    /// must parse cleanly, with the renamed shorts landing in the fields
+    /// they belong to (long flags unchanged).
+    #[test]
+    fn formerly_colliding_subcommands_parse() {
+        match Cli::try_parse_from(["ckb", "serve", "-H", "0.0.0.0", "--port", "3999", "--stdio"])
+            .expect("serve parses")
+            .command
+        {
+            Commands::Serve(args) => {
+                assert_eq!(args.host, "0.0.0.0");
+                assert_eq!(args.port, 3999);
+                assert!(args.stdio);
+            }
+            _ => panic!("expected Serve"),
+        }
+        match Cli::try_parse_from(["ckb", "suggest", ".", "-F", "api", "--format", "json"])
+            .expect("suggest parses")
+            .command
+        {
+            Commands::Suggest(args) => assert_eq!(args.focus.as_deref(), Some("api")),
+            _ => panic!("expected Suggest"),
+        }
+        // The global --format must still be available alongside subcommand flags.
+        let cli = Cli::try_parse_from(["ckb", "init", ".", "-F"]).expect("init parses");
+        match cli.command {
+            Commands::Init(args) => assert!(args.force),
+            _ => panic!("expected Init"),
+        }
+        let cli = Cli::try_parse_from(["ckb", "--format", "json", "serve", "--help"]);
+        assert!(cli.is_err(), "--format + serve --help still renders help");
+    }
+
+    fn bare_report(snapshot_id: &str, duration_ms: f64) -> ScanReport {
+        ScanReport {
+            files_processed: 2,
+            nodes: 3,
+            edges: 2,
+            patterns: Vec::new(),
+            drift: Vec::new(),
+            snapshot_id: snapshot_id.to_string(),
+            duration_ms,
+            package_identity: None,
+            external_dependencies: Vec::new(),
+        }
+    }
+
+    /// Watch mode must not "detect a change" when only the per-scan
+    /// noise (fresh snapshot UUID, measured duration) differs.
+    #[test]
+    fn watch_fingerprint_ignores_per_scan_noise() {
+        let a = bare_report("11111111-1111-1111-1111-111111111111", 12.5);
+        let b = bare_report("22222222-2222-2222-2222-222222222222", 987.25);
+        assert_eq!(report_fingerprint(&a), report_fingerprint(&b));
+    }
+
+    /// …but a real content change (a new violation) must change it.
+    #[test]
+    fn watch_fingerprint_detects_real_change() {
+        let a = bare_report("same", 1.0);
+        let mut b = bare_report("same", 1.0);
+        b.drift.push(DriftViolation {
+            id: uuid::Uuid::new_v4(),
+            kind: ckb_core::ViolationKind::GodObject,
+            from: ckb_core::NodeId("src/a.ts".to_string()),
+            to: ckb_core::NodeId("src/b.ts".to_string()),
+            boundary: "core".to_string(),
+            message: "Module has too many dependencies".to_string(),
+            severity: Severity::Warning,
+            suggested_fix: None,
+        });
+        assert_ne!(report_fingerprint(&a), report_fingerprint(&b));
+    }
 }
