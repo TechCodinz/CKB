@@ -502,11 +502,87 @@ async fn impact_command(args: ImpactArgs, format: String) -> Result<()> {
 }
 
 async fn snapshots_command(args: SnapshotsArgs, _format: String) -> Result<()> {
-    println!("No snapshots found for {}", args.path.display());
+    // Snapshots live in the engine's store (./ckb_data under the working
+    // directory the scans ran from). This command previously printed
+    // "No snapshots found" unconditionally — the store was never read.
+    let engine = CkbEngine::new()?;
+    let snapshots = engine.list_snapshots().await?;
+
+    if snapshots.is_empty() {
+        println!(
+            "No snapshots found for {} (store ./ckb_data holds none; run `ckb scan --store` first)",
+            args.path.display()
+        );
+        return Ok(());
+    }
+
+    println!("📸 {} snapshot(s) in store:", snapshots.len());
+    for snapshot in &snapshots {
+        if args.verbose {
+            println!(
+                "  {}  {}  {} nodes, {} edges",
+                snapshot.id,
+                snapshot.timestamp.format("%Y-%m-%d %H:%M:%S UTC"),
+                snapshot.node_count,
+                snapshot.edge_count
+            );
+        } else {
+            println!("  {}", snapshot.id);
+        }
+    }
     Ok(())
 }
 
-async fn compare_command(_args: CompareArgs, _format: String) -> Result<()> {
+async fn compare_command(args: CompareArgs, format: String) -> Result<()> {
+    let machine = is_machine_format(&format);
+    print_header(
+        machine,
+        format!(
+            "🔍 CKB Compare - {} → {}",
+            args.snapshot1, args.snapshot2
+        ),
+    );
+
+    // This command previously ignored its arguments and returned Ok(())
+    // — exit 0 with zero bytes of output, even for snapshot IDs that do
+    // not exist. Snapshots are looked up in the same store scans write
+    // to; a missing snapshot is a hard error, never a silent success.
+    let engine = CkbEngine::new()?;
+    let before = engine
+        .load_snapshot(&args.snapshot1)
+        .await?
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Snapshot not found: {} (looked in ./ckb_data under the current directory; \
+                 list stored snapshots with `ckb snapshots <path>`)",
+                args.snapshot1
+            )
+        })?;
+    let after = engine
+        .load_snapshot(&args.snapshot2)
+        .await?
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Snapshot not found: {} (looked in ./ckb_data under the current directory; \
+                 list stored snapshots with `ckb snapshots <path>`)",
+                args.snapshot2
+            )
+        })?;
+
+    let delta = engine.compare_snapshots(&before, &after)?;
+
+    match format.as_str() {
+        "json" => {
+            let output = json!({
+                "snapshot_before": args.snapshot1,
+                "snapshot_after": args.snapshot2,
+                "delta": delta,
+            });
+            println!("{}", to_string_pretty(&output)?);
+        }
+        _ => display_snapshot_delta(&delta),
+    }
+
     Ok(())
 }
 
@@ -1198,21 +1274,92 @@ fn generate_suggestions(report: &ScanReport, count: usize, _focus: Option<String
     Ok(suggestions)
 }
 
-#[allow(dead_code)]
-fn display_snapshot_diff(_diff: &SnapshotDiff) {
-    println!("Snapshot comparison: (not yet implemented)");
-}
-
-#[allow(dead_code)]
 fn format_change(change: i64) -> String {
     if change > 0 { format!("+{}", change) }
     else if change < 0 { format!("{}", change) }
     else { "0".to_string() }
 }
 
-#[allow(dead_code)]
-#[derive(Debug)]
-struct SnapshotDiff {}
+fn signed_delta(before: usize, after: usize) -> String {
+    format_change(after as i64 - before as i64)
+}
+
+/// Human rendering of a snapshot delta. The JSON form (`--format json`)
+/// carries the full added/removed lists; here the lists are capped so a
+/// large refactor doesn't flood the terminal.
+fn display_snapshot_delta(delta: &ckb_core::SnapshotDelta) {
+    const CAP: usize = 20;
+
+    let mut table = Table::new();
+    table.set_content_arrangement(ContentArrangement::Dynamic);
+    table.set_header(vec![
+        Cell::new("Metric").add_attribute(Attribute::Bold),
+        Cell::new("Before").add_attribute(Attribute::Bold),
+        Cell::new("After").add_attribute(Attribute::Bold),
+        Cell::new("Delta").add_attribute(Attribute::Bold),
+    ]);
+    for (label, before, after) in [
+        ("Files", delta.files_before, delta.files_after),
+        ("Nodes", delta.nodes_before, delta.nodes_after),
+        ("Edges", delta.edges_before, delta.edges_after),
+        ("Violations", delta.violations_before, delta.violations_after),
+    ] {
+        table.add_row(vec![
+            Cell::new(label),
+            Cell::new(before),
+            Cell::new(after),
+            Cell::new(signed_delta(before, after)),
+        ]);
+    }
+    println!("{table}");
+
+    fn print_list(title: &str, items: &[String]) {
+        if items.is_empty() {
+            return;
+        }
+        println!("\n{title} ({})", items.len());
+        for item in items.iter().take(CAP) {
+            println!("  • {item}");
+        }
+        if items.len() > CAP {
+            println!("  … and {} more (use --format json for the full list)", items.len() - CAP);
+        }
+    }
+
+    print_list("📄 Files added", &delta.files_added);
+    print_list("📄 Files removed", &delta.files_removed);
+    print_list("🧩 Nodes added", &delta.nodes_added);
+    print_list("🧩 Nodes removed", &delta.nodes_removed);
+
+    if !delta.edges_added.is_empty() {
+        println!("\n🔗 Edges added ({})", delta.edges_added.len());
+        for edge in delta.edges_added.iter().take(CAP) {
+            println!("  • {} → {} ({})", edge.from, edge.to, edge.kind);
+        }
+    }
+    if !delta.edges_removed.is_empty() {
+        println!("\n🔗 Edges removed ({})", delta.edges_removed.len());
+        for edge in delta.edges_removed.iter().take(CAP) {
+            println!("  • {} → {} ({})", edge.from, edge.to, edge.kind);
+        }
+    }
+
+    if !delta.violations_resolved.is_empty() {
+        println!("\n✅ Violations resolved ({})", delta.violations_resolved.len());
+        for v in &delta.violations_resolved {
+            println!("  • [{}] {} → {}: {}", v.kind, v.from, v.to, v.message);
+        }
+    }
+    if !delta.violations_introduced.is_empty() {
+        println!("\n❌ Violations introduced ({})", delta.violations_introduced.len());
+        for v in &delta.violations_introduced {
+            println!("  • [{}] {} → {}: {}", v.kind, v.from, v.to, v.message);
+        }
+    }
+    if delta.violations_resolved.is_empty() && delta.violations_introduced.is_empty() {
+        println!("\n✅ No violation changes between snapshots.");
+    }
+}
 
 #[allow(dead_code)]
 fn display_custom_violations(violations: &[DriftViolation]) {
@@ -1310,6 +1457,143 @@ mod cli_regression_tests {
         let a = bare_report("11111111-1111-1111-1111-111111111111", 12.5);
         let b = bare_report("22222222-2222-2222-2222-222222222222", 987.25);
         assert_eq!(report_fingerprint(&a), report_fingerprint(&b));
+    }
+
+    fn write_source(root: &std::path::Path, rel: &str, content: &str) {
+        let path = root.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, content).unwrap();
+    }
+
+    fn temp_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "ckb-cli-test-{tag}-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// The a↔b cycle half of the compare/rules fixture pair. `cycle`
+    /// toggles b.ts importing a.ts (the violation) vs. being
+    /// self-contained (the fixed version).
+    fn write_cycle_project(root: &std::path::Path, cycle: bool) {
+        write_source(root, "src/core/util.ts",
+            "export function formatId(prefix: string, n: number): string { return prefix + \"-\" + n; }\n");
+        write_source(root, "src/core/a.ts",
+            "import { stepB } from \"./b\";\nexport function stepA(): string { return stepB(); }\n");
+        if cycle {
+            write_source(root, "src/core/b.ts",
+                "import { stepA } from \"./a\";\nexport function stepB(): string { return stepA(); }\n");
+        } else {
+            write_source(root, "src/core/b.ts",
+                "export function stepB(): string { return \"b\"; }\n");
+        }
+        write_source(root, "src/db/store.ts",
+            "import { formatId } from \"../core/util\";\nexport function readAll(): string { return formatId(\"rec\", 1); }\n");
+        write_source(root, "src/ui/panel.ts",
+            "import { readAll } from \"../db/store\";\nimport { formatId } from \"../core/util\";\nexport function renderPanel(): string { return formatId(\"panel\", readAll().length); }\n");
+    }
+
+    /// `ckb compare` used to be an empty stub: exit 0, zero bytes out,
+    /// even for snapshot IDs that don't exist. This exercises the exact
+    /// engine calls the fixed command makes (store → load → compare)
+    /// over two real scans of two different roots — the root-relative
+    /// identity normalization is what lets fixture-a vs fixture-b diff
+    /// as one project instead of "everything changed".
+    #[tokio::test]
+    async fn compare_reports_the_real_delta_between_two_scans() {
+        let root_a = temp_dir("cmp-a");
+        let root_b = temp_dir("cmp-b");
+        let storage = temp_dir("cmp-store");
+        write_cycle_project(&root_a, true);
+        write_cycle_project(&root_b, false);
+        write_source(&root_b, "src/service/report.ts",
+            "import { formatId } from \"../core/util\";\nexport function buildReport(): string { return formatId(\"report\", 1); }\n");
+
+        let engine = CkbEngine::new_with_storage_path(&storage.to_string_lossy()).unwrap();
+        let report_a = engine.scan_codebase(&root_a.to_string_lossy()).await.unwrap();
+        // The engine accumulates into one in-memory graph across scans
+        // (long-running hosts reset between projects); a fresh CLI
+        // process per scan is the equivalent, so reset here.
+        engine.reset_architecture_graph().await;
+        let report_b = engine.scan_codebase(&root_b.to_string_lossy()).await.unwrap();
+        assert_eq!(report_a.drift.len(), 1, "fixture A has exactly the cycle violation");
+
+        let graph_a = engine.load_snapshot(&report_a.snapshot_id).await.unwrap()
+            .expect("scan A must store a loadable snapshot");
+        let graph_b = engine.load_snapshot(&report_b.snapshot_id).await.unwrap()
+            .expect("scan B must store a loadable snapshot");
+        assert!(engine.load_snapshot("00000000-0000-0000-0000-000000000000").await.unwrap().is_none(),
+            "unknown snapshot IDs must come back as None so the CLI can fail loudly");
+
+        let delta = engine.compare_snapshots(&graph_a, &graph_b).unwrap();
+        assert_eq!((delta.files_before, delta.files_after), (5, 6));
+        assert_eq!(delta.files_added, vec!["service/report.ts".to_string()]);
+        assert!(delta.files_removed.is_empty());
+        assert_eq!(delta.nodes_after - delta.nodes_before, 2, "new file node + its symbol node");
+        assert!(delta.edges_removed.iter().any(|e| e.kind == "Import"
+            && e.from == "core/b.ts::file" && e.to == "core/a.ts::file"),
+            "the removed b→a import edge must be itemised: {:?}", delta.edges_removed);
+        assert!(delta.edges_added.iter().any(|e| e.kind == "Import"
+            && e.from == "service/report.ts::file" && e.to == "core/util.ts::file"),
+            "the added report→util import edge must be itemised: {:?}", delta.edges_added);
+        assert_eq!((delta.violations_before, delta.violations_after), (1, 0));
+        assert_eq!(delta.violations_resolved.len(), 1);
+        assert_eq!(delta.violations_resolved[0].kind, "CircularDependency");
+        assert!(delta.violations_introduced.is_empty());
+    }
+
+    /// `.ckb/rules.json` used to be dead configuration: `ckb suggest`
+    /// told users to add it, nothing loaded it, and scans silently
+    /// enforced nothing. A valid file must now produce a
+    /// ForbiddenDependency for the scoped import — and only that import
+    /// (service→db stays legal, no file = no enforcement, malformed
+    /// file = loud failure).
+    #[tokio::test]
+    async fn project_rules_are_enforced_by_scan() {
+        let storage = temp_dir("rules-store");
+        let engine = CkbEngine::new_with_storage_path(&storage.to_string_lossy()).unwrap();
+
+        // No rules file: only the cycle is reported.
+        let root_plain = temp_dir("rules-plain");
+        write_cycle_project(&root_plain, true);
+        let plain = engine.scan_codebase(&root_plain.to_string_lossy()).await.unwrap();
+        assert_eq!(plain.drift.len(), 1);
+        assert!(plain.drift.iter().all(|v| v.kind != ckb_core::ViolationKind::ForbiddenDependency));
+
+        // With the rules file: the ui→db import is flagged, scoped by
+        // `from` so nothing else changes.
+        let root_ruled = temp_dir("rules-ruled");
+        write_cycle_project(&root_ruled, true);
+        write_source(&root_ruled, ".ckb/rules.json", r#"[
+          {
+            "name": "ui-must-not-import-db",
+            "description": "UI must go through the service layer",
+            "pattern": "src/db/",
+            "from": "src/ui/",
+            "to": "src/db/",
+            "severity": "Error"
+          }
+        ]"#);
+        engine.reset_architecture_graph().await;
+        let ruled = engine.scan_codebase(&root_ruled.to_string_lossy()).await.unwrap();
+        assert_eq!(ruled.drift.len(), 2, "cycle + the rules violation: {:?}", ruled.drift);
+        let violation = ruled.drift.iter()
+            .find(|v| v.kind == ckb_core::ViolationKind::ForbiddenDependency)
+            .expect("ui→db import must be flagged");
+        assert_eq!(violation.boundary, "ui-must-not-import-db");
+        assert_eq!(violation.severity, Severity::Error);
+        assert!(violation.from.0.ends_with("src/ui/panel.ts::file"), "from: {}", violation.from.0);
+        assert!(violation.to.0.ends_with("src/db/store.ts::file"), "to: {}", violation.to.0);
+
+        // A malformed rules file must fail the scan, not silently pass.
+        let root_bad = temp_dir("rules-bad");
+        write_cycle_project(&root_bad, true);
+        write_source(&root_bad, ".ckb/rules.json", "{ not json");
+        engine.reset_architecture_graph().await;
+        assert!(engine.scan_codebase(&root_bad.to_string_lossy()).await.is_err(),
+            "malformed .ckb/rules.json must fail loudly");
     }
 
     /// …but a real content change (a new violation) must change it.
