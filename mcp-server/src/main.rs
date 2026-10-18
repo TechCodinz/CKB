@@ -213,6 +213,18 @@ async fn require_api_key(
 async fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let stdio_mode = args.iter().any(|a| a == "--stdio");
+    // Every shipped MCP client config (integrations/claude-code,
+    // integrations/cursor, integrations/windsurf, integrations/antigravity)
+    // launches this binary with `--port <n>` / `--cors` arguments. Those
+    // flags were silently ignored for years — the server happened to work
+    // because its PORT-env default is also 3000 and CORS was env-driven.
+    // Honour them explicitly: --port wins over the PORT env var, and
+    // --cors is equivalent to CKB_ALLOWED_ORIGIN=* (with the same warning).
+    let arg_port: Option<u16> = args
+        .windows(2)
+        .find(|w| w[0] == "--port")
+        .and_then(|w| w[1].parse().ok());
+    let cors_flag = args.iter().any(|a| a == "--cors");
 
     // In --stdio mode stdout *is* the JSON-RPC transport: anything else
     // written there (startup banner, tracing logs) corrupts the stream
@@ -257,16 +269,20 @@ async fn main() -> anyhow::Result<()> {
 
     // CORS: only wide-open if the operator explicitly opts in. Otherwise restrict
     // to CKB_ALLOWED_ORIGIN (or same-origin/no-CORS for local tooling).
-    let cors = match std::env::var("CKB_ALLOWED_ORIGIN") {
-        Ok(origin) if origin == "*" => {
-            warn!("CKB_ALLOWED_ORIGIN=* — CORS is wide open. Only do this for local/dev use.");
+    // An explicit CKB_ALLOWED_ORIGIN wins; the --cors flag is the fallback.
+    let allowed_origin = std::env::var("CKB_ALLOWED_ORIGIN")
+        .ok()
+        .or_else(|| cors_flag.then(|| "*".to_string()));
+    let cors = match allowed_origin.as_deref() {
+        Some("*") => {
+            warn!("CORS is wide open (CKB_ALLOWED_ORIGIN=* or --cors). Only do this for local/dev use.");
             CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any)
         }
-        Ok(origin) => {
+        Some(origin) => {
             let origin: axum::http::HeaderValue = origin.parse()?;
             CorsLayer::new().allow_origin(origin).allow_methods(Any).allow_headers(Any)
         }
-        Err(_) => {
+        None => {
             warn!("CKB_ALLOWED_ORIGIN not set — defaulting to no cross-origin browser access.");
             CorsLayer::new()
         }
@@ -304,9 +320,8 @@ async fn main() -> anyhow::Result<()> {
         .layer(cors)
         .with_state(state);
 
-    let port: u16 = std::env::var("PORT")
-        .ok()
-        .and_then(|p| p.parse().ok())
+    let port: u16 = arg_port
+        .or_else(|| std::env::var("PORT").ok().and_then(|p| p.parse().ok()))
         .unwrap_or(3000);
     // Default to loopback-only. Operators who need LAN/public exposure (e.g. inside a
     // container behind their own reverse proxy) can opt in with CKB_BIND_ALL=1, but the
