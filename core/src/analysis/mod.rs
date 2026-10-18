@@ -299,6 +299,51 @@ impl ArchitectureAnalyzer {
             doc.push('\n');
         }
 
+        // Evidence from the live graph. Guidelines that never mention what
+        // the scan actually found (the current violations, the real
+        // high-fan-in files) are indistinguishable from a static template,
+        // so anchor the document in the graph's own facts — the same
+        // evidence the CLI's `suggest` command reports.
+        doc.push_str("## Current Violations (detected in this graph)\n\n");
+        let violations = self
+            .detect_patterns(graph)
+            .and_then(|patterns| self.detect_drift(graph, &patterns))
+            .unwrap_or_default();
+        if violations.is_empty() {
+            doc.push_str("- None detected in the current graph.\n");
+        } else {
+            for v in &violations {
+                doc.push_str(&format!(
+                    "- **{:?}** ({:?}, boundary `{}`): `{}` -> `{}` — {}\n",
+                    v.kind, v.severity, v.boundary, v.from.0, v.to.0, v.message
+                ));
+                if let Some(fix) = &v.suggested_fix {
+                    doc.push_str(&format!("  Suggested fix: {}\n", fix));
+                }
+            }
+        }
+        doc.push('\n');
+
+        let mut fan_in: Vec<(&Node, usize)> = graph
+            .nodes()
+            .iter()
+            .filter(|n| n.kind == NodeKind::File)
+            .map(|n| (*n, graph.incoming_degree(&n.id).unwrap_or(0)))
+            .filter(|(_, degree)| *degree >= 2)
+            .collect();
+        fan_in.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.path.cmp(&b.0.path)));
+        if !fan_in.is_empty() {
+            doc.push_str("## High Fan-In Files (treat as stable contracts)\n\n");
+            for (node, degree) in fan_in.iter().take(5) {
+                doc.push_str(&format!(
+                    "- `{}` — {} direct dependents. Changing its public surface has the widest blast radius in this codebase; run impact analysis first.\n",
+                    node.path.to_string_lossy(),
+                    degree
+                ));
+            }
+            doc.push('\n');
+        }
+
         doc.push_str("## Guardrails\n");
         doc.push_str("1. Maintain separation of concerns between core logic, backend API, and presentation layers.\n");
         doc.push_str("2. Do not introduce circular dependencies across modules.\n");
