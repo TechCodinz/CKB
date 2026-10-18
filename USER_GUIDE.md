@@ -157,7 +157,7 @@ curl -X GET https://ckb-backend-api.onrender.com/api/v1/scans/latest \
 
 ## 5. CI/CD Pipeline Integration (GitHub Actions)
 
-Add CKB architectural validation to your GitHub repository to catch circular dependencies, forbidden imports, and architectural drift before pull requests are merged.
+Add CKB architectural validation to your GitHub repository to catch circular dependencies and architectural drift before pull requests are merged — plus forbidden imports wherever your project declares them as architecture rules in `.ckb/rules.json`.
 
 Create `.github/workflows/ckb-check.yml`:
 

@@ -21,7 +21,7 @@
 | **Freshness + Memory Delta** | Detects new commits and uncommitted worktree changes, then reports exact graph changes after refresh |
 | **Causal reasoning** | Explains proven architecture paths and transitive change/failure cones without inventing runtime execution |
 | **Code DNA** | Explainable graph/runtime-derived health and structural-risk metrics |
-| **Drift detection** | Finds forbidden deps, circular deps, god objects, layer violations |
+| **Drift detection** | Finds circular deps and god objects automatically; forbidden deps and layer violations are enforced against architecture rules you configure in `.ckb/rules.json` (`ckb suggest` walks you through setting them up) |
 | **Impact analysis** | Shows what can be affected when you change a file or function |
 | **Runtime intelligence** | Separates static AST evidence from observed OpenTelemetry execution paths |
 | **MCP Server** | Exposes architecture data and durable memory to MCP-compatible AI assistants |
