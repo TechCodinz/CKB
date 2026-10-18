@@ -245,21 +245,35 @@ impl ArchitectureAnalyzer {
         Ok(boundaries)
     }
 
-    pub fn slice_context_for_prompt(&self, graph: &DependencyGraph, file: &str, _depth: usize) -> Result<String> {
-        let node_id = NodeId(format!("{}::file", file));
-        let callers = graph.get_callers(&node_id);
-        let deps = graph.get_dependencies(&node_id)?;
+    pub fn slice_context_for_prompt(&self, graph: &DependencyGraph, file: &str, depth: usize) -> Result<String> {
+        // Node IDs in a scanned graph embed the path exactly as the scanner
+        // saw it (frequently absolute), while callers of this tool pass the
+        // natural workspace-relative path ("src/core/util.ts"). An exact
+        // `"{file}::file"` lookup therefore missed every real node and the
+        // tool returned an empty context for the files that matter most.
+        // Resolve like the impact path does: exact ID first, then a File
+        // node whose stored path equals or ends with the requested path.
+        let node_id = resolve_file_node(graph, file);
+        let depth = depth.clamp(1, 5);
+
+        let (callers, deps) = match &node_id {
+            Some(id) => (
+                collect_neighbors(graph, id, depth, true),
+                collect_neighbors(graph, id, depth, false),
+            ),
+            None => (Vec::new(), Vec::new()),
+        };
 
         let mut out = String::new();
         out.push_str(&format!("<architectural_context target_file=\"{}\">\n", file));
         out.push_str("  <incoming_dependents>\n");
-        for caller in callers {
-            out.push_str(&format!("    <dependent id=\"{}\"/>\n", caller.0));
+        for (caller, d) in callers {
+            out.push_str(&format!("    <dependent id=\"{}\" depth=\"{}\"/>\n", caller.0, d));
         }
         out.push_str("  </incoming_dependents>\n");
         out.push_str("  <outgoing_dependencies>\n");
-        for dep in deps {
-            out.push_str(&format!("    <dependency id=\"{}\"/>\n", dep.0));
+        for (dep, d) in deps {
+            out.push_str(&format!("    <dependency id=\"{}\" depth=\"{}\"/>\n", dep.0, d));
         }
         out.push_str("  </outgoing_dependencies>\n");
         out.push_str("</architectural_context>");
@@ -464,6 +478,65 @@ fn relative_id(raw: &str, root: &std::path::Path) -> String {
         },
         None => raw.to_string(),
     }
+}
+
+/// Resolve a caller-supplied file reference to the File node the scanner
+/// stored. Exact `"{file}::file"` ID match first (the historical behaviour
+/// for callers passing scanner-shaped paths), then a path match: the
+/// stored path equals the request or ends with `/{request}` — the same
+/// normalization `find_affected_nodes` applies for impact analysis.
+fn resolve_file_node(graph: &DependencyGraph, file: &str) -> Option<NodeId> {
+    let exact = NodeId(format!("{}::file", file));
+    if graph.nodes().iter().any(|n| n.id == exact) {
+        return Some(exact);
+    }
+    let normalized = file.replace('\\', "/");
+    graph
+        .nodes()
+        .iter()
+        .filter(|n| n.kind == NodeKind::File)
+        .find(|n| {
+            let path = n.path.to_string_lossy().replace('\\', "/");
+            path == normalized || path.ends_with(&format!("/{}", normalized))
+        })
+        .map(|n| n.id.clone())
+}
+
+/// Breadth-first neighbourhood of `start` up to `depth` hops, in either
+/// edge direction, returning each reached node with its hop distance.
+/// Order is deterministic (BFS level order, graph iteration order within
+/// a level) and each node appears once, at its minimum distance.
+fn collect_neighbors(
+    graph: &DependencyGraph,
+    start: &NodeId,
+    depth: usize,
+    incoming: bool,
+) -> Vec<(NodeId, usize)> {
+    let mut out: Vec<(NodeId, usize)> = Vec::new();
+    let mut seen: std::collections::HashSet<NodeId> = std::collections::HashSet::new();
+    seen.insert(start.clone());
+    let mut frontier: Vec<NodeId> = vec![start.clone()];
+    for level in 1..=depth {
+        let mut next: Vec<NodeId> = Vec::new();
+        for node in &frontier {
+            let neighbors = if incoming {
+                graph.get_callers(node)
+            } else {
+                graph.get_dependencies(node).unwrap_or_default()
+            };
+            for neighbor in neighbors {
+                if seen.insert(neighbor.clone()) {
+                    out.push((neighbor.clone(), level));
+                    next.push(neighbor);
+                }
+            }
+        }
+        frontier = next;
+        if frontier.is_empty() {
+            break;
+        }
+    }
+    out
 }
 
 /// Root-relative paths of all File nodes in the graph.
