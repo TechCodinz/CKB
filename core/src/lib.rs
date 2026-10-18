@@ -29,6 +29,20 @@ pub use federation::*;
 use std::sync::Arc;
 use rayon::ThreadPoolBuilder;
 
+/// Resolve a caller-supplied file path to the node ID runtime telemetry
+/// is stored under. Scanned node IDs embed the path exactly as the scanner
+/// saw it (usually absolute), while callers pass natural workspace-relative
+/// paths ("src/core/util.ts") — an exact `"{file}::file"` lookup therefore
+/// recorded telemetry on an orphan ID no real node has, and reads through
+/// the other path form came back empty. Resolve through the graph's File
+/// nodes (exact ID, then path-suffix match), the same resolution the
+/// prompt-context path uses; paths that match no scanned node keep the
+/// historical exact ID so pre-scan telemetry keeps working.
+fn resolve_telemetry_node(graph: &graph::DependencyGraph, file: &str) -> NodeId {
+    analysis::resolve_file_node(graph, file)
+        .unwrap_or_else(|| NodeId(format!("{}::file", file)))
+}
+
 /// CKB Engine - Main entry point for all functionality
 pub struct CkbEngine {
     parser: Arc<parser::LanguageParser>,
@@ -400,16 +414,16 @@ impl CkbEngine {
 
     /// Record live dynamic runtime trace execution telemetry for a node
     pub async fn record_runtime_telemetry(&self, file: &str, executions: u64, latency_ms: f32) -> Result<(), anyhow::Error> {
-        let node_id = NodeId(format!("{}::file", file));
         let mut graph = self.graph.write().await;
+        let node_id = resolve_telemetry_node(&graph, file);
         graph.record_runtime_trace(node_id, executions, latency_ms);
         Ok(())
     }
 
     /// Get live dynamic runtime metrics for a node
     pub async fn get_runtime_telemetry(&self, file: &str) -> Result<Option<RuntimeMetrics>, anyhow::Error> {
-        let node_id = NodeId(format!("{}::file", file));
         let graph = self.graph.read().await;
+        let node_id = resolve_telemetry_node(&graph, file);
         Ok(graph.get_runtime_metrics(&node_id).cloned())
     }
 

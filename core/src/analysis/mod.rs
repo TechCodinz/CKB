@@ -369,7 +369,15 @@ impl ArchitectureAnalyzer {
     }
 
     pub fn predict_failure_probability(&self, graph: &DependencyGraph, file: &str) -> Result<f32> {
-        let file_node = NodeId(format!("{}::file", file));
+        // Resolve the caller's path to the stored File node (exact ID,
+        // then path-suffix match) like `slice_context_for_prompt` does:
+        // scanned IDs embed the path as scanned (usually absolute), so an
+        // exact `"{file}::file"` lookup missed every real node and this
+        // silently scored 0.0 for natural relative paths. A file that is
+        // not in the graph at all keeps the historical 0.0.
+        let Some(file_node) = resolve_file_node(graph, file) else {
+            return Ok(0.0);
+        };
         let inc = graph.incoming_degree(&file_node)? as f32;
         let out = graph.outgoing_degree(&file_node)? as f32;
         let structural = ((inc * 2.0 + out) / 30.0).min(0.65);
@@ -530,7 +538,7 @@ fn relative_id(raw: &str, root: &std::path::Path) -> String {
 /// for callers passing scanner-shaped paths), then a path match: the
 /// stored path equals the request or ends with `/{request}` — the same
 /// normalization `find_affected_nodes` applies for impact analysis.
-fn resolve_file_node(graph: &DependencyGraph, file: &str) -> Option<NodeId> {
+pub(crate) fn resolve_file_node(graph: &DependencyGraph, file: &str) -> Option<NodeId> {
     let exact = NodeId(format!("{}::file", file));
     if graph.nodes().iter().any(|n| n.id == exact) {
         return Some(exact);
