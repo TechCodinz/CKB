@@ -43,8 +43,7 @@ impl RustParser {
             .to_string();
         if source_path.is_empty() { return None; }
         let symbols = body
-            .replace('{', "")
-            .replace('}', "")
+            .replace(['{', '}'], "")
             .split("::")
             .map(|s| s.trim().trim_end_matches(',').to_string())
             .filter(|s| !s.is_empty())
@@ -276,7 +275,7 @@ mod tests {
         let analysis = parser.parse("hello.rs", "fn hello() {}").unwrap();
         assert!(analysis.nodes.iter().any(|n| n.id.0 == "hello.rs::hello" && n.kind == NodeKind::Function));
         let n = analysis.nodes.iter().find(|n| n.id.0 == "hello.rs::hello").unwrap();
-        assert!(n.metadata.get("end_line").is_some());
+        assert!(n.metadata.contains_key("end_line"));
     }
 
     #[test]

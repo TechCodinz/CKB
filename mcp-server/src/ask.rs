@@ -47,7 +47,7 @@ fn build_context(question: &str, nodes: &[Node], violations: &[DriftViolation]) 
         })
         .filter(|(score, _)| *score > 0)
         .collect();
-    scored_nodes.sort_by(|a, b| b.0.cmp(&a.0));
+    scored_nodes.sort_by_key(|a| std::cmp::Reverse(a.0));
     scored_nodes.truncate(MAX_CONTEXT_NODES);
 
     let mut scored_violations: Vec<(usize, &DriftViolation)> = violations.iter()
@@ -57,7 +57,7 @@ fn build_context(question: &str, nodes: &[Node], violations: &[DriftViolation]) 
         })
         .filter(|(score, _)| *score > 0)
         .collect();
-    scored_violations.sort_by(|a, b| b.0.cmp(&a.0));
+    scored_violations.sort_by_key(|a| std::cmp::Reverse(a.0));
     scored_violations.truncate(MAX_CONTEXT_VIOLATIONS);
 
     let mut context = String::new();

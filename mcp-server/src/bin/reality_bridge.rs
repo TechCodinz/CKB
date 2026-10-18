@@ -350,7 +350,7 @@ async fn current_snapshot_id(state: &AppState) -> Option<String> {
         return Some(report.snapshot_id.clone());
     }
     let mut snapshots = state.engine.architecture_snapshot_metadata().await.ok()?;
-    snapshots.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+    snapshots.sort_by_key(|a| a.timestamp);
     snapshots.last().map(|snapshot| snapshot.id.clone())
 }
 
@@ -714,7 +714,7 @@ async fn snapshots(
         .architecture_snapshot_metadata()
         .await
         .map_err(internal)?;
-    snapshots.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+    snapshots.sort_by_key(|a| a.timestamp);
 
     Ok(Json(json!({
         "snapshots": snapshots,

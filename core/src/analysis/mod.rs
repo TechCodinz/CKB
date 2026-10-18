@@ -194,7 +194,7 @@ impl ArchitectureAnalyzer {
             if !b.forbidden_dependencies.is_empty() {
                 doc.push_str(&format!("- **Forbidden dependency tokens**: {}\n", b.forbidden_dependencies.join(", ")));
             }
-            doc.push_str("\n");
+            doc.push('\n');
         }
 
         doc.push_str("## Guardrails\n");
@@ -277,6 +277,12 @@ impl ArchitectureAnalyzer {
             }
         }
         Ok(violations)
+    }
+}
+
+impl Default for ArchitectureAnalyzer {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -10,18 +10,17 @@ use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
+#[derive(Default)]
 pub enum SupportState {
     Supported,
     Unsupported,
     Preview,
     Beta,
     Limited,
+    #[default]
     Unknown,
 }
 
-impl Default for SupportState {
-    fn default() -> Self { Self::Unknown }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]

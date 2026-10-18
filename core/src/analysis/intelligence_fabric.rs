@@ -110,7 +110,9 @@ impl Default for ArchitectureConstitution {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[derive(Default)]
 pub enum ArchitectureTaskKind {
+    #[default]
     Understand,
     Explain,
     Change,
@@ -121,9 +123,6 @@ pub enum ArchitectureTaskKind {
     Security,
 }
 
-impl Default for ArchitectureTaskKind {
-    fn default() -> Self { Self::Understand }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -352,9 +351,7 @@ pub struct EvaluationObservation {
 impl EvaluationObservation {
     pub fn observed_score(&self) -> Option<f32> {
         let mut values = Vec::new();
-        for value in [self.compile_passed, self.tests_passed, self.contracts_passed, self.security_checks_passed] {
-            if let Some(value) = value { values.push(if value { 1.0 } else { 0.0 }); }
-        }
+        for value in [self.compile_passed, self.tests_passed, self.contracts_passed, self.security_checks_passed].into_iter().flatten() { values.push(if value { 1.0 } else { 0.0 }); }
         if let Some(regressed) = self.runtime_regression_observed { values.push(if regressed { 0.0 } else { 1.0 }); }
         if let Some(rollback) = self.rollback_required { values.push(if rollback { 0.0 } else { 1.0 }); }
         if values.is_empty() { None } else { Some(values.iter().sum::<f32>() / values.len() as f32) }
@@ -491,8 +488,8 @@ mod tests {
     #[test]
     fn provider_identity_does_not_change_compiled_evidence() {
         let memory = memory_with_evidence("static");
-        let mut a = ModelCapabilityProfile::default(); a.provider = Some("vendor-a".into()); a.model = Some("future-1".into());
-        let mut b = ModelCapabilityProfile::default(); b.provider = Some("vendor-b".into()); b.model = Some("future-99".into());
+        let a = ModelCapabilityProfile { provider: Some("vendor-a".into()), model: Some("future-1".into()), ..Default::default() };
+        let b = ModelCapabilityProfile { provider: Some("vendor-b".into()), model: Some("future-99".into()), ..Default::default() };
         let ca = ContextCompiler::compile(&memory, ArchitectureTaskKind::Change, a, ContextBudget::default());
         let cb = ContextCompiler::compile(&memory, ArchitectureTaskKind::Change, b, ContextBudget::default());
         assert_eq!(ca.sections.iter().map(|s| &s.content).collect::<Vec<_>>(), cb.sections.iter().map(|s| &s.content).collect::<Vec<_>>());

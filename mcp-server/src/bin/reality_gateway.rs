@@ -524,7 +524,7 @@ async fn store_trace_batch(state: &GatewayState, project_key: &str, spans: Vec<O
             });
         }
 
-        traces.sort_by(|a, b| a.last_seen_unix_nano.cmp(&b.last_seen_unix_nano));
+        traces.sort_by_key(|a| a.last_seen_unix_nano);
         if traces.len() > state.max_traces {
             let excess = traces.len() - state.max_traces;
             traces.drain(0..excess);

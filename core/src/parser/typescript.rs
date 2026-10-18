@@ -160,7 +160,6 @@ impl TypeScriptParser {
         &self,
         path: &str,
         node: Node,
-        _source: &str,
         kind: NodeKind,
         qualified_name: String,
         display_name: String,
@@ -194,12 +193,12 @@ impl TypeScriptParser {
         match node.kind() {
             "function_declaration" => {
                 if let Some(name) = self.get_node_name(node, source) {
-                    self.push_decl_node(path, node, source, NodeKind::Function, name.clone(), name, nodes);
+                    self.push_decl_node(path, node, NodeKind::Function, name.clone(), name, nodes);
                 }
             }
             "class_declaration" => {
                 if let Some(name) = self.get_node_name(node, source) {
-                    self.push_decl_node(path, node, source, NodeKind::Class, name.clone(), name.clone(), nodes);
+                    self.push_decl_node(path, node, NodeKind::Class, name.clone(), name.clone(), nodes);
                     class_for_children = Some(name.clone());
 
                     let mut cursor = node.walk();
@@ -222,7 +221,7 @@ impl TypeScriptParser {
             }
             "interface_declaration" => {
                 if let Some(name) = self.get_node_name(node, source) {
-                    self.push_decl_node(path, node, source, NodeKind::Interface, name.clone(), name, nodes);
+                    self.push_decl_node(path, node, NodeKind::Interface, name.clone(), name, nodes);
                 }
             }
             "method_definition" | "method_signature" => {
@@ -230,17 +229,17 @@ impl TypeScriptParser {
                     let qualified = current_class
                         .map(|c| format!("{}.{}", c, method))
                         .unwrap_or_else(|| method.clone());
-                    self.push_decl_node(path, node, source, NodeKind::Method, qualified, method, nodes);
+                    self.push_decl_node(path, node, NodeKind::Method, qualified, method, nodes);
                 }
             }
             "type_alias_declaration" => {
                 if let Some(name) = self.get_node_name(node, source) {
-                    self.push_decl_node(path, node, source, NodeKind::Type, name.clone(), name, nodes);
+                    self.push_decl_node(path, node, NodeKind::Type, name.clone(), name, nodes);
                 }
             }
             "enum_declaration" => {
                 if let Some(name) = self.get_node_name(node, source) {
-                    self.push_decl_node(path, node, source, NodeKind::Enum, name.clone(), name, nodes);
+                    self.push_decl_node(path, node, NodeKind::Enum, name.clone(), name, nodes);
                 }
             }
             _ => {}
@@ -425,7 +424,7 @@ function verify() { return true; }
         let analysis = parser.parse("auth.ts", source).unwrap();
         let method = analysis.nodes.iter().find(|n| n.id.0 == "auth.ts::AuthService.login").expect("method node");
         assert_eq!(method.kind, NodeKind::Method);
-        assert!(method.metadata.get("end_line").is_some());
+        assert!(method.metadata.contains_key("end_line"));
         assert!(analysis.calls.iter().any(|c| c.caller_name == "AuthService.login" && c.callee_name == "verify"));
     }
 

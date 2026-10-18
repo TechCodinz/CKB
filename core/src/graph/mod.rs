@@ -19,6 +19,13 @@ pub struct DependencyGraph {
     pending_imports: Vec<(String, Import)>,
 }
 
+/// Build an `Edge` with a fresh id — companion to
+/// `DependencyGraph::add_edge_once`, which takes the built edge
+/// rather than its fields as separate parameters.
+fn make_edge(from: NodeId, to: NodeId, kind: EdgeKind, weight: f32, metadata: HashMap<String, String>) -> Edge {
+    Edge { id: uuid::Uuid::new_v4(), from, to, kind, weight, metadata }
+}
+
 impl DependencyGraph {
     pub fn new() -> Self {
         Self {
@@ -98,7 +105,7 @@ impl DependencyGraph {
                     TypeRelationKind::Extends => EdgeKind::Extends,
                     TypeRelationKind::Implements => EdgeKind::Implements,
                 };
-                self.add_edge_once(*from_idx, *to_idx, from_id, to_id, edge_kind, 2.0, HashMap::new());
+                self.add_edge_once(*from_idx, *to_idx, make_edge(from_id, to_id, edge_kind, 2.0, HashMap::new()));
             }
         }
         Ok(())
@@ -112,21 +119,12 @@ impl DependencyGraph {
         idx
     }
 
-    fn add_edge_once(
-        &mut self,
-        from_idx: NodeIndex,
-        to_idx: NodeIndex,
-        from: NodeId,
-        to: NodeId,
-        kind: EdgeKind,
-        weight: f32,
-        metadata: HashMap<String, String>,
-    ) {
-        let duplicate = self.graph.edges_connecting(from_idx, to_idx).any(|e| e.weight().kind == kind);
+    fn add_edge_once(&mut self, from_idx: NodeIndex, to_idx: NodeIndex, edge: Edge) {
+        // Takes a fully-built Edge (see `make_edge`) instead of the
+        // edge's six fields as separate parameters.
+        let duplicate = self.graph.edges_connecting(from_idx, to_idx).any(|e| e.weight().kind == edge.kind);
         if duplicate { return; }
-        self.graph.add_edge(from_idx, to_idx, Edge {
-            id: uuid::Uuid::new_v4(), from, to, kind, weight, metadata,
-        });
+        self.graph.add_edge(from_idx, to_idx, edge);
     }
 
     fn normalize_lexical(path: &Path) -> String {
@@ -224,7 +222,7 @@ impl DependencyGraph {
                     let mut metadata = HashMap::new();
                     metadata.insert("import_source".into(), import.source.clone());
                     metadata.insert("resolution".into(), "semantic-path".into());
-                    self.add_edge_once(from_idx, to_idx, from_id.clone(), to_id, EdgeKind::Import, 1.0, metadata);
+                    self.add_edge_once(from_idx, to_idx, make_edge(from_id.clone(), to_id, EdgeKind::Import, 1.0, metadata));
                 }
             }
         }
@@ -248,7 +246,7 @@ impl DependencyGraph {
                     metadata.insert("resolution".into(), resolution.into());
                     metadata.insert("call_line".into(), call.line.to_string());
                     metadata.insert("call_column".into(), call.column.to_string());
-                    self.add_edge_once(caller_idx, callee_idx, caller_id.clone(), callee_id, EdgeKind::Calls, 1.5, metadata);
+                    self.add_edge_once(caller_idx, callee_idx, make_edge(caller_id.clone(), callee_id, EdgeKind::Calls, 1.5, metadata));
                 }
             }
         }
@@ -437,6 +435,12 @@ impl DependencyGraph {
     }
 }
 
+impl Default for DependencyGraph {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -470,13 +474,13 @@ mod tests {
         let first_index = graph.add_node(first);
         let second_index = graph.add_node(second);
 
-        graph.add_edge_once(first_index, second_index, first_id.clone(), second_id.clone(), EdgeKind::Calls, 1.0, HashMap::new());
-        graph.add_edge_once(second_index, first_index, second_id.clone(), first_id.clone(), EdgeKind::Calls, 1.0, HashMap::new());
+        graph.add_edge_once(first_index, second_index, make_edge(first_id.clone(), second_id.clone(), EdgeKind::Calls, 1.0, HashMap::new()));
+        graph.add_edge_once(second_index, first_index, make_edge(second_id.clone(), first_id.clone(), EdgeKind::Calls, 1.0, HashMap::new()));
         assert_eq!(graph.find_cycles().unwrap().len(), 1);
         assert!(graph.find_architectural_cycles().unwrap().is_empty());
 
-        graph.add_edge_once(first_index, second_index, first_id.clone(), second_id.clone(), EdgeKind::Import, 1.0, HashMap::new());
-        graph.add_edge_once(second_index, first_index, second_id, first_id, EdgeKind::Import, 1.0, HashMap::new());
+        graph.add_edge_once(first_index, second_index, make_edge(first_id.clone(), second_id.clone(), EdgeKind::Import, 1.0, HashMap::new()));
+        graph.add_edge_once(second_index, first_index, make_edge(second_id, first_id, EdgeKind::Import, 1.0, HashMap::new()));
         assert_eq!(graph.find_architectural_cycles().unwrap().len(), 1);
     }
 

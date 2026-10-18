@@ -106,7 +106,7 @@ fn extract_pyproject(engine: &mut DeepCausalityEngine, artifact: &RepositoryArti
 
 fn python_requirement_name(value: &str) -> Option<String> {
     let base = value.split(';').next()?.trim();
-    let stop = base.find(|character: char| matches!(character, '<' | '>' | '=' | '!' | '~' | '[' | ' ')).unwrap_or(base.len());
+    let stop = base.find(['<', '>', '=', '!', '~', '[', ' ']).unwrap_or(base.len());
     let name = base[..stop].trim();
     if name.is_empty() { None } else { Some(name.to_string()) }
 }

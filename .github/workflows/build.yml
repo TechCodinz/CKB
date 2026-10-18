@@ -26,8 +26,10 @@ jobs:
       - name: Run tests
         run: cargo test --locked --release -p ckb-core -p ckb-cli -p ckb-mcp-server
       - name: Clippy
+        # No continue-on-error: the workspace is clippy-clean under
+        # -D warnings (verified locally with this exact command), so a
+        # lint failure here is a real regression and must fail the job.
         run: cargo clippy --locked -p ckb-core -p ckb-cli -p ckb-mcp-server --all-targets -- -D warnings
-        continue-on-error: true
 
   wasm:
     runs-on: ubuntu-latest

@@ -31,7 +31,7 @@ fn enrich_graphql(engine: &mut DeepCausalityEngine, artifact: &RepositoryArtifac
         let Some((left, right)) = line.split_once(':') else { continue; };
         let field = left.trim().split('(').next().unwrap_or("");
         if field.is_empty() { continue; }
-        let type_token = right.trim().split_whitespace().next().unwrap_or("").trim_end_matches(',');
+        let type_token = right.split_whitespace().next().unwrap_or("").trim_end_matches(',');
         if type_token.is_empty() { continue; }
         let required = type_token.ends_with('!');
         let type_name = type_token.trim_end_matches('!').to_string();

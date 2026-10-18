@@ -198,7 +198,7 @@ async fn require_api_key(
 
     if let Some(expected) = &state.api_key {
         match extract_api_key(&headers) {
-            Some(key) if &key == expected.as_str() => {}
+            Some(key) if key == expected.as_str() => {}
             _ => {
                 return Err(unauthorized(
                     "Missing or invalid API key. Set CKB_API_KEY and send it via X-API-Key or Authorization: Bearer.",

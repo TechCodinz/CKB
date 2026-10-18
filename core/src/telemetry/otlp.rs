@@ -10,7 +10,12 @@ use serde::{Deserialize, Serialize};
 use crate::types::{NodeId, RuntimeMetrics};
 use std::collections::HashMap;
 
-pub const UNRESOLVED_RUNTIME_PREFIX: &str = "runtime-unresolved/";
+// Single definition lives in analysis::live_execution; this used to be
+// a second, duplicate const with the same name/value, which made the
+// crate root's two glob re-exports (`analysis::*` and `telemetry::*`)
+// ambiguous. Re-exporting the one item keeps both paths valid and
+// unambiguous.
+pub use crate::analysis::live_execution::UNRESOLVED_RUNTIME_PREFIX;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OtlpSpan {

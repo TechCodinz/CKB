@@ -65,6 +65,12 @@ impl PatternDetectorEngine {
     }
 }
 
+impl Default for PatternDetectorEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct LayeredArchitectureDetector {
     layer_patterns: Vec<LayerPattern>,
 }
@@ -152,7 +158,7 @@ impl LayeredArchitectureDetector {
                 if self.matches_layer(node, layer) {
                     layer_nodes
                         .entry(layer.name.clone())
-                        .or_insert_with(HashSet::new)
+                        .or_default()
                         .insert(node.id.clone());
                     break;
                 }
@@ -195,7 +201,7 @@ impl LayeredArchitectureDetector {
                     }
                 }
                 Pattern::Annotation(p) => {
-                    if node.metadata.get("annotations").map_or(false, |a| a.contains(p)) {
+                    if node.metadata.get("annotations").is_some_and(|a| a.contains(p)) {
                         return true;
                     }
                 }
@@ -228,6 +234,12 @@ impl LayeredArchitectureDetector {
 
     fn check_layer_compliance(&self, _graph: &DependencyGraph, _layers: &[ArchitectureBoundary]) -> Result<Vec<DriftViolation>> {
         Ok(Vec::new())
+    }
+}
+
+impl Default for LayeredArchitectureDetector {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -265,42 +277,84 @@ impl PatternDetector for LayeredArchitectureDetector {
 
 pub struct ModularArchitectureDetector;
 impl ModularArchitectureDetector { pub fn new() -> Self { Self } }
+
+impl Default for ModularArchitectureDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl PatternDetector for ModularArchitectureDetector {
     fn detect(&self, _graph: &DependencyGraph) -> Result<Option<ArchitecturalPattern>> { Ok(None) }
 }
 
 pub struct HexagonalArchitectureDetector;
 impl HexagonalArchitectureDetector { pub fn new() -> Self { Self } }
+
+impl Default for HexagonalArchitectureDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl PatternDetector for HexagonalArchitectureDetector {
     fn detect(&self, _graph: &DependencyGraph) -> Result<Option<ArchitecturalPattern>> { Ok(None) }
 }
 
 pub struct CleanArchitectureDetector;
 impl CleanArchitectureDetector { pub fn new() -> Self { Self } }
+
+impl Default for CleanArchitectureDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl PatternDetector for CleanArchitectureDetector {
     fn detect(&self, _graph: &DependencyGraph) -> Result<Option<ArchitecturalPattern>> { Ok(None) }
 }
 
 pub struct MicroservicesDetector;
 impl MicroservicesDetector { pub fn new() -> Self { Self } }
+
+impl Default for MicroservicesDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl PatternDetector for MicroservicesDetector {
     fn detect(&self, _graph: &DependencyGraph) -> Result<Option<ArchitecturalPattern>> { Ok(None) }
 }
 
 pub struct EventDrivenDetector;
 impl EventDrivenDetector { pub fn new() -> Self { Self } }
+
+impl Default for EventDrivenDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl PatternDetector for EventDrivenDetector {
     fn detect(&self, _graph: &DependencyGraph) -> Result<Option<ArchitecturalPattern>> { Ok(None) }
 }
 
 pub struct CqrsDetector;
 impl CqrsDetector { pub fn new() -> Self { Self } }
+
+impl Default for CqrsDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl PatternDetector for CqrsDetector {
     fn detect(&self, _graph: &DependencyGraph) -> Result<Option<ArchitecturalPattern>> { Ok(None) }
 }
 
 pub struct DomainDrivenDesignDetector;
 impl DomainDrivenDesignDetector { pub fn new() -> Self { Self } }
+
+impl Default for DomainDrivenDesignDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl PatternDetector for DomainDrivenDesignDetector {
     fn detect(&self, _graph: &DependencyGraph) -> Result<Option<ArchitecturalPattern>> { Ok(None) }
 }

@@ -48,7 +48,7 @@ impl DriftDetector {
         }
         
         // Sort by severity
-        all_violations.sort_by(|a, b| b.severity.cmp(&a.severity));
+        all_violations.sort_by_key(|v| std::cmp::Reverse(v.severity));
         
         Ok(all_violations)
     }
@@ -83,6 +83,12 @@ impl DriftDetector {
         // Check only affected subgraph
         let subgraph = graph.extract_subgraph(&affected_nodes)?;
         self.detect_all(&subgraph, boundaries)
+    }
+}
+
+impl Default for DriftDetector {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -134,9 +140,7 @@ impl Rule for ForbiddenDependencyRule {
                                     edge.from.0, edge.to.0, boundary.name
                                 ),
                                 severity: Severity::Error,
-                                suggested_fix: Some(format!(
-                                    "Move dependency through allowed layer or refactor to respect boundaries"
-                                )),
+                                suggested_fix: Some("Move dependency through allowed layer or refactor to respect boundaries".to_string()),
                             });
                         }
                     }

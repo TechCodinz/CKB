@@ -319,7 +319,7 @@ mod tests {
         assert!(analysis.exports.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Function));
         let node = analysis.nodes.iter().find(|n| n.id.0 == "hello.py::hello").expect("function graph node");
         assert_eq!(node.line, 1);
-        assert!(node.metadata.get("end_line").is_some());
+        assert!(node.metadata.contains_key("end_line"));
     }
 
     #[test]

@@ -61,7 +61,7 @@ impl LanguageParser {
     }
 
     pub fn is_supported_extension(&self, ext: &std::ffi::OsStr) -> bool {
-        ext.to_str().map_or(false, |e| self.parsers.contains_key(e))
+        ext.to_str().is_some_and(|e| self.parsers.contains_key(e))
     }
 }
 

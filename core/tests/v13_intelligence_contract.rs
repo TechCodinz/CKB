@@ -6,7 +6,6 @@ use ckb_core::{
     ContextBudget,
     ContextCompiler,
     EvidenceClass,
-    EvidenceRecord,
     MemoryEdge,
     MemoryEvidence,
     MemoryNode,

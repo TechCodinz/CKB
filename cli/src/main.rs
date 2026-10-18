@@ -1049,7 +1049,7 @@ fn generate_graphml(report: &ScanReport) -> String {
 
 fn generate_mermaid(report: &ScanReport) -> String {
     let mut mmd = String::from("graph TD\n");
-    for (_i, pattern) in report.patterns.iter().enumerate() {
+    for pattern in report.patterns.iter() {
         mmd.push_str(&format!("  subgraph {}\n", pattern.name.replace(' ', "_")));
         for boundary in &pattern.boundaries {
             for node_id in &boundary.nodes {
@@ -1124,7 +1124,7 @@ fn validate_rules(report: &ScanReport, rules: &[CustomRule]) -> Result<Vec<Drift
                             to: node_id.clone(),
                             boundary: rule.name.clone(),
                             message: format!("{}: {}", rule.name, rule.description),
-                            severity: rule.severity.clone(),
+                            severity: rule.severity,
                             suggested_fix: Some(format!("Review node matching pattern '{}'", rule.pattern)),
                         });
                     }
